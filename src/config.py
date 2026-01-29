@@ -13,7 +13,6 @@ import os
 # Semantic Scholar API
 SEMANTIC_SCHOLAR_API_URL = "https://api.semanticscholar.org/graph/v1"
 SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
-print(SEMANTIC_SCHOLAR_API_KEY)
 
 
 #LLM Configuration
