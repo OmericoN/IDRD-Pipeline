@@ -17,5 +17,14 @@ Usage:
 
 __version__ = "0.1.0"
 
+
+from src.config import (
+    SEMANTIC_SCHOLAR_API_KEY,
+    SEMANTIC_SCHOLAR_API_URL
+)
+
 # Package metadata
-__all__ = []
+__all__ = [
+    'SEMANTIC_SCHOLAR_API_KEY',
+    'SEMANTIC_SCHOLAR_API_URL'
+]

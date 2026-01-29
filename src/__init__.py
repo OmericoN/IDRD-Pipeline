@@ -1,27 +1,13 @@
 """
-IDRD-Pipeline: A multi-stage pipeline for fetching and evaluating publications with implicit dataset references.
+IDRD-Pipeline - Citation Context Analysis
 
-This package contains four main stages:
-1. Fetching: Retrieve publications using Semantic Scholar API
-2. Extraction: Extract features from publications
-3. Embeddings: Embed university database for affiliation and similarity checking
-4. Evaluation: Evaluate formality of references
-
-Version: 0.1.0
+Main package initialization for the IDRD-Pipeline project.
 """
 
 __version__ = "0.1.0"
-__author__ = "IDRD-Pipeline Team"
+__author__ = ""
 
-# Import subpackages for easier access
-from . import fetching
-from . import extraction
-from . import embeddings
-from . import evaluation
+# Don't import subpackages here - let them be imported explicitly
+# This avoids circular import issues
 
-__all__ = [
-    "fetching",
-    "extraction",
-    "embeddings",
-    "evaluation",
-]
+__all__ = []
