@@ -10,36 +10,7 @@ The IDRD-Pipeline is a Python-based multi-stage pipeline designed to:
 3. Embed university database for affiliation and similarity checking
 4. Evaluate the formality of dataset references
 
-## Project Structure
-
-```
-IDRD-Pipeline/
-├── src/                        # Source code
-│   ├── __init__.py
-│   ├── README.md
-│   │
-│   ├── fetching/              # Stage 1: Fetch publications via Semantic Scholar API
-│   │   ├── __init__.py
-│   │   └── README.md
-│   │
-│   ├── extraction/            # Stage 2: Extract features from publications
-│   │   ├── __init__.py
-│   │   └── README.md
-│   │
-│   ├── embeddings/            # Stage 3: Embed university DB for affiliation/similarity
-│   │   ├── __init__.py
-│   │   └── README.md
-│   │
-│   └── evaluation/            # Stage 4: Evaluate formality of references
-│       ├── __init__.py
-│       └── README.md
-│
-├── .gitignore
-├── LICENSE
-├── README.md                   # This file
-└── pyproject.toml             # Python project configuration
-```
-
+d
 ## Pipeline Stages
 
 ### Stage 1: Fetching (`src.fetching`)
@@ -58,7 +29,7 @@ Extracts relevant features from the fetched publications.
 
 ### Stage 3: Embeddings (`src.embeddings`)
 Embeds university database to check affiliation and calculate similarity.
-- University database embedding
+- Dataset affiliation with UM via vector embedding on UM database
 - Author affiliation matching
 - Similarity metric calculation
 - Institution-publication matching
@@ -96,15 +67,6 @@ from src import fetching, extraction, embeddings, evaluation
 # from src.embeddings import affiliation_matcher
 # from src.evaluation import formality_evaluator
 ```
-
-## Development
-
-Each package is self-contained with its own documentation. See individual package READMEs for details:
-- [src/README.md](src/README.md) - Main source documentation
-- [src/fetching/README.md](src/fetching/README.md) - Fetching stage
-- [src/extraction/README.md](src/extraction/README.md) - Extraction stage
-- [src/embeddings/README.md](src/embeddings/README.md) - Embeddings stage
-- [src/evaluation/README.md](src/evaluation/README.md) - Evaluation stage
 
 ## License
 
