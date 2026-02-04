@@ -6,6 +6,7 @@ import time
 import json
 from typing import Dict, List, Optional
 import pandas as pd
+from tqdm import tqdm
 
 class SemanticScholarClient:
     """
@@ -93,28 +94,32 @@ class SemanticScholarClient:
             "tldr"
         ]
 
-        for batch in range(total_batches):
-            current_offset = offset + batch * batch_size
-            current_limit = min(batch_size, limit - batch * batch_size)
+        with tqdm(total=limit, desc="Fetching papers", unit="papers") as pbar:
+            for batch in range(total_batches):
+                current_offset = offset + batch * batch_size
+                current_limit = min(batch_size, limit - batch * batch_size)
 
-            # Stop if actual total is exceeded
-            if actual_total is not None and current_offset >= actual_total:
-                print(f"Reached actual total papers ({actual_total}); stopping fetch")
-                break
-            print(f"Fetching batch {batch+1}/{total_batches} papers (offset: {current_offset}, limit: {current_limit})...")
-            
-            papers, total = self._fetch_batch(
-                query, current_limit, current_offset, default_fields, fields_of_study, open_access_pdf
-            )
-
-            if batch == 0:
-                print("API call successful!")
-                print(f"Total papers: {total:,}")
-                actual_total = total
+                # Stop if actual total is exceeded
+                if actual_total is not None and current_offset >= actual_total:
+                    pbar.write(f"Reached actual total papers ({actual_total}); stopping fetch")
+                    break
                 
-            all_papers.extend(papers)
-            print(f"Batch {batch+1}: fetched {len(papers)} papers")
-            
+                papers, total = self._fetch_batch(
+                    query, current_limit, current_offset, default_fields, fields_of_study, open_access_pdf
+                )
+
+                if batch == 0:
+                    pbar.write("API call successful!")
+                    pbar.write(f"Total papers: {total:,}")
+                    actual_total = total
+                    # Update progress bar total if actual total is less than requested
+                    if actual_total < limit:
+                        pbar.total = actual_total
+                        pbar.refresh()
+                    
+                all_papers.extend(papers)
+                pbar.update(len(papers))
+                
         return all_papers
 
 
