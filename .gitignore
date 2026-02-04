@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 .env
+src/schema/publications.db
 __pycache__/
 *.py[codz]
 *$py.class

@@ -42,6 +42,18 @@ class PaperDictParser:
         Returns:
             Cleaned and structured paper dictionary
         """
+        # Determine open access status
+        # Priority: 1. Check explicit isOpenAccess field, 2. Check if PDF exists with GREEN/GOLD/HYBRID/BRONZE status
+        is_open_access = paper.get('isOpenAccess', False)
+        
+        # If not explicitly marked, check PDF status
+        if not is_open_access:
+            pdf_info = paper.get('openAccessPdf', {})
+            if pdf_info and pdf_info.get('url'):
+                status = pdf_info.get('status', '').upper()
+                # GREEN, GOLD, HYBRID, BRONZE all indicate open access
+                is_open_access = status in ['GREEN', 'GOLD', 'HYBRID', 'BRONZE']
+        
         return {
             'paperId': paper.get('paperId'),
             'title': paper.get('title'),
@@ -54,7 +66,8 @@ class PaperDictParser:
             'publicationDate': paper.get('publicationDate'),
             'publicationTypes': paper.get('publicationTypes', []),
             
-            # Open Access
+            # Open Access - derived from status if needed
+            'isOpenAccess': is_open_access,
             'openAccessPdf': self._parse_open_access(paper.get('openAccessPdf')),
             
             # Authors
@@ -71,11 +84,11 @@ class PaperDictParser:
             # External IDs
             'externalIds': paper.get('externalIds', {}),
             
-            # Journal info
+            # Journal
             'journal': self._parse_journal(paper.get('journal')),
             
             # TL;DR
-            'tldr': self._parse_tldr(paper.get('tldr'))
+            'tldr': paper.get('tldr', {}).get('text') if paper.get('tldr') else None,
         }
     
     def _parse_open_access(self, oa_data: Optional[Dict]) -> Optional[Dict]:
