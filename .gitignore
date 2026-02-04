@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+.vscode
+settings.json
 .env
 src/schema/publications.db
 __pycache__/

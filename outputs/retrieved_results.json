@@ -62,9 +62,9 @@
         "url": null
       }
     ],
-    "citationCount": 7979,
+    "citationCount": 8063,
     "referenceCount": 90,
-    "influentialCitationCount": 1487,
+    "influentialCitationCount": 1495,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -114,9 +114,9 @@
         "url": null
       }
     ],
-    "citationCount": 4347,
+    "citationCount": 4427,
     "referenceCount": 68,
-    "influentialCitationCount": 566,
+    "influentialCitationCount": 573,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -172,9 +172,9 @@
         "url": null
       }
     ],
-    "citationCount": 3810,
+    "citationCount": 3839,
     "referenceCount": 82,
-    "influentialCitationCount": 624,
+    "influentialCitationCount": 626,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -237,9 +237,9 @@
         "url": null
       }
     ],
-    "citationCount": 2961,
+    "citationCount": 3026,
     "referenceCount": 36,
-    "influentialCitationCount": 356,
+    "influentialCitationCount": 360,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -255,64 +255,6 @@
       "pages": "11121-11128"
     },
     "tldr": "Experimental results on nine real-life datasets show that LTSF-Linear surprisingly outperforms existing sophisticated Transformer-based L TSF models in all cases, and often by a large margin."
-  },
-  {
-    "paperId": "8e33914d6051dd031a5e096962b9398fc1d16067",
-    "title": "Vision Transformers for Dense Prediction",
-    "year": 2021,
-    "abstract": "We introduce dense prediction transformers, an architecture that leverages vision transformers in place of convolutional networks as a backbone for dense prediction tasks. We assemble tokens from various stages of the vision transformer into image-like representations at various resolutions and progressively combine them into full-resolution predictions using a convolutional decoder. The transformer backbone processes representations at a constant and relatively high resolution and has a global receptive field at every stage. These properties allow the dense prediction transformer to provide finer-grained and more globally coherent predictions when compared to fully-convolutional networks. Our experiments show that this architecture yields substantial improvements on dense prediction tasks, especially when a large amount of training data is available. For monocular depth estimation, we observe an improvement of up to 28% in relative performance when compared to a state-of-the-art fully-convolutional network. When applied to semantic segmentation, dense prediction transformers set a new state of the art on ADE20K with 49.02% mIoU. We further show that the architecture can be fine-tuned on smaller datasets such as NYUv2, KITTI, and Pascal Context where it also sets the new state of the art. Our models are available at https://github.com/intel-isl/DPT.",
-    "url": "https://www.semanticscholar.org/paper/8e33914d6051dd031a5e096962b9398fc1d16067",
-    "venue": "IEEE International Conference on Computer Vision",
-    "publicationDate": "2021-03-24",
-    "publicationTypes": [
-      "JournalArticle",
-      "Conference"
-    ],
-    "isOpenAccess": true,
-    "openAccessPdf": {
-      "url": "https://arxiv.org/pdf/2103.13413",
-      "status": "GREEN",
-      "license": null,
-      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2103.13413, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
-    },
-    "authors": [
-      {
-        "authorId": "2774325",
-        "name": "René Ranftl",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "1651204675",
-        "name": "Alexey Bochkovskiy",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "145231047",
-        "name": "V. Koltun",
-        "affiliations": [],
-        "url": null
-      }
-    ],
-    "citationCount": 2355,
-    "referenceCount": 60,
-    "influentialCitationCount": 310,
-    "fieldsOfStudy": [
-      "Computer Science"
-    ],
-    "externalIds": {
-      "DBLP": "journals/corr/abs-2103-13413",
-      "ArXiv": "2103.13413",
-      "DOI": "10.1109/ICCV48922.2021.01196",
-      "CorpusId": 232352612
-    },
-    "journal": {
-      "name": "2021 IEEE/CVF International Conference on Computer Vision (ICCV)",
-      "volume": null,
-      "pages": "12159-12168"
-    },
-    "tldr": "D dense prediction transformers, an architecture that leverages vision transformers in place of convolutional networks as a backbone for dense prediction tasks, can be fine-tuned on smaller datasets such as NYUv2, KITTI, and Pascal Context where it also sets the new state of the art."
   },
   {
     "paperId": "739ceacfafb1c4eaa17509351b647c773270b3ae",
@@ -353,9 +295,9 @@
         "url": null
       }
     ],
-    "citationCount": 2190,
+    "citationCount": 2214,
     "referenceCount": 50,
-    "influentialCitationCount": 294,
+    "influentialCitationCount": 296,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -418,9 +360,9 @@
         "url": null
       }
     ],
-    "citationCount": 2244,
+    "citationCount": 2295,
     "referenceCount": 59,
-    "influentialCitationCount": 273,
+    "influentialCitationCount": 280,
     "fieldsOfStudy": [
       "Computer Science",
       "Engineering"
@@ -437,6 +379,64 @@
       "pages": "1748-1758"
     },
     "tldr": "This work reformulates the task of volumetric (3D) medical image segmentation as a sequence-to-sequence prediction problem and introduces a novel architecture, dubbed as UNEt TRansformers (UNETR), that utilizes a transformer as the encoder to learn sequence representations of the input volume and effectively capture the global multi-scale information."
+  },
+  {
+    "paperId": "8e33914d6051dd031a5e096962b9398fc1d16067",
+    "title": "Vision Transformers for Dense Prediction",
+    "year": 2021,
+    "abstract": "We introduce dense prediction transformers, an architecture that leverages vision transformers in place of convolutional networks as a backbone for dense prediction tasks. We assemble tokens from various stages of the vision transformer into image-like representations at various resolutions and progressively combine them into full-resolution predictions using a convolutional decoder. The transformer backbone processes representations at a constant and relatively high resolution and has a global receptive field at every stage. These properties allow the dense prediction transformer to provide finer-grained and more globally coherent predictions when compared to fully-convolutional networks. Our experiments show that this architecture yields substantial improvements on dense prediction tasks, especially when a large amount of training data is available. For monocular depth estimation, we observe an improvement of up to 28% in relative performance when compared to a state-of-the-art fully-convolutional network. When applied to semantic segmentation, dense prediction transformers set a new state of the art on ADE20K with 49.02% mIoU. We further show that the architecture can be fine-tuned on smaller datasets such as NYUv2, KITTI, and Pascal Context where it also sets the new state of the art. Our models are available at https://github.com/intel-isl/DPT.",
+    "url": "https://www.semanticscholar.org/paper/8e33914d6051dd031a5e096962b9398fc1d16067",
+    "venue": "IEEE International Conference on Computer Vision",
+    "publicationDate": "2021-03-24",
+    "publicationTypes": [
+      "JournalArticle",
+      "Conference"
+    ],
+    "isOpenAccess": true,
+    "openAccessPdf": {
+      "url": "https://arxiv.org/pdf/2103.13413",
+      "status": "GREEN",
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2103.13413, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "authors": [
+      {
+        "authorId": "2774325",
+        "name": "René Ranftl",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "1651204675",
+        "name": "Alexey Bochkovskiy",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "145231047",
+        "name": "V. Koltun",
+        "affiliations": [],
+        "url": null
+      }
+    ],
+    "citationCount": 2377,
+    "referenceCount": 60,
+    "influentialCitationCount": 310,
+    "fieldsOfStudy": [
+      "Computer Science"
+    ],
+    "externalIds": {
+      "DBLP": "journals/corr/abs-2103-13413",
+      "ArXiv": "2103.13413",
+      "DOI": "10.1109/ICCV48922.2021.01196",
+      "CorpusId": 232352612
+    },
+    "journal": {
+      "name": "2021 IEEE/CVF International Conference on Computer Vision (ICCV)",
+      "volume": null,
+      "pages": "12159-12168"
+    },
+    "tldr": "D dense prediction transformers, an architecture that leverages vision transformers in place of convolutional networks as a backbone for dense prediction tasks, can be fine-tuned on smaller datasets such as NYUv2, KITTI, and Pascal Context where it also sets the new state of the art."
   },
   {
     "paperId": "3a906b77fa218adc171fecb28bb81c24c14dcc7b",
@@ -495,7 +495,7 @@
         "url": null
       }
     ],
-    "citationCount": 3197,
+    "citationCount": 3212,
     "referenceCount": 286,
     "influentialCitationCount": 55,
     "fieldsOfStudy": [
@@ -583,9 +583,9 @@
         "url": null
       }
     ],
-    "citationCount": 2352,
+    "citationCount": 2363,
     "referenceCount": 63,
-    "influentialCitationCount": 231,
+    "influentialCitationCount": 232,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -665,7 +665,7 @@
         "url": null
       }
     ],
-    "citationCount": 2282,
+    "citationCount": 2296,
     "referenceCount": 47,
     "influentialCitationCount": 191,
     "fieldsOfStudy": [
@@ -728,9 +728,9 @@
         "url": null
       }
     ],
-    "citationCount": 2623,
+    "citationCount": 2696,
     "referenceCount": 46,
-    "influentialCitationCount": 546,
+    "influentialCitationCount": 563,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -780,9 +780,9 @@
         "url": null
       }
     ],
-    "citationCount": 2782,
+    "citationCount": 2796,
     "referenceCount": 47,
-    "influentialCitationCount": 364,
+    "influentialCitationCount": 365,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -870,9 +870,9 @@
         "url": null
       }
     ],
-    "citationCount": 1686,
+    "citationCount": 1704,
     "referenceCount": 57,
-    "influentialCitationCount": 345,
+    "influentialCitationCount": 346,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -976,7 +976,7 @@
         "url": null
       }
     ],
-    "citationCount": 3422,
+    "citationCount": 3439,
     "referenceCount": 63,
     "influentialCitationCount": 210,
     "fieldsOfStudy": [
@@ -1057,9 +1057,9 @@
         "url": null
       }
     ],
-    "citationCount": 1252,
+    "citationCount": 1300,
     "referenceCount": 38,
-    "influentialCitationCount": 190,
+    "influentialCitationCount": 198,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -1115,9 +1115,9 @@
         "url": null
       }
     ],
-    "citationCount": 1176,
+    "citationCount": 1199,
     "referenceCount": 31,
-    "influentialCitationCount": 213,
+    "influentialCitationCount": 218,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -1198,9 +1198,9 @@
         "url": null
       }
     ],
-    "citationCount": 1209,
+    "citationCount": 1224,
     "referenceCount": 94,
-    "influentialCitationCount": 45,
+    "influentialCitationCount": 46,
     "fieldsOfStudy": [
       "Computer Science",
       "Engineering",
@@ -1270,9 +1270,9 @@
         "url": null
       }
     ],
-    "citationCount": 1617,
+    "citationCount": 1630,
     "referenceCount": 59,
-    "influentialCitationCount": 311,
+    "influentialCitationCount": 315,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -1352,7 +1352,7 @@
         "url": null
       }
     ],
-    "citationCount": 1521,
+    "citationCount": 1527,
     "referenceCount": 119,
     "influentialCitationCount": 159,
     "fieldsOfStudy": [
@@ -1403,7 +1403,7 @@
         "url": null
       }
     ],
-    "citationCount": 187,
+    "citationCount": 192,
     "referenceCount": 30,
     "influentialCitationCount": 12,
     "fieldsOfStudy": [
@@ -1483,7 +1483,7 @@
         "url": null
       }
     ],
-    "citationCount": 936,
+    "citationCount": 947,
     "referenceCount": 102,
     "influentialCitationCount": 146,
     "fieldsOfStudy": [
@@ -1546,9 +1546,9 @@
         "url": null
       }
     ],
-    "citationCount": 624,
+    "citationCount": 633,
     "referenceCount": 34,
-    "influentialCitationCount": 83,
+    "influentialCitationCount": 86,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -1838,9 +1838,9 @@
         "url": null
       }
     ],
-    "citationCount": 776,
+    "citationCount": 783,
     "referenceCount": 134,
-    "influentialCitationCount": 42,
+    "influentialCitationCount": 44,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -1895,9 +1895,9 @@
         "url": null
       }
     ],
-    "citationCount": 1345,
+    "citationCount": 1360,
     "referenceCount": 68,
-    "influentialCitationCount": 233,
+    "influentialCitationCount": 235,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -1965,7 +1965,7 @@
         "url": null
       }
     ],
-    "citationCount": 1191,
+    "citationCount": 1199,
     "referenceCount": 81,
     "influentialCitationCount": 128,
     "fieldsOfStudy": [
@@ -2022,7 +2022,7 @@
         "url": null
       }
     ],
-    "citationCount": 284,
+    "citationCount": 289,
     "referenceCount": 52,
     "influentialCitationCount": 56,
     "fieldsOfStudy": [
@@ -2041,6 +2041,63 @@
       "pages": "49:1-49:55"
     },
     "tldr": "The dynamics of ICL in transformers with a single linear self-attention layer trained by gradient flow on linear regression tasks are investigated and it is shown that despite non-convexity, gradient flow with a suitable random initialization finds a global minimum of the objective function."
+  },
+  {
+    "paperId": "02ad9f3fefe33cb9ca546591bec65dbdf7766c80",
+    "title": "Ring Attention with Blockwise Transformers for Near-Infinite Context",
+    "year": 2023,
+    "abstract": "Transformers have emerged as the architecture of choice for many state-of-the-art AI models, showcasing exceptional performance across a wide range of AI applications. However, the memory demands imposed by Transformers limit their ability to handle long sequences, thereby posing challenges in utilizing videos, actions, and other long-form sequences and modalities in complex environments. We present a novel approach, Ring Attention with Blockwise Transformers (Ring Attention), which leverages blockwise computation of self-attention and feedforward to distribute long sequences across multiple devices while fully overlapping the communication of key-value blocks with the computation of blockwise attention. Our approach enables training and inference of sequences that are up to device count times longer than those achievable by prior memory-efficient Transformers, without resorting to approximations or incurring additional communication and computation overheads. Extensive experiments on language modeling and reinforcement learning tasks demonstrate the effectiveness of our approach in allowing millions of tokens context size and improving performance.",
+    "url": "https://www.semanticscholar.org/paper/02ad9f3fefe33cb9ca546591bec65dbdf7766c80",
+    "venue": "International Conference on Learning Representations",
+    "publicationDate": "2023-10-03",
+    "publicationTypes": [
+      "JournalArticle"
+    ],
+    "isOpenAccess": true,
+    "openAccessPdf": {
+      "url": "https://arxiv.org/pdf/2310.01889",
+      "status": "CLOSED",
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2310.01889, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "authors": [
+      {
+        "authorId": "2256317240",
+        "name": "Hao Liu",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "2253469012",
+        "name": "Matei Zaharia",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "2253464956",
+        "name": "Pieter Abbeel",
+        "affiliations": [],
+        "url": null
+      }
+    ],
+    "citationCount": 401,
+    "referenceCount": 44,
+    "influentialCitationCount": 41,
+    "fieldsOfStudy": [
+      "Computer Science"
+    ],
+    "externalIds": {
+      "ArXiv": "2310.01889",
+      "DBLP": "conf/iclr/0055ZA24",
+      "DOI": "10.48550/arXiv.2310.01889",
+      "CorpusId": 263608461
+    },
+    "journal": {
+      "name": "ArXiv",
+      "volume": "abs/2310.01889",
+      "pages": null
+    },
+    "tldr": "This work presents a novel approach, Ring Attention with Blockwise Transformers (Ring Attention), which leverages blockwise computation of self-attention and feedforward to distribute long sequences across multiple devices while fully overlapping the communication of key-value blocks with the computation of blockwise attention."
   },
   {
     "paperId": "2a805d0e1b067444a554c5169d189fa1f649f411",
@@ -2087,7 +2144,7 @@
         "url": null
       }
     ],
-    "citationCount": 1314,
+    "citationCount": 1319,
     "referenceCount": 54,
     "influentialCitationCount": 97,
     "fieldsOfStudy": [
@@ -2105,63 +2162,6 @@
       "pages": "1204-1213"
     },
     "tldr": "A ViT model with two billion parameters is successfully trained, which attains a new state-of-the-art on ImageNet of 90.45% top-1 accuracy and performs well for few-shot transfer."
-  },
-  {
-    "paperId": "02ad9f3fefe33cb9ca546591bec65dbdf7766c80",
-    "title": "Ring Attention with Blockwise Transformers for Near-Infinite Context",
-    "year": 2023,
-    "abstract": "Transformers have emerged as the architecture of choice for many state-of-the-art AI models, showcasing exceptional performance across a wide range of AI applications. However, the memory demands imposed by Transformers limit their ability to handle long sequences, thereby posing challenges in utilizing videos, actions, and other long-form sequences and modalities in complex environments. We present a novel approach, Ring Attention with Blockwise Transformers (Ring Attention), which leverages blockwise computation of self-attention and feedforward to distribute long sequences across multiple devices while fully overlapping the communication of key-value blocks with the computation of blockwise attention. Our approach enables training and inference of sequences that are up to device count times longer than those achievable by prior memory-efficient Transformers, without resorting to approximations or incurring additional communication and computation overheads. Extensive experiments on language modeling and reinforcement learning tasks demonstrate the effectiveness of our approach in allowing millions of tokens context size and improving performance.",
-    "url": "https://www.semanticscholar.org/paper/02ad9f3fefe33cb9ca546591bec65dbdf7766c80",
-    "venue": "International Conference on Learning Representations",
-    "publicationDate": "2023-10-03",
-    "publicationTypes": [
-      "JournalArticle"
-    ],
-    "isOpenAccess": true,
-    "openAccessPdf": {
-      "url": "https://arxiv.org/pdf/2310.01889",
-      "status": "CLOSED",
-      "license": null,
-      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2310.01889, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
-    },
-    "authors": [
-      {
-        "authorId": "2256317240",
-        "name": "Hao Liu",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "2253469012",
-        "name": "Matei Zaharia",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "2253464956",
-        "name": "Pieter Abbeel",
-        "affiliations": [],
-        "url": null
-      }
-    ],
-    "citationCount": 396,
-    "referenceCount": 44,
-    "influentialCitationCount": 40,
-    "fieldsOfStudy": [
-      "Computer Science"
-    ],
-    "externalIds": {
-      "ArXiv": "2310.01889",
-      "DBLP": "conf/iclr/0055ZA24",
-      "DOI": "10.48550/arXiv.2310.01889",
-      "CorpusId": 263608461
-    },
-    "journal": {
-      "name": "ArXiv",
-      "volume": "abs/2310.01889",
-      "pages": null
-    },
-    "tldr": "This work presents a novel approach, Ring Attention with Blockwise Transformers (Ring Attention), which leverages blockwise computation of self-attention and feedforward to distribute long sequences across multiple devices while fully overlapping the communication of key-value blocks with the computation of blockwise attention."
   },
   {
     "paperId": "f5e9337477d7a9eb6267d0310549fdefafbb7fe2",
@@ -2207,7 +2207,7 @@
         "url": null
       }
     ],
-    "citationCount": 244,
+    "citationCount": 247,
     "referenceCount": 34,
     "influentialCitationCount": 43,
     "fieldsOfStudy": [
@@ -2276,9 +2276,9 @@
         "url": null
       }
     ],
-    "citationCount": 912,
+    "citationCount": 921,
     "referenceCount": 45,
-    "influentialCitationCount": 104,
+    "influentialCitationCount": 105,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -2345,9 +2345,9 @@
         "url": null
       }
     ],
-    "citationCount": 262,
+    "citationCount": 265,
     "referenceCount": 0,
-    "influentialCitationCount": 40,
+    "influentialCitationCount": 41,
     "fieldsOfStudy": [
       "Computer Science",
       "Mathematics"
@@ -2458,7 +2458,7 @@
         "url": null
       }
     ],
-    "citationCount": 699,
+    "citationCount": 706,
     "referenceCount": 87,
     "influentialCitationCount": 49,
     "fieldsOfStudy": [
@@ -2539,9 +2539,9 @@
         "url": null
       }
     ],
-    "citationCount": 1162,
+    "citationCount": 1171,
     "referenceCount": 43,
-    "influentialCitationCount": 91,
+    "influentialCitationCount": 92,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -2602,9 +2602,9 @@
         "url": null
       }
     ],
-    "citationCount": 810,
+    "citationCount": 820,
     "referenceCount": 94,
-    "influentialCitationCount": 121,
+    "influentialCitationCount": 125,
     "fieldsOfStudy": [
       "Computer Science",
       "Medicine"
@@ -2680,9 +2680,9 @@
         "url": null
       }
     ],
-    "citationCount": 238,
+    "citationCount": 243,
     "referenceCount": 65,
-    "influentialCitationCount": 47,
+    "influentialCitationCount": 49,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -2743,9 +2743,9 @@
         "url": null
       }
     ],
-    "citationCount": 836,
+    "citationCount": 851,
     "referenceCount": 82,
-    "influentialCitationCount": 88,
+    "influentialCitationCount": 89,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -2807,7 +2807,7 @@
         "url": null
       }
     ],
-    "citationCount": 1363,
+    "citationCount": 1375,
     "referenceCount": 105,
     "influentialCitationCount": 83,
     "fieldsOfStudy": [
@@ -2865,7 +2865,7 @@
         "url": null
       }
     ],
-    "citationCount": 140,
+    "citationCount": 142,
     "referenceCount": 72,
     "influentialCitationCount": 4,
     "fieldsOfStudy": [
@@ -2928,9 +2928,9 @@
         "url": null
       }
     ],
-    "citationCount": 676,
+    "citationCount": 680,
     "referenceCount": 85,
-    "influentialCitationCount": 105,
+    "influentialCitationCount": 104,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -2946,88 +2946,6 @@
       "pages": null
     },
     "tldr": "It is shown empirically that standard Transformers can be trained from scratch to perform in-context learning of linear functions -- that is, the trained model is able to learn unseen linear functions from in- context examples with performance comparable to the optimal least squares estimator."
-  },
-  {
-    "paperId": "525d93a382f6e7873b5d8a2e0713eb3dff7fb250",
-    "title": "Transformers learn in-context by gradient descent",
-    "year": 2022,
-    "abstract": "At present, the mechanisms of in-context learning in Transformers are not well understood and remain mostly an intuition. In this paper, we suggest that training Transformers on auto-regressive objectives is closely related to gradient-based meta-learning formulations. We start by providing a simple weight construction that shows the equivalence of data transformations induced by 1) a single linear self-attention layer and by 2) gradient-descent (GD) on a regression loss. Motivated by that construction, we show empirically that when training self-attention-only Transformers on simple regression tasks either the models learned by GD and Transformers show great similarity or, remarkably, the weights found by optimization match the construction. Thus we show how trained Transformers become mesa-optimizers i.e. learn models by gradient descent in their forward pass. This allows us, at least in the domain of regression problems, to mechanistically understand the inner workings of in-context learning in optimized Transformers. Building on this insight, we furthermore identify how Transformers surpass the performance of plain gradient descent by learning an iterative curvature correction and learn linear models on deep data representations to solve non-linear regression tasks. Finally, we discuss intriguing parallels to a mechanism identified to be crucial for in-context learning termed induction-head (Olsson et al., 2022) and show how it could be understood as a specific case of in-context learning by gradient descent learning within Transformers. Code to reproduce the experiments can be found at https://github.com/google-research/self-organising-systems/tree/master/transformers_learn_icl_by_gd .",
-    "url": "https://www.semanticscholar.org/paper/525d93a382f6e7873b5d8a2e0713eb3dff7fb250",
-    "venue": "International Conference on Machine Learning",
-    "publicationDate": "2022-12-15",
-    "publicationTypes": [
-      "JournalArticle",
-      "Conference"
-    ],
-    "isOpenAccess": true,
-    "openAccessPdf": {
-      "url": "http://arxiv.org/pdf/2212.07677",
-      "status": "GREEN",
-      "license": null,
-      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2212.07677, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
-    },
-    "authors": [
-      {
-        "authorId": "145167136",
-        "name": "J. Oswald",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "51440033",
-        "name": "Eyvind Niklasson",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "72142084",
-        "name": "E. Randazzo",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "3105061",
-        "name": "J. Sacramento",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "2050989525",
-        "name": "A. Mordvintsev",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "3422677",
-        "name": "A. Zhmoginov",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "3316311",
-        "name": "Max Vladymyrov",
-        "affiliations": [],
-        "url": null
-      }
-    ],
-    "citationCount": 646,
-    "referenceCount": 56,
-    "influentialCitationCount": 68,
-    "fieldsOfStudy": [
-      "Computer Science"
-    ],
-    "externalIds": {
-      "DBLP": "conf/icml/OswaldNRSMZV23",
-      "ArXiv": "2212.07677",
-      "DOI": "10.48550/arXiv.2212.07677",
-      "CorpusId": 254685643
-    },
-    "journal": {
-      "name": null,
-      "volume": null,
-      "pages": "35151-35174"
-    },
-    "tldr": "It is suggested that training Transformers on auto-regressive objectives is closely related to gradient-based meta-learning formulations and how Transformers surpass the performance of plain gradient descent by learning an iterative curvature correction and learn linear models on deep data representations to solve non-linear regression tasks."
   },
   {
     "paperId": "68cda2cfefe8c21dc64fee55deab87672a517d39",
@@ -3092,9 +3010,9 @@
         "url": null
       }
     ],
-    "citationCount": 584,
+    "citationCount": 598,
     "referenceCount": 89,
-    "influentialCitationCount": 82,
+    "influentialCitationCount": 84,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -3110,6 +3028,88 @@
       "pages": "16123-16134"
     },
     "tldr": "HIPT with hierarchical pretraining outperforms current state-of-the-art methods for cancer subtyping and survival prediction, and self-supervised ViTs are able to model important inductive biases about the hierarchical structure of phenotypes in the tumor microenvironment."
+  },
+  {
+    "paperId": "525d93a382f6e7873b5d8a2e0713eb3dff7fb250",
+    "title": "Transformers learn in-context by gradient descent",
+    "year": 2022,
+    "abstract": "At present, the mechanisms of in-context learning in Transformers are not well understood and remain mostly an intuition. In this paper, we suggest that training Transformers on auto-regressive objectives is closely related to gradient-based meta-learning formulations. We start by providing a simple weight construction that shows the equivalence of data transformations induced by 1) a single linear self-attention layer and by 2) gradient-descent (GD) on a regression loss. Motivated by that construction, we show empirically that when training self-attention-only Transformers on simple regression tasks either the models learned by GD and Transformers show great similarity or, remarkably, the weights found by optimization match the construction. Thus we show how trained Transformers become mesa-optimizers i.e. learn models by gradient descent in their forward pass. This allows us, at least in the domain of regression problems, to mechanistically understand the inner workings of in-context learning in optimized Transformers. Building on this insight, we furthermore identify how Transformers surpass the performance of plain gradient descent by learning an iterative curvature correction and learn linear models on deep data representations to solve non-linear regression tasks. Finally, we discuss intriguing parallels to a mechanism identified to be crucial for in-context learning termed induction-head (Olsson et al., 2022) and show how it could be understood as a specific case of in-context learning by gradient descent learning within Transformers. Code to reproduce the experiments can be found at https://github.com/google-research/self-organising-systems/tree/master/transformers_learn_icl_by_gd .",
+    "url": "https://www.semanticscholar.org/paper/525d93a382f6e7873b5d8a2e0713eb3dff7fb250",
+    "venue": "International Conference on Machine Learning",
+    "publicationDate": "2022-12-15",
+    "publicationTypes": [
+      "JournalArticle",
+      "Conference"
+    ],
+    "isOpenAccess": true,
+    "openAccessPdf": {
+      "url": "http://arxiv.org/pdf/2212.07677",
+      "status": "GREEN",
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2212.07677, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "authors": [
+      {
+        "authorId": "145167136",
+        "name": "J. Oswald",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "51440033",
+        "name": "Eyvind Niklasson",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "72142084",
+        "name": "E. Randazzo",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "3105061",
+        "name": "J. Sacramento",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "2050989525",
+        "name": "A. Mordvintsev",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "3422677",
+        "name": "A. Zhmoginov",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "3316311",
+        "name": "Max Vladymyrov",
+        "affiliations": [],
+        "url": null
+      }
+    ],
+    "citationCount": 656,
+    "referenceCount": 56,
+    "influentialCitationCount": 68,
+    "fieldsOfStudy": [
+      "Computer Science"
+    ],
+    "externalIds": {
+      "DBLP": "conf/icml/OswaldNRSMZV23",
+      "ArXiv": "2212.07677",
+      "DOI": "10.48550/arXiv.2212.07677",
+      "CorpusId": 254685643
+    },
+    "journal": {
+      "name": null,
+      "volume": null,
+      "pages": "35151-35174"
+    },
+    "tldr": "It is suggested that training Transformers on auto-regressive objectives is closely related to gradient-based meta-learning formulations and how Transformers surpass the performance of plain gradient descent by learning an iterative curvature correction and learn linear models on deep data representations to solve non-linear regression tasks."
   },
   {
     "paperId": "762ca2711eb167f19b79e39c175708ca15e1f5d7",
@@ -3179,9 +3179,9 @@
         "url": null
       }
     ],
-    "citationCount": 320,
+    "citationCount": 330,
     "referenceCount": 77,
-    "influentialCitationCount": 30,
+    "influentialCitationCount": 31,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -3261,7 +3261,7 @@
         "url": null
       }
     ],
-    "citationCount": 813,
+    "citationCount": 823,
     "referenceCount": 73,
     "influentialCitationCount": 122,
     "fieldsOfStudy": [
@@ -3348,7 +3348,7 @@
         "url": null
       }
     ],
-    "citationCount": 528,
+    "citationCount": 536,
     "referenceCount": 87,
     "influentialCitationCount": 55,
     "fieldsOfStudy": [
@@ -3399,9 +3399,9 @@
         "url": null
       }
     ],
-    "citationCount": 377,
+    "citationCount": 384,
     "referenceCount": 64,
-    "influentialCitationCount": 54,
+    "influentialCitationCount": 55,
     "fieldsOfStudy": [
       "Computer Science"
     ],
@@ -3417,6 +3417,75 @@
       "pages": null
     },
     "tldr": "A separable self-attention method with linear complexity, making it a good choice for resource-constrained devices, and the improved model, MobileViTv2, is state-of-the-art on several mobile vision tasks, including ImageNet object classification and MS-COCO object detection."
+  },
+  {
+    "paperId": "6f6e2e0311589a9af045f6acd00b7dee6d19fce4",
+    "title": "The Impact of Positional Encoding on Length Generalization in Transformers",
+    "year": 2023,
+    "abstract": "Length generalization, the ability to generalize from small training context sizes to larger ones, is a critical challenge in the development of Transformer-based language models. Positional encoding (PE) has been identified as a major factor influencing length generalization, but the exact impact of different PE schemes on extrapolation in downstream tasks remains unclear. In this paper, we conduct a systematic empirical study comparing the length generalization performance of decoder-only Transformers with five different position encoding approaches including Absolute Position Embedding (APE), T5's Relative PE, ALiBi, and Rotary, in addition to Transformers without positional encoding (NoPE). Our evaluation encompasses a battery of reasoning and mathematical tasks. Our findings reveal that the most commonly used positional encoding methods, such as ALiBi, Rotary, and APE, are not well suited for length generalization in downstream tasks. More importantly, NoPE outperforms other explicit positional encoding methods while requiring no additional computation. We theoretically demonstrate that NoPE can represent both absolute and relative PEs, but when trained with SGD, it mostly resembles T5's relative PE attention patterns. Finally, we find that scratchpad is not always helpful to solve length generalization and its format highly impacts the model's performance. Overall, our work suggests that explicit position embeddings are not essential for decoder-only Transformers to generalize well to longer sequences.",
+    "url": "https://www.semanticscholar.org/paper/6f6e2e0311589a9af045f6acd00b7dee6d19fce4",
+    "venue": "Neural Information Processing Systems",
+    "publicationDate": "2023-05-31",
+    "publicationTypes": [
+      "JournalArticle"
+    ],
+    "isOpenAccess": true,
+    "openAccessPdf": {
+      "url": "http://arxiv.org/pdf/2305.19466",
+      "status": "CLOSED",
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2305.19466, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "authors": [
+      {
+        "authorId": "1754452702",
+        "name": "Amirhossein Kazemnejad",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "8350409",
+        "name": "Inkit Padhi",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "1704263",
+        "name": "K. Ramamurthy",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "1730372",
+        "name": "Payel Das",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "145732771",
+        "name": "Siva Reddy",
+        "affiliations": [],
+        "url": null
+      }
+    ],
+    "citationCount": 315,
+    "referenceCount": 62,
+    "influentialCitationCount": 27,
+    "fieldsOfStudy": [
+      "Computer Science"
+    ],
+    "externalIds": {
+      "DBLP": "conf/nips/KazemnejadPRDR23",
+      "ArXiv": "2305.19466",
+      "DOI": "10.48550/arXiv.2305.19466",
+      "CorpusId": 258987259
+    },
+    "journal": {
+      "name": "ArXiv",
+      "volume": "abs/2305.19466",
+      "pages": null
+    },
+    "tldr": "This work suggests that explicit position embeddings are not essential for decoder-only Transformers to generalize well to longer sequences, and NoPE outperforms other explicit positional encoding methods while requiring no additional computation."
   },
   {
     "paperId": "c5e6f0c52c1f91086879f46120efa79e96158eba",
@@ -3451,7 +3520,7 @@
         "url": null
       }
     ],
-    "citationCount": 343,
+    "citationCount": 344,
     "referenceCount": 49,
     "influentialCitationCount": 49,
     "fieldsOfStudy": [
@@ -3521,7 +3590,7 @@
         "url": null
       }
     ],
-    "citationCount": 281,
+    "citationCount": 287,
     "referenceCount": 40,
     "influentialCitationCount": 47,
     "fieldsOfStudy": [
@@ -3539,6 +3608,88 @@
       "pages": "5886-5895"
     },
     "tldr": "An efficient frequency domain-based self-attention solver (FSAS) to estimate the scaled dot-product attention by an element-wise product operation instead of the matrix multiplication in the spatial domain is developed."
+  },
+  {
+    "paperId": "a03738b89bd2e6554fde2725f01f69552f2389ca",
+    "title": "Feature Shrinkage Pyramid for Camouflaged Object Detection with Transformers",
+    "year": 2023,
+    "abstract": "Vision transformers have recently shown strong global context modeling capabilities in camouflaged object detection. However, they suffer from two major limitations: less effective locality modeling and insufficient feature aggregation in decoders, which are not conducive to camou-flaged object detection that explores subtle cues from indistinguishable backgrounds. To address these issues, in this paper, we propose a novel transformer-based Feature Shrinkage Pyramid Network (FSPNet), which aims to hierarchically decode locality-enhanced neighboring transformer features through progressive shrinking for camou-flaged object detection. Specifically, we propose a non-local token enhancement module (NL-TEM) that employs the non-local mechanism to interact neighboring tokens and explore graph-based high-order relations within tokens to enhance local representations of transformers. Moreover, we design a feature shrinkage decoder (FSD) with adjacent interaction modules (AIM), which progressively aggregates adjacent transformer features through a layer-by-layer shrinkage pyramid to accumulate imperceptible but effective cues as much as possible for object information decoding. Extensive quantitative and qualitative experiments demonstrate that the proposed model significantly outperforms the existing 24 competitors on three challenging COD benchmark datasets under six widely-used evaluation metrics. Our code is publicly available at https://github.com/ZhouHuang23/FSPNet.",
+    "url": "https://www.semanticscholar.org/paper/a03738b89bd2e6554fde2725f01f69552f2389ca",
+    "venue": "Computer Vision and Pattern Recognition",
+    "publicationDate": "2023-03-26",
+    "publicationTypes": [
+      "JournalArticle",
+      "Conference"
+    ],
+    "isOpenAccess": true,
+    "openAccessPdf": {
+      "url": "https://arxiv.org/pdf/2303.14816",
+      "status": "GREEN",
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2303.14816, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "authors": [
+      {
+        "authorId": "153858004",
+        "name": "Zhou Huang",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "46447978",
+        "name": "Hang Dai",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "3408056",
+        "name": "Tian-Zhu Xiang",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "2146295031",
+        "name": "Shuo Wang",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "103302856",
+        "name": "Huaixin Chen",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "2187055155",
+        "name": "Jie Qin",
+        "affiliations": [],
+        "url": null
+      },
+      {
+        "authorId": "2054473409",
+        "name": "Huan Xiong",
+        "affiliations": [],
+        "url": null
+      }
+    ],
+    "citationCount": 205,
+    "referenceCount": 62,
+    "influentialCitationCount": 38,
+    "fieldsOfStudy": [
+      "Computer Science"
+    ],
+    "externalIds": {
+      "DBLP": "conf/cvpr/HuangDXWCQX23",
+      "ArXiv": "2303.14816",
+      "DOI": "10.1109/CVPR52729.2023.00538",
+      "CorpusId": 257766661
+    },
+    "journal": {
+      "name": "2023 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)",
+      "volume": null,
+      "pages": "5557-5566"
+    },
+    "tldr": "A novel transformer-based Feature Shrinkage Pyramid Network (FSPNet), which aims to hierarchically decode locality-enhanced neighboring transformer features through progressive shrinking for camou-flaged object detection and significantly outperforms the existing 24 competitors on three challenging COD benchmark datasets under six widely-used evaluation metrics."
   },
   {
     "paperId": "dd2819016c6bf244c39b3e6707b60389bbdbcd21",
@@ -3597,7 +3748,7 @@
         "url": null
       }
     ],
-    "citationCount": 934,
+    "citationCount": 937,
     "referenceCount": 74,
     "influentialCitationCount": 166,
     "fieldsOfStudy": [
@@ -3615,134 +3766,5 @@
       "pages": "19291-19300"
     },
     "tldr": "Point-BERT, a new paradigm for learning Transformers to generalize the concept of BERT to 3D point cloud, is presented and it is shown that a pure Transformer architecture attains 93.8% accuracy on ModelNet40 and 83.1% accuracy in the hardest setting of ScanObjectNN, surpassing carefully designed point cloud models with much fewer hand-made designs."
-  },
-  {
-    "paperId": "6b66447a6039acd79c6810ff07bb378c3e79b8c6",
-    "title": "Comparing Vision Transformers and Convolutional Neural Networks for Image Classification: A Literature Review",
-    "year": 2023,
-    "abstract": "Transformers are models that implement a mechanism of self-attention, individually weighting the importance of each part of the input data. Their use in image classification tasks is still somewhat limited since researchers have so far chosen Convolutional Neural Networks for image classification and transformers were more targeted to Natural Language Processing (NLP) tasks. Therefore, this paper presents a literature review that shows the differences between Vision Transformers (ViT) and Convolutional Neural Networks. The state of the art that used the two architectures for image classification was reviewed and an attempt was made to understand what factors may influence the performance of the two deep learning architectures based on the datasets used, image size, number of target classes (for the classification problems), hardware, and evaluated architectures and top results. The objective of this work is to identify which of the architectures is the best for image classification and under what conditions. This paper also describes the importance of the Multi-Head Attention mechanism for improving the performance of ViT in image classification.",
-    "url": "https://www.semanticscholar.org/paper/6b66447a6039acd79c6810ff07bb378c3e79b8c6",
-    "venue": "Applied Sciences",
-    "publicationDate": "2023-04-28",
-    "publicationTypes": [
-      "JournalArticle",
-      "Review"
-    ],
-    "isOpenAccess": true,
-    "openAccessPdf": {
-      "url": "https://www.mdpi.com/2076-3417/13/9/5521/pdf?version=1683174100",
-      "status": "GOLD",
-      "license": "CCBY",
-      "disclaimer": "Notice: Paper or abstract available at https://api.unpaywall.org/v2/10.3390/app13095521?email=<INSERT_YOUR_EMAIL> or https://doi.org/10.3390/app13095521, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
-    },
-    "authors": [
-      {
-        "authorId": "2073403590",
-        "name": "J. Maurício",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "145908670",
-        "name": "Inês Domingues",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "1716043",
-        "name": "Jorge Bernardino",
-        "affiliations": [],
-        "url": null
-      }
-    ],
-    "citationCount": 459,
-    "referenceCount": 29,
-    "influentialCitationCount": 9,
-    "fieldsOfStudy": null,
-    "externalIds": {
-      "DOI": "10.3390/app13095521",
-      "CorpusId": 258453958
-    },
-    "journal": {
-      "name": "Applied Sciences",
-      "volume": null,
-      "pages": null
-    },
-    "tldr": "An attempt was made to understand what factors may influence the performance of the two deep learning architectures based on the datasets used, image size, number of target classes, hardware, and evaluated architectures and top results."
-  },
-  {
-    "paperId": "e03609f2587f690867e7ea0bedaf0db25282c548",
-    "title": "ZeroQuant: Efficient and Affordable Post-Training Quantization for Large-Scale Transformers",
-    "year": 2022,
-    "abstract": "How to efficiently serve ever-larger trained natural language models in practice has become exceptionally challenging even for powerful cloud servers due to their prohibitive memory/computation requirements. In this work, we present an efficient and affordable post-training quantization approach to compress large Transformer-based models, termed as ZeroQuant. ZeroQuant is an end-to-end quantization and inference pipeline with three main components: (1) a fine-grained hardware-friendly quantization scheme for both weight and activations; (2) a novel affordable layer-by-layer knowledge distillation algorithm (LKD) even without the access to the original training data; (3) a highly-optimized quantization system backend support to remove the quantization/dequantization overhead. As such, we are able to show that: (1) ZeroQuant can reduce the precision for weights and activations to INT8 in a cost-free way for both BERT and GPT3-style models with minimal accuracy impact, which leads to up to 5.19x/4.16x speedup on those models compared to FP16 inference; (2) ZeroQuant plus LKD affordably quantize the weights in the fully-connected module to INT4 along with INT8 weights in the attention module and INT8 activations, resulting in 3x memory footprint reduction compared to the FP16 model; (3) ZeroQuant can be directly applied to two of the largest open-sourced language models, including GPT-J6B and GPT-NeoX20, for which our INT8 model achieves similar accuracy as the FP16 model but achieves up to 5.2x better efficiency.",
-    "url": "https://www.semanticscholar.org/paper/e03609f2587f690867e7ea0bedaf0db25282c548",
-    "venue": "Neural Information Processing Systems",
-    "publicationDate": "2022-06-04",
-    "publicationTypes": [
-      "JournalArticle"
-    ],
-    "isOpenAccess": true,
-    "openAccessPdf": {
-      "url": "https://arxiv.org/pdf/2206.01861",
-      "status": "GREEN",
-      "license": null,
-      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2206.01861, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
-    },
-    "authors": [
-      {
-        "authorId": "9088433",
-        "name": "Z. Yao",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "3394222",
-        "name": "Reza Yazdani Aminabadi",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "67016465",
-        "name": "Minjia Zhang",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "2129511744",
-        "name": "Xiaoxia Wu",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "2609325",
-        "name": "Conglong Li",
-        "affiliations": [],
-        "url": null
-      },
-      {
-        "authorId": "2257185770",
-        "name": "Yuxiong He",
-        "affiliations": [],
-        "url": null
-      }
-    ],
-    "citationCount": 627,
-    "referenceCount": 85,
-    "influentialCitationCount": 59,
-    "fieldsOfStudy": [
-      "Computer Science"
-    ],
-    "externalIds": {
-      "DBLP": "conf/nips/YaoAZWLH22",
-      "ArXiv": "2206.01861",
-      "DOI": "10.48550/arXiv.2206.01861",
-      "CorpusId": 249395624
-    },
-    "journal": {
-      "name": "ArXiv",
-      "volume": "abs/2206.01861",
-      "pages": null
-    },
-    "tldr": "This work is able to show that ZeroQuant can reduce the precision for weights and activations to INT8 in a cost-free way for both BERT and GPT3-style models with minimal accuracy impact, which leads to up to 5.19x/4.16x speedup on those models compared to FP16 inference."
   }
 ]

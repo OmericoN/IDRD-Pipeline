@@ -1,8 +1,6 @@
-import sys
-sys.path.append('../../')
-# Import directly from config
-from src.config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
-from src.utils.dict_parser import PaperDictParser
+import os
+from config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
+from utils.dict_parser import PaperDictParser
 import requests
 import time
 import json
