@@ -89,6 +89,9 @@ class PaperDictParser:
             
             # TL;DR
             'tldr': paper.get('tldr', {}).get('text') if paper.get('tldr') else None,
+            
+            # Citations with contexts and intents
+            'citations': self._parse_citations(paper.get('citations', []))
         }
     
     def _parse_open_access(self, oa_data: Optional[Dict]) -> Optional[Dict]:
@@ -131,6 +134,43 @@ class PaperDictParser:
         if not tldr:
             return None
         return tldr.get('text')
+    
+    def _parse_citations(self, citations: List[Dict]) -> List[Dict]:
+        """Parse citation data including contexts and intents."""
+        if not citations:
+            return []
+        
+        parsed_citations = []
+        for citation in citations:
+            citing_paper = citation.get('citingPaper', {})
+            
+            parsed_citation = {
+                'contexts': citation.get('contexts', []),
+                'intents': citation.get('intents', []),
+                'isInfluential': citation.get('isInfluential', False),
+                'citingPaper': {
+                    'paperId': citing_paper.get('paperId'),
+                    'title': citing_paper.get('title'),
+                    'year': citing_paper.get('year'),
+                    'authors': self._parse_citation_authors(citing_paper.get('authors', []))
+                } if citing_paper else None
+            }
+            parsed_citations.append(parsed_citation)
+        
+        return parsed_citations
+    
+    def _parse_citation_authors(self, authors: List[Dict]) -> List[Dict]:
+        """Parse authors from citation data."""
+        if not authors:
+            return []
+        
+        return [
+            {
+                'authorId': author.get('authorId'),
+                'name': author.get('name')
+            }
+            for author in authors
+        ]
     
     def parse_papers(self, papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -175,6 +215,12 @@ class PaperDictParser:
         # Flatten nested structures for DataFrame
         flattened = []
         for paper in self.parsed_papers:
+            citations = paper.get('citations', [])
+            
+            # Calculate citation statistics
+            total_contexts = sum(len(c.get('contexts', [])) for c in citations)
+            total_intents = sum(len(c.get('intents', [])) for c in citations)
+            
             flat = {
                 'paperId': paper['paperId'],
                 'title': paper['title'],
@@ -205,7 +251,17 @@ class PaperDictParser:
                 'tldr': paper.get('tldr'),
                 
                 # Fields of study
-                'fields_of_study': ', '.join(paper.get('fieldsOfStudy', []))
+                'fields_of_study': ', '.join(paper.get('fieldsOfStudy', [])),
+                
+                # Citation data - detailed statistics
+                'citations_fetched': len(citations),
+                'influential_citations': sum(1 for c in citations if c.get('isInfluential')),
+                'citations_with_context': sum(1 for c in citations if c.get('contexts')),
+                'citations_with_intents': sum(1 for c in citations if c.get('intents')),
+                'total_citation_contexts': total_contexts,
+                'total_citation_intents': total_intents,
+                'avg_contexts_per_citation': total_contexts / len(citations) if citations else 0,
+                'avg_intents_per_citation': total_intents / len(citations) if citations else 0
             }
             flattened.append(flat)
         
@@ -273,7 +329,7 @@ class PaperDictParser:
         
         df = self.to_dataframe()
         
-        return {
+        stats = {
             'total_papers': len(self.parsed_papers),
             'year_range': {
                 'min': int(df['year'].min()) if pd.notna(df['year'].min()) else None,
@@ -290,6 +346,23 @@ class PaperDictParser:
             'unique_venues': int(df['venue'].nunique()),
             'top_venues': df['venue'].value_counts().head(5).to_dict()
         }
+        
+        # Add citation context statistics if available
+        if 'citations_fetched' in df.columns and df['citations_fetched'].sum() > 0:
+            stats['citation_context_stats'] = {
+                'papers_with_citations': int(df['citations_fetched'].gt(0).sum()),
+                'total_citations_fetched': int(df['citations_fetched'].sum()),
+                'avg_citations_per_paper': float(df['citations_fetched'].mean()),
+                'total_influential': int(df['influential_citations'].sum()) if 'influential_citations' in df.columns else 0,
+                'total_with_context': int(df['citations_with_context'].sum()) if 'citations_with_context' in df.columns else 0,
+                'total_with_intents': int(df['citations_with_intents'].sum()) if 'citations_with_intents' in df.columns else 0,
+                'total_contexts': int(df['total_citation_contexts'].sum()) if 'total_citation_contexts' in df.columns else 0,
+                'total_intents': int(df['total_citation_intents'].sum()) if 'total_citation_intents' in df.columns else 0,
+                'avg_contexts_per_citation': float(df[df['citations_fetched'] > 0]['avg_contexts_per_citation'].mean()),
+                'avg_intents_per_citation': float(df[df['citations_fetched'] > 0]['avg_intents_per_citation'].mean())
+            }
+        
+        return stats
     
     def save_statistics(self, filename: str = 'paper_statistics.json'):
         """
@@ -346,49 +419,12 @@ class PaperDictParser:
             filtered = [p for p in filtered if p['openAccessPdf'] and p['openAccessPdf'].get('url')]
         
         return filtered
-
-
-# Example usage
-if __name__ == "__main__":
-    import sys
-    sys.path.append('../../')
     
-    from src.Stage1_fetching.fetching import SemanticScholarClient
-    
-    # Fetch papers
-    print("Fetching papers from Semantic Scholar...")
-    client = SemanticScholarClient()
-    papers = client.search_papers(query="Transformers", limit=20)
-    
-    # Parse papers
-    print("\nParsing papers...")
-    parser = PaperDictParser()  # Automatically uses 'outputs' folder
-    parsed = parser.parse_papers(papers)
-    
-    # Save in all formats
-    print("\nSaving results...")
-    saved_files = parser.save_all_formats('transformer_papers')
-    
-    # Save statistics
-    parser.save_statistics('transformer_papers_stats.json')
-    
-    # Print summary
-    print("\n" + "="*50)
-    print("SUMMARY")
-    print("="*50)
-    stats = parser.get_statistics()
-    print(json.dumps(stats, indent=2))
-    
-    # Filter highly cited recent papers
-    highly_cited = parser.filter_papers(
-        min_citations=50,
-        year_from=2020,
-        has_abstract=True
-    )
-    print(f"\n✓ Found {len(highly_cited)} highly cited recent papers")
-    
-    # Save filtered results
-    if highly_cited:
-        filtered_parser = PaperDictParser()
-        filtered_parser.parsed_papers = highly_cited
-        filtered_parser.save_all_formats('highly_cited_papers')
+    def get_papers_with_snippets(self) -> List[Dict[str, Any]]:
+        """
+        Get only papers that have matched snippets.
+        
+        Returns:
+            List of papers with snippets
+        """
+        return [p for p in self.parsed_papers if p.get('matchedSnippets')]

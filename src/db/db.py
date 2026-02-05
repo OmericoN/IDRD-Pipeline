@@ -128,11 +128,59 @@ class PublicationDatabase:
             )
         ''')
         
+        # Citations table - NEW
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS citations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paperId TEXT NOT NULL,
+                citingPaperId TEXT,
+                citingPaperTitle TEXT,
+                citingPaperYear INTEGER,
+                isInfluential BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (paperId) REFERENCES publications(paperId) ON DELETE CASCADE,
+                UNIQUE(paperId, citingPaperId)
+            )
+        ''')
+        
+        # Citation contexts table - NEW
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS citation_contexts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                citation_id INTEGER NOT NULL,
+                context TEXT NOT NULL,
+                FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Citation intents table - NEW
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS citation_intents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                citation_id INTEGER NOT NULL,
+                intent TEXT NOT NULL,
+                FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Citation authors table - NEW
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS citation_authors (
+                citation_id INTEGER NOT NULL,
+                authorId TEXT,
+                name TEXT NOT NULL,
+                FOREIGN KEY (citation_id) REFERENCES citations(id) ON DELETE CASCADE,
+                PRIMARY KEY (citation_id, authorId)
+            )
+        ''')
+        
         # Create indexes for faster queries
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_year ON publications(year)')
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_citations ON publications(citationCount)')
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_title ON publications(title)')
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_doi ON external_ids(doi)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_citing_paper ON citations(citingPaperId)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_citation_paper ON citations(paperId)')
         
         self.conn.commit()
     
@@ -248,6 +296,53 @@ class PublicationDatabase:
                     VALUES (?, ?)
                 ''', (paper_id, field))
             
+            # Insert citations with contexts and intents - NEW
+            for citation in paper.get('citations', []):
+                citing_paper = citation.get('citingPaper', {})
+                citing_paper_id = citing_paper.get('paperId') if citing_paper else None
+                
+                # Insert citation
+                self.cursor.execute('''
+                    INSERT OR REPLACE INTO citations 
+                    (paperId, citingPaperId, citingPaperTitle, citingPaperYear, isInfluential)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    paper_id,
+                    citing_paper_id,
+                    citing_paper.get('title') if citing_paper else None,
+                    citing_paper.get('year') if citing_paper else None,
+                    citation.get('isInfluential', False)
+                ))
+                
+                # Get the citation_id
+                citation_id = self.cursor.lastrowid
+                
+                # Insert contexts
+                for context in citation.get('contexts', []):
+                    self.cursor.execute('''
+                        INSERT INTO citation_contexts (citation_id, context)
+                        VALUES (?, ?)
+                    ''', (citation_id, context))
+                
+                # Insert intents
+                for intent in citation.get('intents', []):
+                    self.cursor.execute('''
+                        INSERT INTO citation_intents (citation_id, intent)
+                        VALUES (?, ?)
+                    ''', (citation_id, intent))
+                
+                # Insert citing paper authors
+                if citing_paper:
+                    for author in citing_paper.get('authors', []):
+                        author_id = author.get('authorId')
+                        author_name = author.get('name')
+                        if author_name:
+                            self.cursor.execute('''
+                                INSERT OR IGNORE INTO citation_authors 
+                                (citation_id, authorId, name)
+                                VALUES (?, ?, ?)
+                            ''', (citation_id, author_id, author_name))
+            
             return True
             
         except Exception as e:
@@ -330,6 +425,48 @@ class PublicationDatabase:
             SELECT field FROM fields_of_study WHERE paperId = ?
         ''', (paper_id,))
         paper['fieldsOfStudy'] = [r[0] for r in self.cursor.fetchall()]
+        
+        # Get citations with contexts and intents - NEW
+        self.cursor.execute('''
+            SELECT id, citingPaperId, citingPaperTitle, citingPaperYear, isInfluential
+            FROM citations
+            WHERE paperId = ?
+        ''', (paper_id,))
+        
+        citations = []
+        for citation_row in self.cursor.fetchall():
+            citation_id = citation_row[0]
+            citation = {
+                'citingPaperId': citation_row[1],
+                'citingPaperTitle': citation_row[2],
+                'citingPaperYear': citation_row[3],
+                'isInfluential': bool(citation_row[4]),
+                'contexts': [],
+                'intents': [],
+                'authors': []
+            }
+            
+            # Get contexts
+            self.cursor.execute('''
+                SELECT context FROM citation_contexts WHERE citation_id = ?
+            ''', (citation_id,))
+            citation['contexts'] = [r[0] for r in self.cursor.fetchall()]
+            
+            # Get intents
+            self.cursor.execute('''
+                SELECT intent FROM citation_intents WHERE citation_id = ?
+            ''', (citation_id,))
+            citation['intents'] = [r[0] for r in self.cursor.fetchall()]
+            
+            # Get authors
+            self.cursor.execute('''
+                SELECT authorId, name FROM citation_authors WHERE citation_id = ?
+            ''', (citation_id,))
+            citation['authors'] = [{'authorId': r[0], 'name': r[1]} for r in self.cursor.fetchall()]
+            
+            citations.append(citation)
+        
+        paper['citations'] = citations
         
         return paper
     
@@ -456,6 +593,36 @@ class PublicationDatabase:
         self.cursor.execute('SELECT COUNT(*) FROM authors')
         stats['total_authors'] = self.cursor.fetchone()[0]
         
+        # Citation context statistics - NEW
+        self.cursor.execute('SELECT COUNT(*) FROM citations')
+        total_citations = self.cursor.fetchone()[0]
+        
+        self.cursor.execute('''
+            SELECT COUNT(*) FROM citations WHERE isInfluential = 1
+        ''')
+        influential_citations = self.cursor.fetchone()[0]
+        
+        self.cursor.execute('SELECT COUNT(*) FROM citation_contexts')
+        total_contexts = self.cursor.fetchone()[0]
+        
+        self.cursor.execute('SELECT COUNT(*) FROM citation_intents')
+        total_intents = self.cursor.fetchone()[0]
+        
+        self.cursor.execute('''
+            SELECT COUNT(DISTINCT paperId) FROM citations
+        ''')
+        papers_with_citation_data = self.cursor.fetchone()[0]
+        
+        stats['citation_context_stats'] = {
+            'total_citations_fetched': total_citations,
+            'influential_citations': influential_citations,
+            'total_contexts': total_contexts,
+            'total_intents': total_intents,
+            'papers_with_citation_data': papers_with_citation_data,
+            'avg_contexts_per_citation': round(total_contexts / total_citations, 2) if total_citations > 0 else 0,
+            'avg_intents_per_citation': round(total_intents / total_citations, 2) if total_citations > 0 else 0
+        }
+        
         # Top venues
         self.cursor.execute('''
             SELECT venue, COUNT(*) as count 
@@ -482,6 +649,10 @@ class PublicationDatabase:
     def clear_db(self):
         """Clear all data from the database (keeps table structure)."""
         tables = [
+            'citation_authors',
+            'citation_intents',
+            'citation_contexts',
+            'citations',
             'fields_of_study',
             'publication_types',
             'journals',
@@ -501,6 +672,10 @@ class PublicationDatabase:
     def drop_tables(self):
         """Drop all tables (complete reset)."""
         tables = [
+            'citation_authors',
+            'citation_intents',
+            'citation_contexts',
+            'citations',
             'fields_of_study',
             'publication_types',
             'journals',

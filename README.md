@@ -41,6 +41,25 @@ Evaluates the formality of dataset references.
 - Quality and completeness scoring
 - Evaluation report generation
 
+### Tests - downloader & converter
+'''{python}
+
+    # Run all tests
+    python src/extractor/tests.py
+
+    # Run specific test class
+    python -m unittest src.extractor.tests.TestPDFDownloader
+
+    # Run specific test
+    python -m unittest src.extractor.tests.TestPDFDownloader.test_download_paper_success
+
+    # Run with coverage (requires coverage package)
+    pip install coverage
+    coverage run src/extractor/tests.py
+    coverage report
+    coverage html
+'''
+
 ## Installation
 
 ```bash

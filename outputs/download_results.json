@@ -1,0 +1,80 @@
+{
+  "results": [
+    {
+      "paper_id": "ad4a0938c48e61b7827869e4ac3baffd0aefab35",
+      "title": "Emerging Properties in Self-Supervised Vision Transformers",
+      "url": "http://arxiv.org/pdf/2104.14294",
+      "success": true,
+      "message": "Downloaded: ad4a0938c48e61b7827869e4ac3baffd0aefab35.pdf (29.50 MB)"
+    },
+    {
+      "paper_id": "736973165f98105fec3729b7db414ae4d80fcbeb",
+      "title": "Scalable Diffusion Models with Transformers",
+      "url": "https://arxiv.org/pdf/2212.09748",
+      "success": true,
+      "message": "Downloaded: 736973165f98105fec3729b7db414ae4d80fcbeb.pdf (41.79 MB)"
+    },
+    {
+      "paper_id": "47f7ec3d0a5e6e83b6768ece35206a94dc81919c",
+      "title": "Taming Transformers for High-Resolution Image Synthesis",
+      "url": "https://arxiv.org/pdf/2012.09841",
+      "success": true,
+      "message": "Downloaded: 47f7ec3d0a5e6e83b6768ece35206a94dc81919c.pdf (48.17 MB)"
+    },
+    {
+      "paper_id": "5f404dbba07619cc7f28d75d03f124a52290046e",
+      "title": "Are Transformers Effective for Time Series Forecasting?",
+      "url": "http://arxiv.org/pdf/2205.13504",
+      "success": true,
+      "message": "Downloaded: 5f404dbba07619cc7f28d75d03f124a52290046e.pdf (1.51 MB)"
+    },
+    {
+      "paper_id": "7519a1e9e7371df79bd8a21cee871feb0ec597a5",
+      "title": "UNETR: Transformers for 3D Medical Image Segmentation",
+      "url": "https://arxiv.org/pdf/2103.10504",
+      "success": true,
+      "message": "Downloaded: 7519a1e9e7371df79bd8a21cee871feb0ec597a5.pdf (1.04 MB)"
+    },
+    {
+      "paper_id": "8e33914d6051dd031a5e096962b9398fc1d16067",
+      "title": "Vision Transformers for Dense Prediction",
+      "url": "https://arxiv.org/pdf/2103.13413",
+      "success": true,
+      "message": "Downloaded: 8e33914d6051dd031a5e096962b9398fc1d16067.pdf (9.78 MB)"
+    },
+    {
+      "paper_id": "739ceacfafb1c4eaa17509351b647c773270b3ae",
+      "title": "An Empirical Study of Training Self-Supervised Vision Transformers",
+      "url": "https://arxiv.org/pdf/2104.02057",
+      "success": true,
+      "message": "Downloaded: 739ceacfafb1c4eaa17509351b647c773270b3ae.pdf (0.82 MB)"
+    },
+    {
+      "paper_id": "3a906b77fa218adc171fecb28bb81c24c14dcc7b",
+      "title": "Transformers in Vision: A Survey",
+      "url": "https://arxiv.org/pdf/2101.01169",
+      "success": true,
+      "message": "Downloaded: 3a906b77fa218adc171fecb28bb81c24c14dcc7b.pdf (7.30 MB)"
+    },
+    {
+      "paper_id": "dbe077f8521ecbe0a1477d6148c726d4f053d9c9",
+      "title": "Tokens-to-Token ViT: Training Vision Transformers from Scratch on ImageNet",
+      "url": "https://arxiv.org/pdf/2101.11986",
+      "success": true,
+      "message": "Downloaded: dbe077f8521ecbe0a1477d6148c726d4f053d9c9.pdf (10.27 MB)"
+    },
+    {
+      "paper_id": "e775e649d815a02373eac840cf5e33a04ff85c95",
+      "title": "CvT: Introducing Convolutions to Vision Transformers",
+      "url": "http://arxiv.org/pdf/2103.15808",
+      "success": true,
+      "message": "Downloaded: e775e649d815a02373eac840cf5e33a04ff85c95.pdf (0.95 MB)"
+    }
+  ],
+  "stats": {
+    "successful": 11,
+    "failed": 0,
+    "skipped": 0,
+    "total_size": 189397114
+  }
+}

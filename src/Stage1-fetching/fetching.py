@@ -122,7 +122,6 @@ class SemanticScholarClient:
                 
         return all_papers
 
-
     def _fetch_batch(
         self,
         query: str,
@@ -212,28 +211,196 @@ class SemanticScholarClient:
 
         return [], 0
     
+
+    def get_paper_citations(
+        self,
+        paper_id: str,
+        fields: List[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Dict]:
+        """
+        Get citations for a specific paper with contexts and intents.
+        
+        :param paper_id: Semantic Scholar paper ID
+        :type paper_id: str
+        :param fields: Fields to retrieve for each citation. Default includes contexts and intents
+        :type fields: List[str]
+        :param limit: Number of citations to retrieve per request (max 1000)
+        :type limit: int
+        :param offset: Starting offset for pagination
+        :type offset: int
+        :return: List of citation dictionaries
+        :rtype: List[Dict]
+        """
+        print(f"Fetching citations for paper {paper_id}...")
+        
+        # Default fields - use nested syntax for citingPaper fields
+        default_fields = fields or [
+            "contexts",
+            "intents",
+            "isInfluential",
+            "citingPaper.paperId",
+            "citingPaper.title",
+            "citingPaper.year",
+            "citingPaper.authors"
+        ]
+        
+        all_citations = []
+        batch_size = min(limit, 1000)  # API max is 1000
+        total_batches = (limit + batch_size - 1) // batch_size
+        
+        with tqdm(total=limit, desc="Fetching citations", unit="citations") as pbar:
+            for batch in range(total_batches):
+                current_offset = offset + batch * batch_size
+                current_limit = min(batch_size, limit - batch * batch_size)
+                
+                citations = self._fetch_citations_batch(
+                    paper_id, current_limit, current_offset, default_fields
+                )
+                
+                if not citations:
+                    pbar.write("No more citations available")
+                    break
+                
+                all_citations.extend(citations)
+                pbar.update(len(citations))
+                
+                # If we got fewer citations than requested, we've reached the end
+                if len(citations) < current_limit:
+                    break
+        
+        print(f"Total citations fetched: {len(all_citations)}")
+        return all_citations
+    
+    def _fetch_citations_batch(
+        self,
+        paper_id: str,
+        limit: int,
+        offset: int,
+        fields: List[str],
+        max_retries: int = 10
+    ) -> List[Dict]:
+        """Fetch a single batch of citations with retry logic."""
+        url = f"{self.base_url}/paper/{paper_id}/citations"
+        params = {
+            "fields": ",".join(fields),
+            "limit": limit,
+            "offset": offset
+        }
+        
+        for retry in range(max_retries):
+            try:
+                response = requests.get(
+                    url, params=params, headers=self.headers, timeout=30
+                )
+                
+                # Handle rate limiting
+                if response.status_code == 429:
+                    if retry < max_retries - 1:
+                        print(f"  Rate limited; waiting 5s... (attempt {retry + 1})")
+                        time.sleep(5)
+                        continue
+                    else:
+                        print("  Reached max retries for rate limiting")
+                        return []
+                
+                # Handle client errors
+                if 400 <= response.status_code < 500 and response.status_code != 429:
+                    print(f"  Client error {response.status_code}: {response.text}")
+                    return []
+                
+                # Handle server errors
+                if response.status_code >= 500:
+                    if retry < max_retries - 1:
+                        print(f"  Server error {response.status_code}; waiting 5s...")
+                        time.sleep(5)
+                        continue
+                    else:
+                        print("  Reached max retries for server error")
+                        return []
+                
+                response.raise_for_status()
+                data = response.json()
+                
+                return data.get("data", [])
+                
+            except requests.exceptions.RequestException as e:
+                if retry < max_retries - 1:
+                    print(f"  Network error: {e}; waiting 5s...")
+                    time.sleep(5)
+                else:
+                    print(f"  Reached max retries: {e}")
+                    return []
+            except json.JSONDecodeError as e:
+                if retry < max_retries - 1:
+                    print(f"  JSON parse failed: {e}; waiting 5s...")
+                    time.sleep(5)
+                else:
+                    print(f"  Reached max retries: {e}")
+                    return []
+        
+        return []
+    
+    def enrich_papers_with_citations(
+        self,
+        papers: List[Dict],
+        max_citations_per_paper: int = 100
+    ) -> List[Dict]:
+        """
+        Enrich papers with their citation contexts and intents.
+        
+        :param papers: List of paper dictionaries
+        :type papers: List[Dict]
+        :param max_citations_per_paper: Maximum citations to fetch per paper
+        :type max_citations_per_paper: int
+        :return: Papers enriched with citation data
+        :rtype: List[Dict]
+        """
+        print(f"\nEnriching {len(papers)} papers with citation contexts...")
+        
+        with tqdm(total=len(papers), desc="Enriching papers", unit="papers") as pbar:
+            for paper in papers:
+                paper_id = paper.get('paperId')
+                if not paper_id:
+                    paper['citations'] = []
+                    pbar.update(1)
+                    continue
+                
+                citations = self.get_paper_citations(
+                    paper_id=paper_id,
+                    limit=max_citations_per_paper
+                )
+                
+                paper['citations'] = citations
+                pbar.update(1)
+                time.sleep(0.1)  # Small delay to avoid rate limiting
+        
+        return papers
+
 # Example Usage 
 if __name__ == "__main__":
     parser = PaperDictParser()
     client = SemanticScholarClient()
     
-    # Example 1: All papers (default)
-    # result = client.search_papers(query="Transformers")
-    
-    # Example 2: Only open access papers
+    # Example 1: Basic paper search
     result = client.search_papers(
         query="Transformers", 
         open_access_pdf=True,
-        limit=50
+        limit=10  # Reduced for testing
     )
     
-    # Example 3: Open access + specific field
-    # result = client.search_papers(
-    #     query="deep learning", 
-    #     open_access_pdf=True,
-    #     fields_of_study="Computer Science",
+    # Example 2: Get citations for a specific paper
+    # paper_id = "649def34f8be52c8b66281af98ae884c09aef38b"
+    # citations = client.get_paper_citations(
+    #     paper_id=paper_id,
+    #     fields=["contexts", "intents", "isInfluential", "citingPaper.paperId", "citingPaper.title"],
     #     limit=100
     # )
+    # print(f"Found {len(citations)} citations")
+    
+    # Example 3: Enrich papers with citation contexts
+    result = client.enrich_papers_with_citations(result, max_citations_per_paper=50)
     
     parser.parse_papers(result)
     parser.to_json(filename="retrieved_results.json")
@@ -241,6 +408,7 @@ if __name__ == "__main__":
     # Print summary
     open_access_count = sum(1 for p in result if p.get('openAccessPdf', {}).get('url'))
     papers_with_doi = sum(1 for p in result if p.get('externalIds', {}).get('DOI'))
+    papers_with_citations = sum(1 for p in result if p.get('citations'))
     
     print(f"\n{'='*50}")
     print(f"SUMMARY")
@@ -248,6 +416,7 @@ if __name__ == "__main__":
     print(f"Total papers fetched: {len(result)}")
     print(f"Papers with PDF URLs: {open_access_count}")
     print(f"Papers with DOI: {papers_with_doi}")
+    print(f"Papers with citation data: {papers_with_citations}")
     
     # Show first paper's details
     if result:
@@ -256,3 +425,10 @@ if __name__ == "__main__":
         print(f"  Title: {first_paper.get('title')}")
         print(f"  DOI: {first_paper.get('externalIds', {}).get('DOI', 'N/A')}")
         print(f"  PDF: {first_paper.get('openAccessPdf', {}).get('url', 'N/A')}")
+        print(f"  Citations: {first_paper.get('citationCount', 0)}")
+        if first_paper.get('citations'):
+            print(f"  Citation contexts fetched: {len(first_paper['citations'])}")
+            if first_paper['citations']:
+                first_citation = first_paper['citations'][0]
+                print(f"  First citation contexts: {first_citation.get('contexts', [])[:2]}")
+                print(f"  First citation intents: {first_citation.get('intents', [])}")
