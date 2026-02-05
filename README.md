@@ -10,6 +10,28 @@ The IDRD-Pipeline is a Python-based multi-stage pipeline designed to:
 3. Embed university database for affiliation and similarity checking
 4. Evaluate the formality of dataset references
 
+## Main Orchestration Control
+```python
+# Full pipeline
+python src/main.py --query "Transformers" --limit 50
+
+# Fetch only
+python src/main.py --query "Machine Learning" --limit 100 --fetch-only
+
+# Download only
+python src/main.py --download-only
+
+# Convert only
+python src/main.py --convert-only
+
+# Check status
+python src/main.py --status
+
+# Reset pipeline
+python src/main.py --reset status
+```
+
+
 
 ## Pipeline Stages
 To be written

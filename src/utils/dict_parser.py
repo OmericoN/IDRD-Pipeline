@@ -129,12 +129,6 @@ class PaperDictParser:
             'pages': journal.get('pages')
         }
     
-    def _parse_tldr(self, tldr: Optional[Dict]) -> Optional[str]:
-        """Parse TL;DR summary."""
-        if not tldr:
-            return None
-        return tldr.get('text')
-    
     def _parse_citations(self, citations: List[Dict]) -> List[Dict]:
         """Parse citation data including contexts and intents."""
         if not citations:
@@ -419,12 +413,3 @@ class PaperDictParser:
             filtered = [p for p in filtered if p['openAccessPdf'] and p['openAccessPdf'].get('url')]
         
         return filtered
-    
-    def get_papers_with_snippets(self) -> List[Dict[str, Any]]:
-        """
-        Get only papers that have matched snippets.
-        
-        Returns:
-            List of papers with snippets
-        """
-        return [p for p in self.parsed_papers if p.get('matchedSnippets')]

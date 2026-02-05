@@ -7,6 +7,8 @@ import json
 from typing import Dict, List, Optional
 import pandas as pd
 from tqdm import tqdm
+import sys
+from pathlib import Path
 
 class SemanticScholarClient:
     """
@@ -380,6 +382,10 @@ class SemanticScholarClient:
 
 # Example Usage 
 if __name__ == "__main__":
+    # Add parent directory to path for database imports
+    sys.path.append(str(Path(__file__).parent.parent))
+    from db.db import PublicationDatabase
+    
     parser = PaperDictParser()
     client = SemanticScholarClient()
     
@@ -390,20 +396,22 @@ if __name__ == "__main__":
         limit=10  # Reduced for testing
     )
     
-    # Example 2: Get citations for a specific paper
-    # paper_id = "649def34f8be52c8b66281af98ae884c09aef38b"
-    # citations = client.get_paper_citations(
-    #     paper_id=paper_id,
-    #     fields=["contexts", "intents", "isInfluential", "citingPaper.paperId", "citingPaper.title"],
-    #     limit=100
-    # )
-    # print(f"Found {len(citations)} citations")
-    
     # Example 3: Enrich papers with citation contexts
     result = client.enrich_papers_with_citations(result, max_citations_per_paper=50)
     
     parser.parse_papers(result)
-    parser.to_json(filename="retrieved_results.json")
+    
+    # Save to JSON (check the actual method signature - likely just needs filename)
+    json_path = Path(__file__).parent.parent.parent / 'outputs' / 'metadata' / 'retrieved_results.json'
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    parser.to_json(str(json_path))  # Pass full path as single argument
+    
+    # Also save to database
+    print("\nSaving to database...")
+    db = PublicationDatabase()
+    count = db.insert_publications(result)
+    print(f"✓ Saved {count} papers to database")
+    db.close()
     
     # Print summary
     open_access_count = sum(1 for p in result if p.get('openAccessPdf', {}).get('url'))
@@ -417,6 +425,7 @@ if __name__ == "__main__":
     print(f"Papers with PDF URLs: {open_access_count}")
     print(f"Papers with DOI: {papers_with_doi}")
     print(f"Papers with citation data: {papers_with_citations}")
+    print(f"Saved to: {json_path}")
     
     # Show first paper's details
     if result:

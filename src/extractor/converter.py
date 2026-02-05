@@ -6,21 +6,22 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
+import json
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(str(Path(__file__).parent.parent))
+from db.db import PublicationDatabase
 
 
 class GrobidConverter:
     """
     Manages GROBID Docker container and converts PDFs to TEI XML.
+    Updates database with conversion status.
     
     Usage:
-        converter = GrobidConverter()
-        converter.start_grobid()
-        converter.convert_pdfs()
-        converter.stop_grobid()
-    
-    Or use context manager:
         with GrobidConverter() as converter:
-            converter.convert_pdfs()
+            converter.convert_from_database()
     """
     
     def __init__(
@@ -28,22 +29,24 @@ class GrobidConverter:
         pdf_dir: str = None,
         output_dir: str = None,
         grobid_port: int = 8070,
-        container_name: str = "grobid-server"
+        container_name: str = "grobid-server",
+        db_path: str = None
     ):
         """
         Initialize GROBID converter.
         
         Args:
-            pdf_dir: Directory containing PDFs (default: src/extractor/pdfs/)
-            output_dir: Directory for TEI XML output (default: src/extractor/converted/)
+            pdf_dir: Directory containing PDFs (default: outputs/pdf/)
+            output_dir: Directory for TEI XML output (default: outputs/xml/)
             grobid_port: Port to expose GROBID on (default: 8070)
             container_name: Name for the Docker container
+            db_path: Path to database (default: src/db/publications.db)
         """
         # Set directories
         if pdf_dir is None:
-            pdf_dir = Path(__file__).parent / "pdfs"
+            pdf_dir = Path(__file__).parent.parent.parent / "outputs" / "pdf"
         if output_dir is None:
-            output_dir = Path(__file__).parent / "converted"
+            output_dir = Path(__file__).parent.parent.parent / "outputs" / "xml"
         
         self.pdf_dir = Path(pdf_dir)
         self.output_dir = Path(output_dir)
@@ -69,10 +72,14 @@ class GrobidConverter:
             'skipped': 0
         }
         
+        # Initialize database connection
+        self.db = PublicationDatabase(db_path)
+        
         print(f"✓ GROBID Converter initialized")
         print(f"  PDF directory: {self.pdf_dir.absolute()}")
         print(f"  Output directory: {self.output_dir.absolute()}")
         print(f"  GROBID URL: {self.grobid_url}")
+        print(f"  Database: {self.db.db_path}")
     
     def _pull_grobid_image(self):
         """Pull GROBID Docker image if not available."""
@@ -189,7 +196,8 @@ class GrobidConverter:
         self,
         pdf_path: Path,
         paper_id: str = None,
-        overwrite: bool = False
+        overwrite: bool = False,
+        delete_pdf: bool = False
     ) -> Tuple[bool, str]:
         """
         Convert a single PDF to TEI XML using GROBID.
@@ -198,6 +206,7 @@ class GrobidConverter:
             pdf_path: Path to PDF file
             paper_id: Paper ID for output filename (uses pdf filename if None)
             overwrite: If True, re-convert even if XML exists
+            delete_pdf: If True, delete PDF after successful conversion (default: False)
             
         Returns:
             Tuple of (success: bool, message: str)
@@ -215,6 +224,13 @@ class GrobidConverter:
         # Check if already converted
         if output_path.exists() and not overwrite:
             self.stats['skipped'] += 1
+            # Still delete PDF if requested
+            if delete_pdf:
+                try:
+                    pdf_path.unlink()
+                    return True, f"Already converted (PDF deleted): {paper_id}.tei.xml"
+                except Exception as e:
+                    return True, f"Already converted (PDF delete failed): {paper_id}.tei.xml"
             return True, f"Already converted: {paper_id}.tei.xml"
         
         # Convert using GROBID API
@@ -235,6 +251,15 @@ class GrobidConverter:
                     
                     self.stats['successful'] += 1
                     file_size = output_path.stat().st_size / 1024  # KB
+                    
+                    # Delete PDF after successful conversion if requested
+                    if delete_pdf:
+                        try:
+                            pdf_path.unlink()
+                            return True, f"Converted & deleted: {paper_id}.tei.xml ({file_size:.1f} KB)"
+                        except Exception as e:
+                            return True, f"Converted (delete failed): {paper_id}.tei.xml ({file_size:.1f} KB)"
+                    
                     return True, f"Converted: {paper_id}.tei.xml ({file_size:.1f} KB)"
                 
                 elif response.status_code == 503:
@@ -261,14 +286,16 @@ class GrobidConverter:
         self,
         pdf_files: List[Path] = None,
         overwrite: bool = False,
+        delete_pdf: bool = False,
         delay: float = 0.1
     ) -> Dict:
         """
-        Convert multiple PDFs to TEI XML.
+        Convert multiple PDFs to TEI XML with optional PDF deletion.
         
         Args:
             pdf_files: List of PDF paths (if None, uses all PDFs in pdf_dir)
             overwrite: If True, re-convert existing XMLs
+            delete_pdf: If True, delete PDFs after successful conversion (default: False)
             delay: Delay between conversions in seconds
             
         Returns:
@@ -283,6 +310,10 @@ class GrobidConverter:
             return {'results': [], 'stats': self.stats}
         
         print(f"\nConverting {len(pdf_files)} PDFs to TEI XML...")
+        if delete_pdf:
+            print("⚠️  PDFs will be deleted after successful conversion")
+        else:
+            print("PDFs will be kept after conversion")
         
         results = []
         
@@ -290,7 +321,7 @@ class GrobidConverter:
             for pdf_path in pdf_files:
                 paper_id = pdf_path.stem  # Use filename without extension as paper ID
                 
-                success, message = self.convert_pdf(pdf_path, paper_id, overwrite)
+                success, message = self.convert_pdf(pdf_path, paper_id, overwrite, delete_pdf)
                 
                 results.append({
                     'paper_id': paper_id,
@@ -310,6 +341,133 @@ class GrobidConverter:
             'results': results,
             'stats': self.stats.copy()
         }
+    
+    def convert_from_database(
+        self,
+        limit: int = None,
+        overwrite: bool = False,
+        delete_pdf: bool = False,
+        delay: float = 0.1
+    ) -> Dict:
+        """
+        Convert PDFs from database that haven't been converted yet.
+        
+        Args:
+            limit: Maximum number of PDFs to convert (None = all)
+            overwrite: If True, re-convert existing XMLs
+            delete_pdf: If True, delete PDFs after successful conversion
+            delay: Delay between conversions in seconds
+            
+        Returns:
+            Dictionary with conversion results
+        """
+        # Query PDFs that need conversion
+        if overwrite:
+            query = '''
+                SELECT paperId, pdf_path
+                FROM publications
+                WHERE pdf_downloaded = 1 
+                AND pdf_path IS NOT NULL
+            '''
+        else:
+            query = '''
+                SELECT paperId, pdf_path
+                FROM publications
+                WHERE pdf_downloaded = 1 
+                AND pdf_path IS NOT NULL
+                AND (xml_converted = 0 OR xml_converted IS NULL)
+            '''
+        
+        if limit:
+            query += f' LIMIT {limit}'
+        
+        self.db.cursor.execute(query)
+        papers_to_convert = self.db.cursor.fetchall()
+        
+        if not papers_to_convert:
+            print("No PDFs need conversion")
+            return {'results': [], 'stats': self.stats}
+        
+        print(f"\nConverting {len(papers_to_convert)} PDFs from database...")
+        if delete_pdf:
+            print("WARNING: PDFs will be deleted after successful conversion")
+        
+        results = []
+        
+        with tqdm(total=len(papers_to_convert), desc="Converting PDFs", unit="file") as pbar:
+            for row in papers_to_convert:
+                paper_id = row[0]
+                pdf_path = Path(row[1])
+                
+                # Check if PDF exists
+                if not pdf_path.exists():
+                    error_msg = f"PDF not found: {pdf_path}"
+                    self.db.cursor.execute('''
+                        UPDATE publications 
+                        SET xml_converted = 0,
+                            xml_conversion_error = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE paperId = ?
+                    ''', (error_msg, paper_id))
+                    self.db.conn.commit()
+                    
+                    results.append({
+                        'paper_id': paper_id,
+                        'pdf_path': str(pdf_path),
+                        'success': False,
+                        'message': error_msg
+                    })
+                    pbar.update(1)
+                    continue
+                
+                # Convert PDF
+                success, message = self.convert_pdf(pdf_path, paper_id, overwrite, delete_pdf)
+                
+                # Update database
+                if success:
+                    xml_path = str(self.output_dir / f"{paper_id}.tei.xml")
+                    self.db.cursor.execute('''
+                        UPDATE publications 
+                        SET xml_converted = 1,
+                            xml_conversion_date = CURRENT_TIMESTAMP,
+                            xml_path = ?,
+                            xml_conversion_error = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE paperId = ?
+                    ''', (xml_path, paper_id))
+                else:
+                    self.db.cursor.execute('''
+                        UPDATE publications 
+                        SET xml_converted = 0,
+                            xml_conversion_error = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE paperId = ?
+                    ''', (message, paper_id))
+                
+                self.db.conn.commit()
+                
+                results.append({
+                    'paper_id': paper_id,
+                    'pdf_path': str(pdf_path),
+                    'success': success,
+                    'message': message
+                })
+                
+                pbar.set_postfix_str(message[:50])
+                pbar.update(1)
+                
+                if delay > 0:
+                    time.sleep(delay)
+        
+        return {
+            'results': results,
+            'stats': self.stats.copy()
+        }
+    
+    def close_db(self):
+        """Close database connection."""
+        if hasattr(self, 'db'):
+            self.db.close()
     
     def get_statistics(self) -> Dict:
         """Get conversion statistics."""
@@ -337,36 +495,53 @@ class GrobidConverter:
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - stops GROBID."""
+        """Context manager exit - stops GROBID and closes DB."""
         self.stop_grobid()
+        self.close_db()
 
 
 # Example usage
 if __name__ == "__main__":
-    import json
-    from pathlib import Path
+    print("GROBID PDF to TEI XML Converter")
+    print("=" * 60)
     
-    # Option 1: Using context manager (recommended - auto stops container)
-    with GrobidConverter() as converter:
-        results = converter.convert_pdfs(overwrite=False, delay=0.1)
+    try:
+        # Initialize converter with database connection
+        converter = GrobidConverter()
+        
+        # Start GROBID
+        print("\nStarting GROBID container...")
+        converter.start_grobid(wait_time=30)
+        
+        # Convert all PDFs from database
+        print("\nConverting PDFs to TEI XML...")
+        results = converter.convert_from_database(
+            limit=None,  # Convert all available
+            overwrite=False,
+            delete_pdf=False,
+            delay=0.1
+        )
+        
+        # Print statistics
         converter.print_statistics()
         
         # Save results
-        results_path = Path(__file__).parent.parent.parent / 'outputs' / 'conversion_results.json'
+        results_path = Path(__file__).parent.parent.parent / 'outputs' / 'metadata' / 'conversion_results.json'
+        results_path.parent.mkdir(parents=True, exist_ok=True)
         with open(results_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         print(f"\nResults saved to {results_path}")
-    
-    # Option 2: Manual control
-    # converter = GrobidConverter()
-    # converter.start_grobid()
-    # 
-    # # Convert all PDFs
-    # results = converter.convert_pdfs()
-    # converter.print_statistics()
-    # 
-    # # Stop container (keeps it for reuse)
-    # converter.stop_grobid()
-    # 
-    # # Or remove container completely
-    # # converter.remove_grobid()
+        
+        # Stop GROBID
+        print("\nStopping GROBID container...")
+        converter.stop_grobid()
+        converter.close_db()
+        
+        print("\n" + "=" * 60)
+        print("✓ Conversion completed!")
+        print(f"✓ XML files saved to: {converter.output_dir}")
+        print("=" * 60)
+        
+    except Exception as e:
+        print(f"\n✗ Error: {e}")
+        print("\nMake sure Docker is installed and running.")

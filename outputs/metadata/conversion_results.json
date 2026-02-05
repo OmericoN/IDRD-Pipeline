@@ -1,0 +1,69 @@
+{
+  "results": [
+    {
+      "paper_id": "ad4a0938c48e61b7827869e4ac3baffd0aefab35",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\ad4a0938c48e61b7827869e4ac3baffd0aefab35.pdf",
+      "success": true,
+      "message": "Converted: ad4a0938c48e61b7827869e4ac3baffd0aefab35.tei.xml (164.5 KB)"
+    },
+    {
+      "paper_id": "736973165f98105fec3729b7db414ae4d80fcbeb",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\736973165f98105fec3729b7db414ae4d80fcbeb.pdf",
+      "success": true,
+      "message": "Converted: 736973165f98105fec3729b7db414ae4d80fcbeb.tei.xml (115.0 KB)"
+    },
+    {
+      "paper_id": "47f7ec3d0a5e6e83b6768ece35206a94dc81919c",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\47f7ec3d0a5e6e83b6768ece35206a94dc81919c.pdf",
+      "success": true,
+      "message": "Converted: 47f7ec3d0a5e6e83b6768ece35206a94dc81919c.tei.xml (159.5 KB)"
+    },
+    {
+      "paper_id": "5f404dbba07619cc7f28d75d03f124a52290046e",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\5f404dbba07619cc7f28d75d03f124a52290046e.pdf",
+      "success": true,
+      "message": "Converted: 5f404dbba07619cc7f28d75d03f124a52290046e.tei.xml (102.0 KB)"
+    },
+    {
+      "paper_id": "739ceacfafb1c4eaa17509351b647c773270b3ae",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\739ceacfafb1c4eaa17509351b647c773270b3ae.pdf",
+      "success": true,
+      "message": "Converted: 739ceacfafb1c4eaa17509351b647c773270b3ae.tei.xml (98.9 KB)"
+    },
+    {
+      "paper_id": "8e33914d6051dd031a5e096962b9398fc1d16067",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\8e33914d6051dd031a5e096962b9398fc1d16067.pdf",
+      "success": true,
+      "message": "Converted: 8e33914d6051dd031a5e096962b9398fc1d16067.tei.xml (106.2 KB)"
+    },
+    {
+      "paper_id": "7519a1e9e7371df79bd8a21cee871feb0ec597a5",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\7519a1e9e7371df79bd8a21cee871feb0ec597a5.pdf",
+      "success": true,
+      "message": "Converted: 7519a1e9e7371df79bd8a21cee871feb0ec597a5.tei.xml (107.5 KB)"
+    },
+    {
+      "paper_id": "3a906b77fa218adc171fecb28bb81c24c14dcc7b",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\3a906b77fa218adc171fecb28bb81c24c14dcc7b.pdf",
+      "success": true,
+      "message": "Converted: 3a906b77fa218adc171fecb28bb81c24c14dcc7b.tei.xml (414.4 KB)"
+    },
+    {
+      "paper_id": "dbe077f8521ecbe0a1477d6148c726d4f053d9c9",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\dbe077f8521ecbe0a1477d6148c726d4f053d9c9.pdf",
+      "success": true,
+      "message": "Converted: dbe077f8521ecbe0a1477d6148c726d4f053d9c9.tei.xml (108.1 KB)"
+    },
+    {
+      "paper_id": "e775e649d815a02373eac840cf5e33a04ff85c95",
+      "pdf_path": "C:\\Users\\P70097417\\Documents\\IDRD-Pipeline\\IDRD-Pipeline\\outputs\\pdf\\e775e649d815a02373eac840cf5e33a04ff85c95.pdf",
+      "success": true,
+      "message": "Converted: e775e649d815a02373eac840cf5e33a04ff85c95.tei.xml (89.8 KB)"
+    }
+  ],
+  "stats": {
+    "successful": 10,
+    "failed": 0,
+    "skipped": 0
+  }
+}

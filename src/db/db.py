@@ -46,6 +46,26 @@ class PublicationDatabase:
                 influentialCitationCount INTEGER DEFAULT 0,
                 tldr TEXT,
                 isOpenAccess BOOLEAN,
+                
+                -- Pipeline tracking columns
+                pdf_downloaded BOOLEAN DEFAULT FALSE,
+                pdf_download_date TIMESTAMP,
+                pdf_path TEXT,
+                pdf_download_error TEXT,
+                
+                xml_converted BOOLEAN DEFAULT FALSE,
+                xml_conversion_date TIMESTAMP,
+                xml_path TEXT,
+                xml_conversion_error TEXT,
+                
+                sections_extracted BOOLEAN DEFAULT FALSE,
+                sections_extraction_date TIMESTAMP,
+                sections_extraction_error TEXT,
+                
+                features_extracted BOOLEAN DEFAULT FALSE,
+                features_extraction_date TIMESTAMP,
+                features_extraction_error TEXT,
+                
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -182,26 +202,37 @@ class PublicationDatabase:
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_citing_paper ON citations(citingPaperId)')
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_citation_paper ON citations(paperId)')
         
+        # Create indexes for pipeline queries
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_pdf_downloaded ON publications(pdf_downloaded)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_xml_converted ON publications(xml_converted)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_extracted ON publications(sections_extracted)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_features_extracted ON publications(features_extracted)')
+        
         self.conn.commit()
     
     def insert_publication(self, paper: Dict[str, Any]) -> bool:
-        """
-        Insert or update a single publication.
-        
-        Args:
-            paper: Parsed paper dictionary from PaperDictParser
-            
-        Returns:
-            True if successful
-        """
+        """Insert a single publication into the database."""
         try:
-            # Insert main publication data
+            # Extract TLDR text if it's a dict
+            tldr = paper.get('tldr')
+            if isinstance(tldr, dict):
+                tldr = tldr.get('text')  # Extract just the text field
+            
+            # Extract open access URL
+            open_access_pdf = paper.get('openAccessPdf')
+            is_open_access = False
+            if isinstance(open_access_pdf, dict):
+                is_open_access = bool(open_access_pdf.get('url'))
+            elif open_access_pdf:
+                is_open_access = True
+            
+            # Insert main publication
             self.cursor.execute('''
-                INSERT OR REPLACE INTO publications 
-                (paperId, title, abstract, year, url, venue, publicationDate,
-                 citationCount, referenceCount, influentialCitationCount, tldr, 
-                 isOpenAccess, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT OR REPLACE INTO publications (
+                    paperId, title, abstract, year, url, venue, publicationDate,
+                    citationCount, referenceCount, influentialCitationCount,
+                    tldr, isOpenAccess
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 paper.get('paperId'),
                 paper.get('title'),
@@ -213,8 +244,8 @@ class PublicationDatabase:
                 paper.get('citationCount', 0),
                 paper.get('referenceCount', 0),
                 paper.get('influentialCitationCount', 0),
-                paper.get('tldr'),
-                paper.get('isOpenAccess', False)
+                tldr,  # Now a string, not dict
+                is_open_access
             ))
             
             paper_id = paper.get('paperId')
@@ -711,6 +742,195 @@ class PublicationDatabase:
         
         print(f"✓ Exported {len(papers)} publications to {output_path}")
     
+    def reset_database(self, confirm: bool = False):
+        """
+        Reset the entire database by dropping all tables and recreating them.
+        WARNING: This will delete ALL data in the database!
+        
+        Args:
+            confirm: Must be True to actually perform reset (safety measure)
+        """
+        if not confirm:
+            print("WARNING: This will delete ALL data in the database!")
+            print("To confirm, call: db.reset_database(confirm=True)")
+            return
+        
+        print("\nResetting database...")
+        
+        # Get list of all tables
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = self.cursor.fetchall()
+        
+        # Drop all tables
+        for table in tables:
+            table_name = table[0]
+            self.cursor.execute(f'DROP TABLE IF EXISTS {table_name}')
+            print(f"  Dropped table: {table_name}")
+        
+        self.conn.commit()
+        
+        # Recreate all tables
+        self._create_tables()
+        
+        print("Database reset complete - all tables recreated empty")
+    
+    def reset_pipeline_status(self):
+        """
+        Reset only the pipeline tracking columns without deleting paper data.
+        Useful for re-running the pipeline from scratch while keeping paper metadata.
+        Also deletes PDF and XML files from disk.
+        """
+        print("\nResetting pipeline status columns...")
+        
+        # Get paths to files before resetting database
+        self.cursor.execute('''
+            SELECT pdf_path FROM publications 
+            WHERE pdf_path IS NOT NULL
+        ''')
+        pdf_paths = [row[0] for row in self.cursor.fetchall()]
+        
+        self.cursor.execute('''
+            SELECT xml_path FROM publications 
+            WHERE xml_path IS NOT NULL
+        ''')
+        xml_paths = [row[0] for row in self.cursor.fetchall()]
+        
+        # Delete PDF files from disk
+        pdf_deleted = 0
+        pdf_not_found = 0
+        for pdf_path in pdf_paths:
+            try:
+                path = Path(pdf_path)
+                if path.exists():
+                    path.unlink()
+                    pdf_deleted += 1
+                else:
+                    pdf_not_found += 1
+            except Exception as e:
+                print(f"Warning: Could not delete {pdf_path}: {e}")
+        
+        # Delete XML files from database paths
+        xml_deleted = 0
+        xml_not_found = 0
+        for xml_path in xml_paths:
+            try:
+                path = Path(xml_path)
+                if path.exists():
+                    path.unlink()
+                    xml_deleted += 1
+                else:
+                    xml_not_found += 1
+            except Exception as e:
+                print(f"Warning: Could not delete {xml_path}: {e}")
+        
+        # Also delete any remaining XML files in the output directory
+        # (in case they weren't tracked in the database)
+        xml_output_dir = Path(__file__).parent.parent.parent / 'outputs' / 'xml'
+        if xml_output_dir.exists():
+            additional_xmls = list(xml_output_dir.glob("*.tei.xml"))
+            for xml_file in additional_xmls:
+                try:
+                    xml_file.unlink()
+                    xml_deleted += 1
+                except Exception as e:
+                    print(f"Warning: Could not delete {xml_file}: {e}")
+        
+        # Update database
+        self.cursor.execute('''
+            UPDATE publications 
+            SET pdf_downloaded = 0,
+                pdf_download_date = NULL,
+                pdf_path = NULL,
+                pdf_download_error = NULL,
+                xml_converted = 0,
+                xml_conversion_date = NULL,
+                xml_path = NULL,
+                xml_conversion_error = NULL,
+                sections_extracted = 0,
+                sections_extraction_date = NULL,
+                sections_extraction_error = NULL,
+                features_extracted = 0,
+                features_extraction_date = NULL,
+                features_extraction_error = NULL,
+                updated_at = CURRENT_TIMESTAMP
+        ''')
+        
+        rows_updated = self.cursor.rowcount
+        self.conn.commit()
+        
+        print(f"\nPipeline Status Reset Complete:")
+        print(f"  Database records updated: {rows_updated}")
+        print(f"  PDF files deleted: {pdf_deleted}")
+        if pdf_not_found > 0:
+            print(f"  PDF files not found (already deleted): {pdf_not_found}")
+        print(f"  XML files deleted: {xml_deleted}")
+        if xml_not_found > 0:
+            print(f"  XML files not found (already deleted): {xml_not_found}")
+        print("\nPaper metadata preserved, pipeline can be re-run from scratch")
+    
+    def get_pipeline_status(self) -> Dict[str, Any]:
+        """Get pipeline processing status statistics."""
+        status = {}
+        
+        # Total papers
+        self.cursor.execute('SELECT COUNT(*) FROM publications')
+        status['total_papers'] = self.cursor.fetchone()[0]
+        
+        # Downloaded
+        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE pdf_downloaded = 1')
+        status['pdf_downloaded'] = self.cursor.fetchone()[0]
+        
+        # Converted
+        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE xml_converted = 1')
+        status['xml_converted'] = self.cursor.fetchone()[0]
+        
+        # Sections extracted
+        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE sections_extracted = 1')
+        status['sections_extracted'] = self.cursor.fetchone()[0]
+        
+        # Features extracted
+        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE features_extracted = 1')
+        status['features_extracted'] = self.cursor.fetchone()[0]
+        
+        # Errors
+        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE pdf_download_error IS NOT NULL')
+        status['pdf_errors'] = self.cursor.fetchone()[0]
+        
+        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE xml_conversion_error IS NOT NULL')
+        status['xml_errors'] = self.cursor.fetchone()[0]
+        
+        return status
+    
+    def get_papers_needing_download(self, limit: int = None) -> List[Dict]:
+        """Get papers that need PDF download."""
+        query = '''
+            SELECT p.paperId, p.title, oa.url
+            FROM publications p
+            JOIN open_access oa ON p.paperId = oa.paperId
+            WHERE oa.url IS NOT NULL 
+            AND (p.pdf_downloaded = 0 OR p.pdf_downloaded IS NULL)
+        '''
+        if limit:
+            query += f' LIMIT {limit}'
+        
+        self.cursor.execute(query)
+        return [dict(row) for row in self.cursor.fetchall()]
+    
+    def get_papers_needing_conversion(self, limit: int = None) -> List[Dict]:
+        """Get papers that need XML conversion."""
+        query = '''
+            SELECT paperId, title, pdf_path
+            FROM publications
+            WHERE pdf_downloaded = 1 
+            AND pdf_path IS NOT NULL
+            AND (xml_converted = 0 OR xml_converted IS NULL)
+        '''
+        if limit:
+            query += f' LIMIT {limit}'
+        
+        self.cursor.execute(query)
+        return [dict(row) for row in self.cursor.fetchall()]
+    
     def commit(self):
         """Commit pending transactions."""
         self.conn.commit()
@@ -735,7 +955,7 @@ if __name__ == "__main__":
     db = PublicationDatabase()
     
     # Load publications from JSON
-    json_path = Path(__file__).parent.parent.parent / 'outputs' / 'retrieved_results.json'
+    json_path = Path(__file__).parent.parent.parent / 'outputs' / 'metadata' / 'retrieved_results.json'
     if json_path.exists():
         print(f"Loading publications from {json_path}...")
         count = db.load_from_json(str(json_path))

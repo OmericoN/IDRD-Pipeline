@@ -5,32 +5,41 @@ from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
 import hashlib
 import re
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(str(Path(__file__).parent.parent))
+from db.db import PublicationDatabase
 
 
 class PDFDownloader:
     """
     Downloads PDFs from URLs and saves them with paper ID as filename.
+    Updates database with download status.
     
     Usage:
-        downloader = PDFDownloader()  # Uses default: src/extractor/pdfs/
-        downloader.download_paper("paper_id_123", "https://example.com/paper.pdf")
+        downloader = PDFDownloader()  # Uses default: outputs/pdf/
+        downloader.download_from_database()
     """
     
-    def __init__(self, output_dir: str = None, max_retries: int = 3):
+    def __init__(self, output_dir: str = None, max_retries: int = 3, db_path: str = None):
         """
         Initialize the PDF downloader.
         
         Args:
-            output_dir: Directory to save downloaded PDFs (default: src/extractor/pdfs/)
+            output_dir: Directory to save downloaded PDFs (default: outputs/pdf/)
             max_retries: Maximum number of download retry attempts
+            db_path: Path to database (default: src/db/publications.db)
         """
         if output_dir is None:
-            # Default to src/extractor/pdfs/ relative to this file
-            output_dir = Path(__file__).parent / "pdfs"
+            output_dir = Path(__file__).parent.parent.parent / "outputs" / "pdf"
         
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.max_retries = max_retries
+        
+        # Initialize database connection
+        self.db = PublicationDatabase(db_path)
         
         # Headers to mimic a browser request
         self.headers = {
@@ -270,6 +279,103 @@ class PDFDownloader:
             'stats': self.stats.copy()
         }
     
+    def download_from_database(
+        self,
+        limit: int = None,
+        overwrite: bool = False,
+        delay: float = 0.5
+    ) -> Dict:
+        """
+        Download PDFs for papers in database that haven't been downloaded yet.
+        
+        Args:
+            limit: Maximum number of papers to download (None = all)
+            overwrite: If True, re-download existing PDFs
+            delay: Delay between downloads in seconds
+            
+        Returns:
+            Dictionary with download statistics
+        """
+        # Query papers that need PDFs
+        if overwrite:
+            query = '''
+                SELECT p.paperId, p.title, oa.url
+                FROM publications p
+                JOIN open_access oa ON p.paperId = oa.paperId
+                WHERE oa.url IS NOT NULL
+            '''
+        else:
+            query = '''
+                SELECT p.paperId, p.title, oa.url
+                FROM publications p
+                JOIN open_access oa ON p.paperId = oa.paperId
+                WHERE oa.url IS NOT NULL 
+                AND (p.pdf_downloaded = 0 OR p.pdf_downloaded IS NULL)
+            '''
+        
+        if limit:
+            query += f' LIMIT {limit}'
+        
+        self.db.cursor.execute(query)
+        papers_to_download = self.db.cursor.fetchall()
+        
+        if not papers_to_download:
+            print("No papers need PDF download")
+            return {'results': [], 'stats': self.stats}
+        
+        print(f"\nDownloading {len(papers_to_download)} PDFs from database...")
+        
+        results = []
+        
+        with tqdm(total=len(papers_to_download), desc="Downloading PDFs", unit="paper") as pbar:
+            for row in papers_to_download:
+                paper_id = row[0]
+                title = row[1]
+                url = row[2]
+                
+                success, message = self.download_paper(paper_id, url, title, overwrite)
+                
+                # Update database
+                if success:
+                    pdf_path = str(self.output_dir / f"{paper_id}.pdf")
+                    self.db.cursor.execute('''
+                        UPDATE publications 
+                        SET pdf_downloaded = 1,
+                            pdf_download_date = CURRENT_TIMESTAMP,
+                            pdf_path = ?,
+                            pdf_download_error = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE paperId = ?
+                    ''', (pdf_path, paper_id))
+                else:
+                    self.db.cursor.execute('''
+                        UPDATE publications 
+                        SET pdf_downloaded = 0,
+                            pdf_download_error = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE paperId = ?
+                    ''', (message, paper_id))
+                
+                self.db.conn.commit()
+                
+                results.append({
+                    'paper_id': paper_id,
+                    'title': title,
+                    'url': url,
+                    'success': success,
+                    'message': message
+                })
+                
+                pbar.update(1)
+                
+                if delay > 0:
+                    time.sleep(delay)
+        
+        return {
+            'results': results,
+            'stats': self.stats.copy()
+        }
+    
     def get_statistics(self) -> Dict:
         """Get download statistics."""
         total = self.stats['successful'] + self.stats['failed']
@@ -294,51 +400,155 @@ class PDFDownloader:
         print(f"Total size:    {stats['total_size_mb']:.2f} MB")
         print(f"Average size:  {stats['avg_size_mb']:.2f} MB")
         print(f"{'='*60}")
+    
+    def close(self):
+        """Close database connection."""
+        self.db.close()
 
 
 # Example usage
 if __name__ == "__main__":
     import json
-    from pathlib import Path
     
-    # Initialize downloader (uses default: src/extractor/pdfs/)
+    # Initialize downloader with database connection
     downloader = PDFDownloader()
     
-    # Option 1: Download a single paper
-    success, message = downloader.download_paper(
-        paper_id="649def34f8be52c8b66281af98ae884c09aef38b",
-        url="https://arxiv.org/pdf/2104.14294.pdf"
-    )
-    print(f"Single download: {message}")
-    
-    # Option 2: Download from JSON file
-    json_path = Path(__file__).parent.parent.parent / 'outputs' / 'retrieved_results.json'
-    
-    if json_path.exists():
-        print(f"\nLoading papers from {json_path}...")
-        with open(json_path, 'r', encoding='utf-8') as f:
-            papers = json.load(f)
+    try:
+        # First, check database status
+        print("\n" + "="*60)
+        print("DATABASE STATUS CHECK")
+        print("="*60)
         
-        # Filter papers with PDFs
-        papers_with_pdfs = [
-            p for p in papers 
-            if p.get('openAccessPdf', {}).get('url')
-        ]
+        # Check total papers in database
+        downloader.db.cursor.execute('SELECT COUNT(*) FROM publications')
+        total_papers = downloader.db.cursor.fetchone()[0]
+        print(f"Total papers in database: {total_papers}")
         
-        print(f"Found {len(papers_with_pdfs)} papers with PDF URLs")
+        # Check papers with open access URLs
+        downloader.db.cursor.execute('''
+            SELECT COUNT(*) FROM publications p
+            JOIN open_access oa ON p.paperId = oa.paperId
+            WHERE oa.url IS NOT NULL
+        ''')
+        papers_with_urls = downloader.db.cursor.fetchone()[0]
+        print(f"Papers with PDF URLs: {papers_with_urls}")
         
-        # Download all papers
-        results = downloader.download_papers_from_list(
-            papers_with_pdfs,
-            delay=0.5,  # Be respectful to servers
-            overwrite=False
+        # Check papers already downloaded
+        downloader.db.cursor.execute('''
+            SELECT COUNT(*) FROM publications 
+            WHERE pdf_downloaded = 1
+        ''')
+        already_downloaded = downloader.db.cursor.fetchone()[0]
+        print(f"Papers marked as downloaded in DB: {already_downloaded}")
+        
+        # Check existing PDF files
+        existing_pdfs = list(downloader.output_dir.glob("*.pdf"))
+        print(f"Existing PDF files on disk: {len(existing_pdfs)}")
+        
+        # Check papers needing download
+        downloader.db.cursor.execute('''
+            SELECT COUNT(*) FROM publications p
+            JOIN open_access oa ON p.paperId = oa.paperId
+            WHERE oa.url IS NOT NULL 
+            AND (p.pdf_downloaded = 0 OR p.pdf_downloaded IS NULL)
+        ''')
+        papers_needing_download = downloader.db.cursor.fetchone()[0]
+        print(f"Papers needing download: {papers_needing_download}")
+        
+        print("="*60)
+        
+        # If database is empty, suggest loading from JSON
+        if total_papers == 0:
+            print("\nWARNING: DATABASE IS EMPTY!")
+            print("Please run one of the following:")
+            print("  1. python src/pubfetcher/fetching.py  (to fetch new papers)")
+            print("  2. python src/db/db.py  (to load from JSON)")
+            downloader.close()
+            exit(0)
+        
+        # If we have PDFs but database doesn't know about them, sync
+        if len(existing_pdfs) > 0 and already_downloaded < len(existing_pdfs):
+            print(f"\nSyncing {len(existing_pdfs)} existing PDFs with database...")
+            synced = 0
+            skipped = 0
+            
+            for pdf_file in tqdm(existing_pdfs, desc="Syncing PDFs", unit="file"):
+                paper_id = pdf_file.stem
+                pdf_path = str(pdf_file)
+                
+                # Check if this paper exists in database
+                downloader.db.cursor.execute(
+                    'SELECT paperId, pdf_downloaded FROM publications WHERE paperId = ?',
+                    (paper_id,)
+                )
+                result = downloader.db.cursor.fetchone()
+                
+                if result:
+                    if result[1] != 1:  # Not already marked as downloaded
+                        # Update database to mark as downloaded
+                        downloader.db.cursor.execute('''
+                            UPDATE publications 
+                            SET pdf_downloaded = 1,
+                                pdf_download_date = CURRENT_TIMESTAMP,
+                                pdf_path = ?,
+                                pdf_download_error = NULL,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE paperId = ?
+                        ''', (pdf_path, paper_id))
+                        synced += 1
+                    else:
+                        skipped += 1
+                else:
+                    print(f"\nWARNING: PDF found but not in database: {paper_id}.pdf")
+            
+            downloader.db.conn.commit()
+            print(f"Successfully synced {synced} PDFs with database")
+            if skipped > 0:
+                print(f"Skipped {skipped} already synced PDFs")
+            print()
+        
+        # Now download any remaining papers
+        print("\n" + "="*60)
+        print("STARTING PDF DOWNLOAD")
+        print("="*60)
+        
+        results = downloader.download_from_database(
+            limit=None,
+            overwrite=False,
+            delay=0.5
         )
         
         # Print statistics
         downloader.print_statistics()
         
+        # Show updated database status
+        print("\n" + "="*60)
+        print("FINAL DATABASE STATUS")
+        print("="*60)
+        
+        downloader.db.cursor.execute('''
+            SELECT COUNT(*) FROM publications 
+            WHERE pdf_downloaded = 1
+        ''')
+        final_downloaded = downloader.db.cursor.fetchone()[0]
+        print(f"Total papers with PDFs: {final_downloaded}/{papers_with_urls}")
+        
+        downloader.db.cursor.execute('''
+            SELECT COUNT(*) FROM publications 
+            WHERE pdf_download_error IS NOT NULL
+        ''')
+        errors = downloader.db.cursor.fetchone()[0]
+        print(f"Papers with download errors: {errors}")
+        
+        print("="*60)
+        
         # Save results
-        results_path = Path(__file__).parent.parent.parent / 'outputs' / 'download_results.json'
+        results_path = Path(__file__).parent.parent.parent / 'outputs' / 'metadata' / 'download_results.json'
+        results_path.parent.mkdir(parents=True, exist_ok=True)
         with open(results_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         print(f"\nResults saved to {results_path}")
+        
+    finally:
+        downloader.close()
+        print("\nDatabase connection closed")
