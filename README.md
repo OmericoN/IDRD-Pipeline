@@ -10,10 +10,10 @@ The IDRD-Pipeline is a Python-based multi-stage pipeline designed to:
 3. Embed university database for affiliation and similarity checking
 4. Evaluate the formality of dataset references
 
-d
-## Pipeline Stages
 
-### Stage 1: Fetching (`src.fetching`)
+## Pipeline Stages
+To be written
+<!-- ### Stage 1: Fetching (`src.fetching`)
 Fetches publications from the Semantic Scholar API based on search criteria.
 - API communication and authentication
 - Query building and execution
@@ -39,10 +39,10 @@ Evaluates the formality of dataset references.
 - Reference formality assessment
 - Reference type classification
 - Quality and completeness scoring
-- Evaluation report generation
+- Evaluation report generation -->
 
 ### Tests - downloader & converter
-'''{python}
+```python
 
     # Run all tests
     python src/extractor/tests.py
@@ -58,7 +58,7 @@ Evaluates the formality of dataset references.
     coverage run src/extractor/tests.py
     coverage report
     coverage html
-'''
+```
 
 ## Installation
 
@@ -71,21 +71,6 @@ cd IDRD-Pipeline
 pip install -e .
 ```
 
-## Usage
-
-```python
-# Import the pipeline
-import src
-
-# Import individual stages
-from src import fetching, extraction, embeddings, evaluation
-
-# Future usage (when modules are implemented):
-# from src.fetching import api_client
-# from src.extraction import feature_extractor
-# from src.embeddings import affiliation_matcher
-# from src.evaluation import formality_evaluator
-```
 
 ## License
 
