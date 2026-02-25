@@ -3,6 +3,7 @@ runs/
 metadata/
 pdf/
 xml/
+markdown/
 
 .vscode
 settings.json
