@@ -1,38 +1,35 @@
-import psycopg2
-import psycopg2.extras
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-import json
-import os
 from dotenv import load_dotenv
+import psycopg2
+import psycopg2.extras
+import os
 
 load_dotenv()
 
 
 class PublicationDatabase:
-    """PostgreSQL database manager for storing publication metadata."""
+    """PostgreSQL database manager for the IDRD Pipeline."""
 
-    def __init__(self, connection_string: str = None):
-        """
-        Initialize database connection.
+    _init_count = 0   # class-level counter to detect accidental double-instantiation
 
-        Args:
-            connection_string: PostgreSQL DSN. Falls back to env vars.
-        """
-        if connection_string is None:
-            connection_string = (
-                f"host={os.getenv('POSTGRES_HOST', 'localhost')} "
-                f"port={os.getenv('POSTGRES_PORT', '5432')} "
-                f"dbname={os.getenv('POSTGRES_DB', 'idrd_pipeline')} "
-                f"user={os.getenv('POSTGRES_USER', 'postgres')} "
-                f"password={os.getenv('POSTGRES_PASSWORD', '')}"
-            )
+    def __init__(self):
+        PublicationDatabase._init_count += 1
+        if PublicationDatabase._init_count > 1:
+            import traceback
+            print(f"\n⚠  WARNING: PublicationDatabase instantiated {PublicationDatabase._init_count} times.")
+            print("   Stack trace — pinpoints the extra instantiation:")
+            traceback.print_stack(limit=8)
 
-        self.connection_string = connection_string
-        self.conn = psycopg2.connect(connection_string)
-        # RealDictCursor returns rows as dicts (same behaviour as sqlite3.Row)
+        self.conn = psycopg2.connect(
+            host     = os.getenv("POSTGRES_HOST",     "localhost"),
+            port     = os.getenv("POSTGRES_PORT",     "5432"),
+            dbname   = os.getenv("POSTGRES_DB",       "idrd_pipeline"),
+            user     = os.getenv("POSTGRES_USER",     "postgres"),
+            password = os.getenv("POSTGRES_PASSWORD", ""),
+        )
+        self.conn.autocommit = False
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
         self._create_tables()
         print("✓ PostgreSQL database initialized")
 
@@ -43,163 +40,75 @@ class PublicationDatabase:
     def _create_tables(self):
         """Create database tables if they don't exist."""
 
+        # publications
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS publications (
-                "paperId"                    TEXT PRIMARY KEY,
-                title                        TEXT NOT NULL,
-                abstract                     TEXT,
-                year                         INTEGER,
-                url                          TEXT,
-                venue                        TEXT,
-                "publicationDate"            TEXT,
-                "citationCount"              INTEGER DEFAULT 0,
-                "referenceCount"             INTEGER DEFAULT 0,
-                "influentialCitationCount"   INTEGER DEFAULT 0,
-                tldr                         TEXT,
-                "isOpenAccess"               BOOLEAN,
-
-                -- Pipeline tracking
-                pdf_downloaded               BOOLEAN DEFAULT FALSE,
-                pdf_download_date            TIMESTAMP,
-                pdf_path                     TEXT,
-                pdf_download_error           TEXT,
-
-                xml_converted                BOOLEAN DEFAULT FALSE,
-                xml_conversion_date          TIMESTAMP,
-                xml_path                     TEXT,
-                xml_conversion_error         TEXT,
-
-                sections_extracted           BOOLEAN DEFAULT FALSE,
-                sections_extraction_date     TIMESTAMP,
-                sections_extraction_error    TEXT,
-
-                features_extracted           BOOLEAN DEFAULT FALSE,
-                features_extraction_date     TIMESTAMP,
-                features_extraction_error    TEXT,
-
-                created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                "paperId"                   TEXT PRIMARY KEY,
+                title                       TEXT,
+                abstract                    TEXT,
+                year                        INTEGER,
+                citation_count              INTEGER DEFAULT 0,
+                reference_count             INTEGER DEFAULT 0,
+                influential_citation_count  INTEGER DEFAULT 0,
+                venue                       TEXT,
+                publication_date            DATE,
+                publication_types           TEXT[],
+                journal_name                TEXT,
+                journal_volume              TEXT,
+                journal_pages               TEXT,
+                fields_of_study             TEXT[],
+                url                         TEXT,
+                doi                         TEXT,
+                is_open_access              BOOLEAN DEFAULT FALSE,
+                open_access_pdf_url         TEXT,
+                open_access_pdf_status      TEXT,
+                tldr                        TEXT,
+                pdf_downloaded              BOOLEAN DEFAULT FALSE,
+                pdf_download_date           TIMESTAMP,
+                pdf_path                    TEXT,
+                pdf_download_error          TEXT,
+                xml_converted               BOOLEAN DEFAULT FALSE,
+                xml_conversion_date         TIMESTAMP,
+                xml_path                    TEXT,
+                xml_conversion_error        TEXT,
+                sections_extracted          BOOLEAN DEFAULT FALSE,
+                features_extracted          BOOLEAN DEFAULT FALSE,
+                created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 
+        # authors
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS authors (
-                "authorId"  TEXT PRIMARY KEY,
-                name        TEXT NOT NULL,
-                url         TEXT,
-                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                id          SERIAL PRIMARY KEY,
+                "authorId"  TEXT UNIQUE,
+                name        TEXT NOT NULL
             )
         ''')
 
+        # publication_authors join table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS publication_authors (
-                "paperId"   TEXT REFERENCES publications("paperId") ON DELETE CASCADE,
-                "authorId"  TEXT REFERENCES authors("authorId")     ON DELETE CASCADE,
-                PRIMARY KEY ("paperId", "authorId")
+                publication_id  TEXT NOT NULL REFERENCES publications("paperId") ON DELETE CASCADE,
+                author_id       INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+                author_order    INTEGER,
+                PRIMARY KEY (publication_id, author_id)
             )
         ''')
 
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS external_ids (
-                "paperId"  TEXT PRIMARY KEY REFERENCES publications("paperId") ON DELETE CASCADE,
-                doi        TEXT,
-                arxiv      TEXT,
-                pubmed     TEXT,
-                dblp       TEXT,
-                "corpusId" TEXT
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS open_access (
-                "paperId"   TEXT PRIMARY KEY REFERENCES publications("paperId") ON DELETE CASCADE,
-                url         TEXT,
-                status      TEXT,
-                license     TEXT,
-                disclaimer  TEXT
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS journals (
-                "paperId"  TEXT PRIMARY KEY REFERENCES publications("paperId") ON DELETE CASCADE,
-                name       TEXT,
-                volume     TEXT,
-                pages      TEXT
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS publication_types (
-                "paperId"  TEXT REFERENCES publications("paperId") ON DELETE CASCADE,
-                type       TEXT,
-                PRIMARY KEY ("paperId", type)
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS fields_of_study (
-                "paperId"  TEXT REFERENCES publications("paperId") ON DELETE CASCADE,
-                field      TEXT,
-                PRIMARY KEY ("paperId", field)
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS citations (
-                id                   SERIAL PRIMARY KEY,
-                "paperId"            TEXT NOT NULL REFERENCES publications("paperId") ON DELETE CASCADE,
-                "citingPaperId"      TEXT,
-                "citingPaperTitle"   TEXT,
-                "citingPaperYear"    INTEGER,
-                "isInfluential"      BOOLEAN DEFAULT FALSE,
-                created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE("paperId", "citingPaperId")
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS citation_contexts (
-                id          SERIAL PRIMARY KEY,
-                citation_id INTEGER NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
-                context     TEXT NOT NULL
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS citation_intents (
-                id          SERIAL PRIMARY KEY,
-                citation_id INTEGER NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
-                intent      TEXT NOT NULL
-            )
-        ''')
-
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS citation_authors (
-                citation_id INTEGER NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
-                "authorId"  TEXT,
-                name        TEXT NOT NULL,
-                PRIMARY KEY (citation_id, "authorId")
-            )
-        ''')
-
-        # --- indexes ---
-        indexes = [
-            'CREATE INDEX IF NOT EXISTS idx_year              ON publications(year)',
-            'CREATE INDEX IF NOT EXISTS idx_citations         ON publications("citationCount")',
-            'CREATE INDEX IF NOT EXISTS idx_title             ON publications(title)',
-            'CREATE INDEX IF NOT EXISTS idx_doi               ON external_ids(doi)',
-            'CREATE INDEX IF NOT EXISTS idx_citing_paper      ON citations("citingPaperId")',
-            'CREATE INDEX IF NOT EXISTS idx_citation_paper    ON citations("paperId")',
-            'CREATE INDEX IF NOT EXISTS idx_pdf_downloaded    ON publications(pdf_downloaded)',
-            'CREATE INDEX IF NOT EXISTS idx_xml_converted     ON publications(xml_converted)',
-            'CREATE INDEX IF NOT EXISTS idx_sections_extracted ON publications(sections_extracted)',
-            'CREATE INDEX IF NOT EXISTS idx_features_extracted ON publications(features_extracted)',
-        ]
-        for idx in indexes:
-            self.cursor.execute(idx)
+        self.cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_publications_year ON publications(year)'
+        )
+        self.cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_publications_pdf ON publications(pdf_downloaded)'
+        )
+        self.cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_publications_xml ON publications(xml_converted)'
+        )
 
         self.conn.commit()
+        print("✓ PostgreSQL database initialized")
 
     # ------------------------------------------------------------------
     # Inserts
@@ -334,8 +243,8 @@ class PublicationDatabase:
                 ''', (paper_id, field))
 
             # citations
-            for citation in paper.get('citations', []):
-                citing_paper = citation.get('citingPaper', {})
+            for citation in paper.get('citations', []) or []:   # guard against None
+                citing_paper = citation.get('citingPaper') or {}
                 citing_paper_id = citing_paper.get('paperId') if citing_paper else None
 
                 self.cursor.execute('''
@@ -370,13 +279,13 @@ class PublicationDatabase:
                     )
 
                 if citing_paper:
-                    for author in citing_paper.get('authors', []):
+                    for author in citing_paper.get('authors', []) or []:  # guard against None
                         author_name = author.get('name')
                         if author_name:
                             self.cursor.execute('''
                                 INSERT INTO citation_authors (citation_id, "authorId", name)
-                                VALUES (%s,%s,%s)
-                                ON CONFLICT DO NOTHING
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT (citation_id, name) DO NOTHING
                             ''', (citation_id, author.get('authorId'), author_name))
 
             return True
@@ -386,10 +295,102 @@ class PublicationDatabase:
             print(f"Error inserting paper {paper.get('paperId')}: {e}")
             return False
 
-    def insert_publications(self, papers: List[Dict[str, Any]]) -> int:
-        """Insert multiple publications and commit."""
-        count = sum(1 for paper in papers if self.insert_publication(paper))
-        self.conn.commit()
+    def insert_publications(self, papers: List[Dict]) -> int:
+        """Insert publications and their authors. Citations removed."""
+        count = 0
+        for paper in papers:
+            try:
+                paper_id = paper.get('paperId')
+                if not paper_id:
+                    continue
+
+                external_ids = paper.get('externalIds') or {}
+                open_access  = paper.get('openAccessPdf') or {}
+                journal      = paper.get('journal') or {}
+                tldr         = paper.get('tldr') or {}
+
+                self.cursor.execute('''
+                    INSERT INTO publications (
+                        "paperId", title, abstract, year,
+                        citation_count, reference_count, influential_citation_count,
+                        venue, publication_date, publication_types,
+                        journal_name, journal_volume, journal_pages,
+                        fields_of_study, url, doi,
+                        is_open_access, open_access_pdf_url, open_access_pdf_status,
+                        tldr
+                    ) VALUES (
+                        %s,%s,%s,%s, %s,%s,%s, %s,%s,%s,
+                        %s,%s,%s, %s,%s,%s, %s,%s,%s, %s
+                    )
+                    ON CONFLICT ("paperId") DO UPDATE SET
+                        title                      = EXCLUDED.title,
+                        citation_count             = EXCLUDED.citation_count,
+                        updated_at                 = CURRENT_TIMESTAMP
+                ''', (
+                    paper_id,
+                    paper.get('title'),
+                    paper.get('abstract'),
+                    paper.get('year'),
+                    paper.get('citationCount', 0),
+                    paper.get('referenceCount', 0),
+                    paper.get('influentialCitationCount', 0),
+                    paper.get('venue'),
+                    paper.get('publicationDate'),
+                    paper.get('publicationTypes'),
+                    journal.get('name'),
+                    journal.get('volume'),
+                    journal.get('pages'),
+                    paper.get('fieldsOfStudy'),
+                    paper.get('url'),
+                    external_ids.get('DOI'),
+                    paper.get('isOpenAccess', False),
+                    open_access.get('url'),
+                    open_access.get('status'),
+                    tldr.get('text'),
+                ))
+
+                # authors
+                for author in paper.get('authors') or []:
+                    author_id   = author.get('authorId')
+                    author_name = author.get('name')
+                    if not author_name:
+                        continue
+
+                    if author_id:
+                        self.cursor.execute('''
+                            INSERT INTO authors ("authorId", name)
+                            VALUES (%s, %s)
+                            ON CONFLICT ("authorId") DO UPDATE SET name = EXCLUDED.name
+                        ''', (author_id, author_name))
+                        self.cursor.execute(
+                            'SELECT id FROM authors WHERE "authorId" = %s', (author_id,)
+                        )
+                    else:
+                        self.cursor.execute('''
+                            INSERT INTO authors ("authorId", name)
+                            VALUES (NULL, %s)
+                            ON CONFLICT DO NOTHING
+                        ''', (author_name,))
+                        self.cursor.execute(
+                            'SELECT id FROM authors WHERE name = %s AND "authorId" IS NULL',
+                            (author_name,)
+                        )
+
+                    row = self.cursor.fetchone()
+                    if row:
+                        self.cursor.execute('''
+                            INSERT INTO publication_authors (publication_id, author_id, author_order)
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT DO NOTHING
+                        ''', (paper_id, row['id'], None))
+
+                self.conn.commit()
+                count += 1
+
+            except Exception as e:
+                self.conn.rollback()
+                print(f"Error inserting paper {paper.get('paperId')}: {e}")
+
         print(f"✓ Inserted {count}/{len(papers)} publications into database")
         return count
 
@@ -606,37 +607,42 @@ class PublicationDatabase:
 
         return stats
 
-    def get_pipeline_status(self) -> Dict[str, Any]:
-        """Get pipeline processing status statistics."""
-        status = {}
-        self.cursor.execute('SELECT COUNT(*) FROM publications')
-        status['total_papers'] = self.cursor.fetchone()['count']
-
-        for col in ('pdf_downloaded', 'xml_converted', 'sections_extracted', 'features_extracted'):
-            self.cursor.execute(f'SELECT COUNT(*) FROM publications WHERE {col} = TRUE')
-            status[col] = self.cursor.fetchone()['count']
-
-        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE pdf_download_error IS NOT NULL')
-        status['pdf_errors'] = self.cursor.fetchone()['count']
-
-        self.cursor.execute('SELECT COUNT(*) FROM publications WHERE xml_conversion_error IS NOT NULL')
-        status['xml_errors'] = self.cursor.fetchone()['count']
-
-        return status
+    def get_pipeline_status(self) -> Dict:
+        """Return counts for each pipeline stage."""
+        self.cursor.execute("""
+            SELECT
+                COUNT(*)                                            AS total_papers,
+                COUNT(*) FILTER (WHERE pdf_downloaded = TRUE)      AS pdf_downloaded,
+                COUNT(*) FILTER (WHERE xml_converted  = TRUE)      AS xml_converted,
+                COUNT(*) FILTER (WHERE sections_extracted = TRUE)  AS sections_extracted,
+                COUNT(*) FILTER (WHERE features_extracted = TRUE)  AS features_extracted,
+                COUNT(*) FILTER (WHERE pdf_download_error IS NOT NULL
+                                   AND pdf_download_error != '')   AS pdf_errors,
+                COUNT(*) FILTER (WHERE xml_conversion_error IS NOT NULL
+                                   AND xml_conversion_error != '') AS xml_errors
+            FROM publications
+        """)
+        row = self.cursor.fetchone()
+        return dict(row) if row else {}
 
     def get_papers_needing_download(self, limit: int = None) -> List[Dict]:
-        """Get papers that need PDF download."""
-        query = '''
-            SELECT p."paperId", p.title, oa.url
+        """Return papers that have a PDF URL but haven't been downloaded yet."""
+        query = """
+            SELECT
+                p."paperId",
+                p.title,
+                p.open_access_pdf_url  AS url
             FROM publications p
-            JOIN open_access oa ON p."paperId" = oa."paperId"
-            WHERE oa.url IS NOT NULL
-              AND (p.pdf_downloaded = FALSE OR p.pdf_downloaded IS NULL)
-        '''
+            WHERE p.open_access_pdf_url IS NOT NULL
+              AND p.open_access_pdf_url != ''
+              AND (p.pdf_downloaded IS FALSE OR p.pdf_downloaded IS NULL)
+              AND (p.pdf_download_error IS NULL OR p.pdf_download_error = '')
+        """
         if limit:
-            query += f' LIMIT {limit}'
+            query += f" LIMIT {limit}"
+
         self.cursor.execute(query)
-        return [dict(r) for r in self.cursor.fetchall()]
+        return self.cursor.fetchall()
 
     def get_papers_needing_conversion(self, limit: int = None) -> List[Dict]:
         """Get papers that need XML conversion."""
@@ -681,11 +687,25 @@ class PublicationDatabase:
         self._create_tables()
 
     def reset_database(self, confirm: bool = False):
-        """Drop and recreate all tables (deletes ALL data)."""
+        """Drop and recreate all tables AND delete all data/log files."""
         if not confirm:
-            print("WARNING: This will delete ALL data! Call reset_database(confirm=True) to proceed.")
+            print("WARNING: Call reset_database(confirm=True) to proceed.")
             return
+
         print("\nResetting database...")
+
+        pdf_dir  = Path(__file__).parent.parent.parent / 'data' / 'pdf'
+        xml_dir  = Path(__file__).parent.parent.parent / 'data' / 'xml'
+        runs_dir = Path(__file__).parent.parent.parent / 'logs' / 'runs'
+
+        pdf_deleted  = self._clear_directory(pdf_dir)
+        xml_deleted  = self._clear_directory(xml_dir)
+        json_deleted = self._clear_directory(runs_dir)
+
+        print(f"  Deleted {pdf_deleted}  PDF files  from {pdf_dir}")
+        print(f"  Deleted {xml_deleted}  XML files  from {xml_dir}")
+        print(f"  Deleted {json_deleted} log files  from {runs_dir}")
+
         self.cursor.execute("""
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public'
@@ -693,62 +713,56 @@ class PublicationDatabase:
         for row in self.cursor.fetchall():
             self.cursor.execute(f'DROP TABLE IF EXISTS {row["tablename"]} CASCADE')
         self.conn.commit()
+        print("  Dropped all tables")
+
         self._create_tables()
-        print("Database reset complete")
+        print("✓ Full database reset complete")
+
+    @staticmethod
+    def _clear_directory(directory: Path) -> int:
+        """Delete all files in a directory recursively. Returns count deleted."""
+        deleted = 0
+        if not directory.exists():
+            return 0
+        for f in directory.rglob("*"):
+            if f.is_file():
+                f.unlink(missing_ok=True)
+                deleted += 1
+        return deleted
 
     def reset_pipeline_status(self):
-        """Reset pipeline tracking columns; delete PDF/XML files from disk."""
+        """Reset pipeline tracking columns and delete all data files."""
         print("\nResetting pipeline status...")
 
-        self.cursor.execute('SELECT pdf_path FROM publications WHERE pdf_path IS NOT NULL')
-        pdf_paths = [r['pdf_path'] for r in self.cursor.fetchall()]
+        pdf_dir  = Path(__file__).parent.parent.parent / 'data' / 'pdf'
+        xml_dir  = Path(__file__).parent.parent.parent / 'data' / 'xml'
+        runs_dir = Path(__file__).parent.parent.parent / 'logs' / 'runs'
 
-        self.cursor.execute('SELECT xml_path FROM publications WHERE xml_path IS NOT NULL')
-        xml_paths = [r['xml_path'] for r in self.cursor.fetchall()]
+        pdf_deleted  = self._clear_directory(pdf_dir)
+        xml_deleted  = self._clear_directory(xml_dir)
+        json_deleted = self._clear_directory(runs_dir)
 
-        def _delete_files(paths):
-            deleted = not_found = 0
-            for p in paths:
-                try:
-                    path = Path(p)
-                    if path.exists():
-                        path.unlink(); deleted += 1
-                    else:
-                        not_found += 1
-                except Exception as e:
-                    print(f"Warning: could not delete {p}: {e}")
-            return deleted, not_found
-
-        pdf_del, pdf_nf = _delete_files(pdf_paths)
-        xml_del, xml_nf = _delete_files(xml_paths)
-
-        xml_output_dir = Path(__file__).parent.parent.parent / 'outputs' / 'xml'
-        if xml_output_dir.exists():
-            for xml_file in xml_output_dir.glob("*.tei.xml"):
-                try:
-                    xml_file.unlink(); xml_del += 1
-                except Exception as e:
-                    print(f"Warning: could not delete {xml_file}: {e}")
+        print(f"  Deleted {pdf_deleted}  files from {pdf_dir}")
+        print(f"  Deleted {xml_deleted}  files from {xml_dir}")
+        print(f"  Deleted {json_deleted} files from {runs_dir}")
 
         self.cursor.execute('''
             UPDATE publications SET
-                pdf_downloaded = FALSE, pdf_download_date = NULL,
-                pdf_path = NULL, pdf_download_error = NULL,
-                xml_converted = FALSE, xml_conversion_date = NULL,
-                xml_path = NULL, xml_conversion_error = NULL,
-                sections_extracted = FALSE, sections_extraction_date = NULL,
-                sections_extraction_error = NULL,
-                features_extracted = FALSE, features_extraction_date = NULL,
-                features_extraction_error = NULL,
-                updated_at = CURRENT_TIMESTAMP
+                pdf_downloaded       = FALSE,
+                pdf_download_date    = NULL,
+                pdf_path             = NULL,
+                pdf_download_error   = NULL,
+                xml_converted        = FALSE,
+                xml_conversion_date  = NULL,
+                xml_path             = NULL,
+                xml_conversion_error = NULL,
+                sections_extracted   = FALSE,
+                features_extracted   = FALSE,
+                updated_at           = CURRENT_TIMESTAMP
         ''')
-        rows_updated = self.cursor.rowcount
         self.conn.commit()
-
-        print(f"\nPipeline Reset Complete:")
-        print(f"  Records updated : {rows_updated}")
-        print(f"  PDFs deleted    : {pdf_del}  (not found: {pdf_nf})")
-        print(f"  XMLs deleted    : {xml_del}  (not found: {xml_nf})")
+        print(f"  Reset tracking columns for {self.cursor.rowcount} publications")
+        print("✓ Pipeline status reset complete")
 
     def export_to_json(self, output_path: str, limit: int = None):
         """Export publications to JSON."""

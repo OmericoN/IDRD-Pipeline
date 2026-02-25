@@ -1,4 +1,9 @@
 # Byte-compiled / optimized / DLL files
+runs/
+metadata/
+pdf/
+xml/
+
 .vscode
 settings.json
 .env
