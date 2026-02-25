@@ -39,14 +39,15 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 PROJECT_ROOT = Path(__file__).parent.parent
 
 # Pipeline DATA — produced and consumed by pipeline steps
-DATA_DIR = PROJECT_ROOT / "data"
-PDF_DIR  = DATA_DIR / "pdf"
-XML_DIR  = DATA_DIR / "xml"
+DATA_DIR     = PROJECT_ROOT / "data"
+PDF_DIR      = DATA_DIR / "pdf"
+XML_DIR      = DATA_DIR / "xml"
+MARKDOWN_DIR = DATA_DIR / "markdown"
 
 # Pipeline LOGS — observational only, never read by the pipeline
 LOGS_DIR = PROJECT_ROOT / "logs"
 RUNS_DIR = LOGS_DIR / "runs"
 
 # Create directories on import
-for _dir in (PDF_DIR, XML_DIR, RUNS_DIR):
+for _dir in (PDF_DIR, XML_DIR, MARKDOWN_DIR, RUNS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

@@ -692,19 +692,22 @@ class PublicationDatabase:
             print("WARNING: Call reset_database(confirm=True) to proceed.")
             return
 
-        print("\nResetting database...")
+        print("\nPerforming full database reset...")
 
-        pdf_dir  = Path(__file__).parent.parent.parent / 'data' / 'pdf'
-        xml_dir  = Path(__file__).parent.parent.parent / 'data' / 'xml'
-        runs_dir = Path(__file__).parent.parent.parent / 'logs' / 'runs'
+        pdf_dir      = Path(__file__).parent.parent.parent / 'data' / 'pdf'
+        xml_dir      = Path(__file__).parent.parent.parent / 'data' / 'xml'
+        markdown_dir = Path(__file__).parent.parent.parent / 'data' / 'markdown'
+        runs_dir     = Path(__file__).parent.parent.parent / 'logs' / 'runs'
 
-        pdf_deleted  = self._clear_directory(pdf_dir)
-        xml_deleted  = self._clear_directory(xml_dir)
-        json_deleted = self._clear_directory(runs_dir)
+        pdf_deleted      = self._clear_directory(pdf_dir)
+        xml_deleted      = self._clear_directory(xml_dir)
+        markdown_deleted = self._clear_directory(markdown_dir)
+        json_deleted     = self._clear_directory(runs_dir)
 
-        print(f"  Deleted {pdf_deleted}  PDF files  from {pdf_dir}")
-        print(f"  Deleted {xml_deleted}  XML files  from {xml_dir}")
-        print(f"  Deleted {json_deleted} log files  from {runs_dir}")
+        print(f"  Deleted {pdf_deleted}      PDF files      from {pdf_dir}")
+        print(f"  Deleted {xml_deleted}      XML files      from {xml_dir}")
+        print(f"  Deleted {markdown_deleted} Markdown files from {markdown_dir}")
+        print(f"  Deleted {json_deleted}     log files      from {runs_dir}")
 
         self.cursor.execute("""
             SELECT tablename FROM pg_tables
@@ -734,17 +737,20 @@ class PublicationDatabase:
         """Reset pipeline tracking columns and delete all data files."""
         print("\nResetting pipeline status...")
 
-        pdf_dir  = Path(__file__).parent.parent.parent / 'data' / 'pdf'
-        xml_dir  = Path(__file__).parent.parent.parent / 'data' / 'xml'
-        runs_dir = Path(__file__).parent.parent.parent / 'logs' / 'runs'
+        pdf_dir      = Path(__file__).parent.parent.parent / 'data' / 'pdf'
+        xml_dir      = Path(__file__).parent.parent.parent / 'data' / 'xml'
+        markdown_dir = Path(__file__).parent.parent.parent / 'data' / 'markdown'
+        runs_dir     = Path(__file__).parent.parent.parent / 'logs' / 'runs'
 
-        pdf_deleted  = self._clear_directory(pdf_dir)
-        xml_deleted  = self._clear_directory(xml_dir)
-        json_deleted = self._clear_directory(runs_dir)
+        pdf_deleted      = self._clear_directory(pdf_dir)
+        xml_deleted      = self._clear_directory(xml_dir)
+        markdown_deleted = self._clear_directory(markdown_dir)
+        json_deleted     = self._clear_directory(runs_dir)
 
-        print(f"  Deleted {pdf_deleted}  files from {pdf_dir}")
-        print(f"  Deleted {xml_deleted}  files from {xml_dir}")
-        print(f"  Deleted {json_deleted} files from {runs_dir}")
+        print(f"  Deleted {pdf_deleted}      PDF files      from {pdf_dir}")
+        print(f"  Deleted {xml_deleted}      XML files      from {xml_dir}")
+        print(f"  Deleted {markdown_deleted} Markdown files from {markdown_dir}")
+        print(f"  Deleted {json_deleted}     log files      from {runs_dir}")
 
         self.cursor.execute('''
             UPDATE publications SET
