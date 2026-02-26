@@ -35,8 +35,8 @@ sys.path.append(str(Path(__file__).parent))
 from pubfetcher.client import SemanticScholarClient
 from utils.dict_parser import PaperDictParser
 from db.db import PublicationDatabase
-from extractor.downloader import PDFDownloader
-from extractor.converter import GrobidConverter
+from ingestion.downloader import PDFDownloader
+from ingestion.converter import GrobidConverter
 from utils.db_utils import (
     print_download_status,
     print_conversion_status,
