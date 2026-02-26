@@ -58,6 +58,38 @@ GT_XML_DIR.mkdir(parents=True, exist_ok=True)
 GT_MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# ── Clean slate ───────────────────────────────────────────────────────
+
+def _clean_experiment_dirs():
+    """
+    Wipe all PDFs, XMLs and Markdown files from the gt_experiment dirs
+    before every run so results are always fresh and reproducible.
+    Reports and the CSV are NOT touched.
+    """
+    import shutil
+
+    dirs = {
+        "pdf":      GT_PDF_DIR,
+        "xml":      GT_XML_DIR,
+        "markdown": GT_MARKDOWN_DIR,
+    }
+
+    print(f"\n{'─'*70}")
+    print("GT CLEAN — wiping previous experiment data")
+    print(f"{'─'*70}")
+
+    for label, path in dirs.items():
+        if path.exists():
+            file_count = sum(1 for f in path.iterdir() if f.is_file())
+            shutil.rmtree(path)
+            path.mkdir(parents=True, exist_ok=True)
+            print(f"  ✓ {label:<10} cleared ({file_count} files removed) → {path}")
+        else:
+            path.mkdir(parents=True, exist_ok=True)
+            print(f"  ✓ {label:<10} created (was empty) → {path}")
+
+    print(f"{'─'*70}")
+
 # ── GROBID conversion (isolated output) ───────────────────────────────
 
 def _convert_pdfs(
@@ -223,6 +255,9 @@ def run(
     print(f"  Started       : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*70}")
 
+    # ── 0. CLEAN ──────────────────────────────────────────────────────
+    _clean_experiment_dirs()
+
     # ── 1. FETCH ──────────────────────────────────────────────────────
     found_with_pdf, found_no_pdf, not_found = fetch_all(
         csv_path=csv_path,
@@ -256,8 +291,13 @@ def run(
     )
 
     # ── 3. CONVERT ────────────────────────────────────────────────────
+    # count both freshly downloaded + any that were skipped (already on disk)
+    pdfs_available = (
+        download_results["stats"]["successful"]
+        + download_results["stats"]["skipped"]
+    )
     conversion_results = None
-    if convert and download_results["stats"]["successful"] > 0:
+    if convert and pdfs_available > 0:
         conversion_results = _convert_pdfs(
             download_results = download_results,
             output_dir       = GT_XML_DIR,
@@ -358,7 +398,7 @@ if __name__ == "__main__":
     parser = build_parser()
     args   = parser.parse_args()
 
-    # ── extract-only shortcut ──────────────────────────────────────────
+    # ── extract-only shortcut — no clean, just re-extract existing XMLs ──
     if args.extract_only:
         _extract_markdown(xml_dir=GT_XML_DIR, output_dir=GT_MARKDOWN_DIR)
         sys.exit(0)

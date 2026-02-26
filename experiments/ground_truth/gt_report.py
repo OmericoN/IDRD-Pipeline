@@ -2,7 +2,7 @@
 GT Report
 =========
 Prints and saves a structured report of a ground-truth pipeline run.
-Covers fetch, download, and conversion stages.
+Covers fetch, download, conversion, and extraction stages.
 
 Saved to:  data/gt_experiment/report_<timestamp>.json
 """
@@ -20,31 +20,35 @@ GT_EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def build_report(
-    found_with_pdf:  list[dict],
-    found_no_pdf:    list[dict],
-    not_found:       list[dict],
-    download_results: dict,
+    found_with_pdf:     list[dict],
+    found_no_pdf:       list[dict],
+    not_found:          list[dict],
+    download_results:   dict,
     conversion_results: dict | None,
-    total_in_csv: int,
-    elapsed_seconds: float,
+    extraction_results: dict | None,        # ← added
+    total_in_csv:       int,
+    elapsed_seconds:    float,
 ) -> dict:
     """Assemble a structured report dict from all pipeline stage outputs."""
 
     dl_stats = download_results.get("stats", {})
     cv_stats = (conversion_results or {}).get("stats", {})
+    ex_stats = (extraction_results or {}).get("stats", {})   # ← added
 
     report = {
-        "run_timestamp": datetime.now().isoformat(),
+        "run_timestamp":   datetime.now().isoformat(),
         "elapsed_seconds": round(elapsed_seconds, 1),
         "totals": {
-            "in_csv":          total_in_csv,
-            "found_with_pdf":  len(found_with_pdf),
-            "found_no_pdf":    len(found_no_pdf),
-            "not_found":       len(not_found),
-            "pdf_downloaded":  dl_stats.get("successful", 0),
-            "pdf_failed":      dl_stats.get("failed", 0),
-            "xml_converted":   cv_stats.get("successful", 0),
-            "xml_failed":      cv_stats.get("failed", 0),
+            "in_csv":         total_in_csv,
+            "found_with_pdf": len(found_with_pdf),
+            "found_no_pdf":   len(found_no_pdf),
+            "not_found":      len(not_found),
+            "pdf_downloaded": dl_stats.get("successful", 0),
+            "pdf_failed":     dl_stats.get("failed",     0),
+            "xml_converted":  cv_stats.get("successful", 0),
+            "xml_failed":     cv_stats.get("failed",     0),
+            "md_extracted":   ex_stats.get("successful", 0),  # ← added
+            "md_failed":      ex_stats.get("failed",     0),  # ← added
         },
         "coverage": {},
         "found_with_pdf": [
@@ -66,21 +70,20 @@ def build_report(
             }
             for p in found_no_pdf
         ],
-        "not_found": [
-            {"gt_id": r["id"], "title": r["title"]}
-            for r in not_found
-        ],
-        "download_failures": download_results.get("failed", []),
-        "conversion_failures": (conversion_results or {}).get("results", []),
+        "not_found":          [{"gt_id": r["id"], "title": r["title"]} for r in not_found],
+        "download_failures":  download_results.get("failed", []),
+        "conversion_results": (conversion_results or {}).get("results", []),
+        "extraction_results": (extraction_results or {}).get("results", []),  # ← added
     }
 
     # ── coverage percentages ──────────────────────────────────────────
     t = total_in_csv or 1
     report["coverage"] = {
         "ss_found_pct":      round((len(found_with_pdf) + len(found_no_pdf)) / t * 100, 1),
-        "ss_with_pdf_pct":   round(len(found_with_pdf) / t * 100, 1),
-        "pdf_download_pct":  round(dl_stats.get("successful", 0) / t * 100, 1),
-        "xml_converted_pct": round(cv_stats.get("successful", 0) / t * 100, 1),
+        "ss_with_pdf_pct":   round(len(found_with_pdf)                       / t * 100, 1),
+        "pdf_download_pct":  round(dl_stats.get("successful", 0)             / t * 100, 1),
+        "xml_converted_pct": round(cv_stats.get("successful", 0)             / t * 100, 1),
+        "md_extracted_pct":  round(ex_stats.get("successful", 0)             / t * 100, 1),  # ← added
     }
 
     return report
@@ -107,6 +110,9 @@ def print_report(report: dict):
     print(f"{'─'*70}")
     print(f"  XML converted       : {t['xml_converted']}  ({c['xml_converted_pct']}%)")
     print(f"  XML failed          : {t['xml_failed']}")
+    print(f"{'─'*70}")
+    print(f"  Markdown extracted  : {t['md_extracted']}  ({c['md_extracted_pct']}%)")   # ← added
+    print(f"  Markdown failed     : {t['md_failed']}")                                   # ← added
 
     if report["not_found"]:
         print(f"\n  Not found in Semantic Scholar ({len(report['not_found'])}):")
@@ -122,6 +128,13 @@ def print_report(report: dict):
         print(f"\n  Download failures ({len(report['download_failures'])}):")
         for r in report["download_failures"]:
             print(f"    [{r.get('gt_id')}] {r.get('reason')} — {r.get('title','')[:50]}")
+
+    # ← added: show extraction failures
+    extraction_failures = [r for r in report.get("extraction_results", []) if not r.get("success")]
+    if extraction_failures:
+        print(f"\n  Extraction failures ({len(extraction_failures)}):")
+        for r in extraction_failures:
+            print(f"    {r.get('xml')} — {r.get('message','')[:60]}")
 
     print(f"{'='*70}")
 

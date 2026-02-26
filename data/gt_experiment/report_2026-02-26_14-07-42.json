@@ -1,21 +1,24 @@
 {
-  "run_timestamp": "2026-02-26T11:03:08.689766",
-  "elapsed_seconds": 295.7,
+  "run_timestamp": "2026-02-26T14:07:42.267412",
+  "elapsed_seconds": 264.3,
   "totals": {
     "in_csv": 50,
-    "found_with_pdf": 24,
-    "found_no_pdf": 16,
-    "not_found": 10,
+    "found_with_pdf": 25,
+    "found_no_pdf": 18,
+    "not_found": 7,
     "pdf_downloaded": 14,
-    "pdf_failed": 10,
+    "pdf_failed": 11,
     "xml_converted": 14,
-    "xml_failed": 0
+    "xml_failed": 0,
+    "md_extracted": 14,
+    "md_failed": 0
   },
   "coverage": {
-    "ss_found_pct": 80.0,
-    "ss_with_pdf_pct": 48.0,
+    "ss_found_pct": 86.0,
+    "ss_with_pdf_pct": 50.0,
     "pdf_download_pct": 28.0,
-    "xml_converted_pct": 28.0
+    "xml_converted_pct": 28.0,
+    "md_extracted_pct": 28.0
   },
   "found_with_pdf": [
     {
@@ -180,6 +183,13 @@
       "pdf_url": "https://unsworks.unsw.edu.au/bitstreams/e37d8d62-bdf9-4c8d-b1b0-b713d896883f/download"
     },
     {
+      "gt_id": "P049",
+      "paper_id": "328a5c4ae21e3e1dcec364cade7cebe4d51ca1ff",
+      "title": "Mammal species composition reveals new insights into Earth's remaining wilderness",
+      "year": 2020,
+      "pdf_url": "http://deepblue.lib.umich.edu/bitstream/2027.42/156493/5/fee2192.pdf"
+    },
+    {
       "gt_id": "P050",
       "paper_id": "4ca5d952b412cdf2e3167653ab2876a9f8602b24",
       "title": "A Typology of Parental Involvement in Student Experience: A Latent Class Analysis",
@@ -188,6 +198,12 @@
     }
   ],
   "found_no_pdf": [
+    {
+      "gt_id": "P001",
+      "paper_id": "03c59571e56cc0023b0b854e2168294536701620",
+      "title": "Deriving accurate galaxy cluster masses using X-ray thermodynamic profiles and graph neural networks",
+      "year": 2025
+    },
     {
       "gt_id": "P002",
       "paper_id": "3438fe0d6b6a4cc5f3c6a57fa010148df23629ba",
@@ -255,6 +271,12 @@
       "year": 2024
     },
     {
+      "gt_id": "P031",
+      "paper_id": "b1c8fd3c27e3d09193f3554eae8c3e5f8151d523",
+      "title": "Does Metallicity affect Protoplanetary Disk Fraction? Answers from the Outer Milky Way",
+      "year": 2024
+    },
+    {
       "gt_id": "P036",
       "paper_id": "aded1a0db4866515bf05a624bd32dc586e7a9d5f",
       "title": "National trends of cerebrospinal fluid Alzheimer's disease biomarker testing in Japan",
@@ -287,10 +309,6 @@
   ],
   "not_found": [
     {
-      "gt_id": "P001",
-      "title": "Deriving accurate galaxy cluster masses using X-ray thermodynamic profiles and graph neural networks"
-    },
-    {
       "gt_id": "P016",
       "title": "A novel artificial intelligence based intensive care unit monitoring system"
     },
@@ -311,20 +329,12 @@
       "title": "Extremile scalar-on-function regression with application to climate scenarios"
     },
     {
-      "gt_id": "P031",
-      "title": "Does Metallicity affect Protoplanetary Disk Fraction? Answers from the Outer Milky Way"
-    },
-    {
       "gt_id": "P039",
       "title": "Estimating dengue force of infection from age-stratified surveillance data in Java Indonesia"
     },
     {
       "gt_id": "P046",
       "title": "Analysis of Trends in Marine Water Quality Using Environmental Impact Assessment Monitoring Data"
-    },
-    {
-      "gt_id": "P049",
-      "title": "Mammal species composition reveals new insights into Earths remaining wilderness"
     }
   ],
   "download_failures": [
@@ -392,6 +402,13 @@
       "url": "https://doi.org/10.1016/j.ehb.2023.101245"
     },
     {
+      "paper_id": "328a5c4ae21e3e1dcec364cade7cebe4d51ca1ff",
+      "gt_id": "P049",
+      "title": "Mammal species composition reveals new insights into Earth's",
+      "reason": "unexpected content-type: text/html; charset=utf-8",
+      "url": "http://deepblue.lib.umich.edu/bitstream/2027.42/156493/5/fee2192.pdf"
+    },
+    {
       "paper_id": "4ca5d952b412cdf2e3167653ab2876a9f8602b24",
       "gt_id": "P050",
       "title": "A Typology of Parental Involvement in Student Experience: A ",
@@ -399,7 +416,7 @@
       "url": "https://academiccommons.columbia.edu/doi/10.7916/d8-0xm9-qk37/download"
     }
   ],
-  "conversion_failures": [
+  "conversion_results": [
     {
       "paper_id": "ee74826c14556857ab071fd524b957c3bb986baf",
       "gt_id": "P007",
@@ -483,6 +500,106 @@
       "gt_id": "P047",
       "success": true,
       "message": "Converted: 5264bcf09e52995572e8040bdbd3f0d4b3a003dd.tei.xml (127.9 KB)"
+    }
+  ],
+  "extraction_results": [
+    {
+      "xml": "05405f589e6751bf2dd6678ba077738ee9555fbf.tei.xml",
+      "md": "05405f589e6751bf2dd6678ba077738ee9555fbf.md",
+      "size_kb": 30.6,
+      "success": true,
+      "message": "30.6 KB"
+    },
+    {
+      "xml": "203d5c05afb0984728236be47e44a323cf0cb953.tei.xml",
+      "md": "203d5c05afb0984728236be47e44a323cf0cb953.md",
+      "size_kb": 17.4,
+      "success": true,
+      "message": "17.4 KB"
+    },
+    {
+      "xml": "28c56ae2585194d8915a086a47b72089764eefc9.tei.xml",
+      "md": "28c56ae2585194d8915a086a47b72089764eefc9.md",
+      "size_kb": 33.2,
+      "success": true,
+      "message": "33.2 KB"
+    },
+    {
+      "xml": "41fc427eb14de98aa878f8e45f312c8d993242b8.tei.xml",
+      "md": "41fc427eb14de98aa878f8e45f312c8d993242b8.md",
+      "size_kb": 31.8,
+      "success": true,
+      "message": "31.8 KB"
+    },
+    {
+      "xml": "448a41e150ea2e7fad199cfdd1abaa5ed0350935.tei.xml",
+      "md": "448a41e150ea2e7fad199cfdd1abaa5ed0350935.md",
+      "size_kb": 38.2,
+      "success": true,
+      "message": "38.2 KB"
+    },
+    {
+      "xml": "4e87103c67a0c559d5bb907e1a5606d233c3a2ca.tei.xml",
+      "md": "4e87103c67a0c559d5bb907e1a5606d233c3a2ca.md",
+      "size_kb": 25.9,
+      "success": true,
+      "message": "25.9 KB"
+    },
+    {
+      "xml": "5264bcf09e52995572e8040bdbd3f0d4b3a003dd.tei.xml",
+      "md": "5264bcf09e52995572e8040bdbd3f0d4b3a003dd.md",
+      "size_kb": 36.0,
+      "success": true,
+      "message": "36.0 KB"
+    },
+    {
+      "xml": "617a876f46b5d583ae29a6f61fc331e563e7648b.tei.xml",
+      "md": "617a876f46b5d583ae29a6f61fc331e563e7648b.md",
+      "size_kb": 40.3,
+      "success": true,
+      "message": "40.3 KB"
+    },
+    {
+      "xml": "8292796c88e8623432ae6854bbc3fc7fd8f37ba6.tei.xml",
+      "md": "8292796c88e8623432ae6854bbc3fc7fd8f37ba6.md",
+      "size_kb": 26.4,
+      "success": true,
+      "message": "26.4 KB"
+    },
+    {
+      "xml": "8ab3266b664a06cc9fa514bfddfc0915e16092bd.tei.xml",
+      "md": "8ab3266b664a06cc9fa514bfddfc0915e16092bd.md",
+      "size_kb": 32.9,
+      "success": true,
+      "message": "32.9 KB"
+    },
+    {
+      "xml": "acc04523948301886b145aa51464e8d0a5f67416.tei.xml",
+      "md": "acc04523948301886b145aa51464e8d0a5f67416.md",
+      "size_kb": 54.3,
+      "success": true,
+      "message": "54.3 KB"
+    },
+    {
+      "xml": "cba8cc12ce8faa8d2ad2e8f933fa3f595c6a3c34.tei.xml",
+      "md": "cba8cc12ce8faa8d2ad2e8f933fa3f595c6a3c34.md",
+      "size_kb": 34.2,
+      "success": true,
+      "message": "34.2 KB"
+    },
+    {
+      "xml": "ee74826c14556857ab071fd524b957c3bb986baf.tei.xml",
+      "md": "ee74826c14556857ab071fd524b957c3bb986baf.md",
+      "size_kb": 67.8,
+      "success": true,
+      "message": "67.8 KB"
+    },
+    {
+      "xml": "f0fc96584f547cb4bca5e0bdc5331bdd617c471a.tei.xml",
+      "md": "f0fc96584f547cb4bca5e0bdc5331bdd617c471a.md",
+      "size_kb": 28.3,
+      "success": true,
+      "message": "28.3 KB"
     }
   ]
 }
