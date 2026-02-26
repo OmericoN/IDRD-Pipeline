@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 import psycopg2
 import psycopg2.extras
 import os
+from psycopg2 import sql
+import re
 
 load_dotenv()
 
@@ -638,10 +640,13 @@ class PublicationDatabase:
               AND (p.pdf_downloaded IS FALSE OR p.pdf_downloaded IS NULL)
               AND (p.pdf_download_error IS NULL OR p.pdf_download_error = '')
         """
+        # SQL Injection Vulnerability resolved: use parameterised placeholder instead of f-string
+        params = []
         if limit:
-            query += f" LIMIT {limit}"
+            query += " LIMIT %s"
+            params.append(limit)
 
-        self.cursor.execute(query)
+        self.cursor.execute(query, params)
         return self.cursor.fetchall()
 
     def get_papers_needing_conversion(self, limit: int = None) -> List[Dict]:
@@ -652,9 +657,13 @@ class PublicationDatabase:
               AND pdf_path IS NOT NULL
               AND (xml_converted = FALSE OR xml_converted IS NULL)
         '''
+        # SQL Injection Vulnerability resolved: use parameterised placeholder instead of f-string
+        params = []
         if limit:
-            query += f' LIMIT {limit}'
-        self.cursor.execute(query)
+            query += ' LIMIT %s'
+            params.append(limit)
+
+        self.cursor.execute(query, params)
         return [dict(r) for r in self.cursor.fetchall()]
 
     # ------------------------------------------------------------------
@@ -669,7 +678,9 @@ class PublicationDatabase:
             'external_ids', 'publication_authors', 'authors', 'publications',
         ]
         for table in tables:
-            self.cursor.execute(f'DELETE FROM {table}')
+            self.cursor.execute(
+                sql.SQL('DELETE FROM {}').format(sql.Identifier(table))
+            )
         self.conn.commit()
         print("✓ Database cleared")
 
@@ -681,7 +692,9 @@ class PublicationDatabase:
             'external_ids', 'publication_authors', 'authors', 'publications',
         ]
         for table in tables:
-            self.cursor.execute(f'DROP TABLE IF EXISTS {table} CASCADE')
+            self.cursor.execute(
+                sql.SQL('DROP TABLE IF EXISTS {} CASCADE').format(sql.Identifier(table))
+            )
         self.conn.commit()
         print("✓ All tables dropped")
         self._create_tables()
@@ -713,10 +726,20 @@ class PublicationDatabase:
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public'
         """)
-        for row in self.cursor.fetchall():
-            self.cursor.execute(f'DROP TABLE IF EXISTS {row["tablename"]} CASCADE')
+        table_names = [row["tablename"] for row in self.cursor.fetchall()]
+
+        for table_name in table_names:
+            # guard: only allow safe identifier characters
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+                print(f"  ⚠ Skipping suspicious table name: {table_name!r}")
+                continue
+            self.cursor.execute(
+                sql.SQL('DROP TABLE IF EXISTS {} CASCADE').format(
+                    sql.Identifier(table_name)
+                )
+            )
+
         self.conn.commit()
-        print("  Dropped all tables")
 
         self._create_tables()
         print("✓ Full database reset complete")

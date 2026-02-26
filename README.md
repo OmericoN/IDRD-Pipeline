@@ -1,18 +1,18 @@
 # IDRD Pipeline
 
 A multi-stage pipeline for fetching academic publications, downloading their PDFs,
-converting them to structured XML, and (in future phases) extracting features for
-a RAG system.
+converting them to structured XML, extracting Markdown sections, and (in future phases)
+extracting features for a RAG system.
 
 ---
 
 ## Requirements
 
 ```bash
-pip install psycopg2-binary python-dotenv requests tqdm docker pandas openpyxl
+pip install psycopg2-binary python-dotenv requests tqdm docker pandas openpyxl lxml
 ```
 
-Create a `.env` file in the project root (already present):
+Create a `.env` file in the project root:
 
 ```
 POSTGRES_HOST=localhost
@@ -38,7 +38,7 @@ The schema is created automatically on first run.
 All commands are run from the **project root**.
 
 ### Full Pipeline (recommended starting point)
-Fetch papers → download PDFs → convert to XML in one command.
+Fetch → Download → Convert → Extract Markdown in one command.
 
 ```bash
 python src/main.py --query "implicit dataset references" --limit 50
@@ -53,11 +53,6 @@ Store papers in the database without downloading anything.
 
 ```bash
 python src/main.py --query "Transformers NLP" --limit 100 --fetch-only
-```
-
-Skip citation context fetching (faster):
-```bash
-python src/main.py --query "Transformers NLP" --limit 100 --fetch-only --no-citations
 ```
 
 Filter by field of study:
@@ -105,6 +100,25 @@ python src/main.py --convert-only --cv-overwrite
 
 ---
 
+#### Step 4 — Extract Markdown only
+Extract structured Markdown from TEI XML files already in `data/xml/`.
+
+```bash
+python src/main.py --extract-only
+```
+
+Re-extract, overwriting existing `.md` files:
+```bash
+python src/main.py --extract-only --ex-overwrite
+```
+
+Limit how many to extract:
+```bash
+python src/main.py --extract-only --ex-limit 20
+```
+
+---
+
 ### Check Status
 See how many papers are at each pipeline stage.
 
@@ -120,7 +134,7 @@ PIPELINE STATUS
   Total papers          : 150
   PDFs downloaded       : 120
   Converted to XML      : 98
-  Sections extracted    : 0
+  Sections extracted    : 87
   Features extracted    : 0
   Download errors       : 5
   Conversion errors     : 2
@@ -131,7 +145,7 @@ PIPELINE STATUS
 
 ### Reset
 
-Reset pipeline tracking flags (keeps all papers, allows re-running download/convert):
+Reset pipeline tracking flags (keeps all papers, allows re-running steps):
 ```bash
 python src/main.py --reset status
 ```
@@ -143,17 +157,54 @@ python src/main.py --reset full
 
 ---
 
+## Ground Truth Experiment
+
+Run the pipeline in a fully isolated mode against the ground truth CSV.
+Does **not** touch the main database or `data/pdf/`, `data/xml/`, `data/markdown/`.
+
+```bash
+# Full run — fetch + download + convert + extract markdown
+python experiments/ground_truth/gt_runner.py
+
+# Fetch metadata only — see what Semantic Scholar has before committing
+python experiments/ground_truth/gt_runner.py --fetch-only
+
+# Fetch + download, skip GROBID
+python experiments/ground_truth/gt_runner.py --no-xml
+
+# Skip markdown extraction
+python experiments/ground_truth/gt_runner.py --no-extract
+
+# Re-run extractor on existing XMLs only (no network calls)
+python experiments/ground_truth/gt_runner.py --extract-only
+
+# Use a custom CSV
+python experiments/ground_truth/gt_runner.py --csv data/ground_truth/temp.csv
+```
+
+Output goes to `data/gt_experiment/`:
+```
+data/gt_experiment/
+├── pdf/          ← downloaded PDFs
+├── xml/          ← GROBID TEI XML
+├── markdown/     ← extracted .md files
+└── report_*.json ← coverage report per run
+```
+
+---
+
 ## All CLI Options
 
 | Flag | Description | Default |
 |---|---|---|
 | `--query TEXT` | Semantic Scholar search query | required for fetch |
 | `--limit N` | Max papers to fetch | 100 |
-| `--fetch-only` | Only fetch papers, stop after Step 1 | off |
+| `--fetch-only` | Only fetch papers (Step 1) | off |
 | `--download-only` | Only download PDFs (Step 2) | off |
 | `--convert-only` | Only convert PDFs to XML (Step 3) | off |
+| `--extract-only` | Only extract Markdown from XMLs (Step 4) | off |
 | `--no-xml` | Skip Step 3 in full pipeline | off |
-| `--no-citations` | Skip fetching citation contexts | off |
+| `--no-extract` | Skip Step 4 in full pipeline | off |
 | `--all-access` | Include non-open-access papers | off |
 | `--fields-of-study TEXT` | Filter by field e.g. `"Computer Science"` | none |
 | `--dl-limit N` | Max PDFs to download | all |
@@ -163,6 +214,8 @@ python src/main.py --reset full
 | `--cv-overwrite` | Re-convert existing XMLs | off |
 | `--cv-delay N` | Seconds between conversions | 0.1 |
 | `--delete-pdfs` | Delete PDFs after conversion | off |
+| `--ex-limit N` | Max XMLs to extract | all |
+| `--ex-overwrite` | Re-extract existing `.md` files | off |
 | `--status` | Show pipeline status and exit | — |
 | `--reset {status\|full}` | Reset pipeline tracking or full DB | — |
 
@@ -173,28 +226,11 @@ python src/main.py --reset full
 | # | Stage | Module | Status |
 |---|---|---|---|
 | 1 | Fetch papers | `src/pubfetcher/client.py` | ✅ Done |
-| 2 | Download PDFs | `src/extractor/downloader.py` | ✅ Done |
-| 3 | Convert PDF → XML | `src/extractor/converter.py` | ✅ Done |
-| 4 | Extract sections | `src/extractor/extractor.py` | 🔲 Phase 2 |
+| 2 | Download PDFs | `src/ingestion/downloader.py` | ✅ Done |
+| 3 | Convert PDF → XML | `src/ingestion/converter.py` | ✅ Done |
+| 4 | Extract Markdown | `src/ingestion/extractor.py` | ✅ Done |
 | 5 | LLM feature extraction | `src/llm/` | 🔲 Phase 3 |
 | 6 | RAG / Vector search | `src/rag/` | 🔲 Phase 4 |
-
----
-
-## Tests
-
-```bash
-# Run all tests
-python src/extractor/tests.py
-
-# Run a specific test class
-python -m unittest src.extractor.tests.TestPDFDownloader
-
-# Run with coverage
-pip install coverage
-coverage run src/extractor/tests.py
-coverage report
-```
 
 ---
 
@@ -203,41 +239,55 @@ coverage report
 ```
 IDRD-Pipeline/
 ├── src/
-│   ├── main.py                  ← pipeline entry point (run this)
-│   ├── config.py                ← all settings in one place
+│   ├── main.py                      ← pipeline entry point
+│   ├── config.py                    ← all settings in one place
 │   ├── db/
-│   │   ├── db.py                ← PostgreSQL database manager
+│   │   ├── db.py                    ← PostgreSQL database manager
 │   │   └── __init__.py
 │   ├── pubfetcher/
-│   │   └── client.py            ← Semantic Scholar API client
-│   ├── extractor/
-│   │   ├── downloader.py        ← PDF downloader
-│   │   ├── converter.py         ← GROBID PDF → XML converter
-│   │   ├── extractor.py         ← section extractor (Phase 2)
-│   │   └── tests.py             ← unit tests
+│   │   └── client.py                ← Semantic Scholar API client
+│   ├── ingestion/
+│   │   ├── downloader.py            ← PDF downloader
+│   │   ├── converter.py             ← GROBID PDF → TEI XML converter
+│   │   └── extractor.py             ← TEI XML → Markdown extractor
 │   └── utils/
-│       ├── db_utils.py          ← shared DB helpers
-│       └── dict_parser.py       ← paper dict parser / exports
-├── outputs/
-│   ├── pdf/                     ← downloaded PDFs
-│   ├── xml/                     ← converted TEI XML files
-│   └── metadata/                ← JSON backups & results
-├── .env                         ← credentials (do not commit)
+│       ├── db_utils.py              ← shared DB helpers
+│       └── dict_parser.py           ← paper dict parser / exports
+├── experiments/
+│   └── ground_truth/
+│       ├── gt_runner.py             ← isolated GT experiment entry point
+│       ├── gt_fetcher.py            ← fetch GT papers from Semantic Scholar
+│       ├── gt_downloader.py         ← download GT PDFs
+│       └── gt_report.py             ← coverage report builder
+├── data/
+│   ├── pdf/                         ← downloaded PDFs
+│   ├── xml/                         ← GROBID TEI XML files
+│   ├── markdown/                    ← extracted Markdown files
+│   └── ground_truth/
+│       └── ground_truth.csv         ← ground truth paper list
+├── data/gt_experiment/              ← isolated GT experiment output
+│   ├── pdf/
+│   ├── xml/
+│   ├── markdown/
+│   └── report_*.json
+├── logs/
+│   └── runs/                        ← per-run logs and metadata
+├── .env                             ← credentials (do not commit)
 ├── ROADMAP.md
 └── README.md
 ```
 
+---
+
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/OmericoN/IDRD-Pipeline.git
 cd IDRD-Pipeline
-
-# Install in development mode
-pip install -e .
+pip install -r requirements.txt
 ```
 
+---
 
 ## License
 

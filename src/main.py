@@ -1,27 +1,12 @@
 """
 IDRD Pipeline - Main Orchestrator
 ==================================
-Orchestrates the complete paper retrieval, download, and conversion pipeline.
-
 Pipeline Flow:
     1. Fetch    — Search & store papers from Semantic Scholar
     2. Download — Download open-access PDFs
     3. Convert  — Convert PDFs to TEI XML via GROBID (Docker)
-    4. Extract  — Extract sections from XML           (Phase 2)
-    5. Features — LLM feature extraction              (Phase 3)
-
-Folder layout:
-    data/
-    ├── pdf/     ← downloaded PDFs        (pipeline reads/writes)
-    └── xml/     ← converted TEI XML      (pipeline reads/writes)
-
-    logs/
-    └── runs/
-        └── 2026-02-25_12-07-48/
-            └── metadata/
-                ├── retrieved_results.json
-                ├── download_results.json
-                └── conversion_results.json
+    4. Extract  — Extract Markdown from TEI XML
+    5. Features — LLM feature extraction  [Phase 3]
 """
 
 import sys
@@ -37,12 +22,13 @@ from utils.dict_parser import PaperDictParser
 from db.db import PublicationDatabase
 from ingestion.downloader import PDFDownloader
 from ingestion.converter import GrobidConverter
+from ingestion.extractor import extract_markdown
 from utils.db_utils import (
     print_download_status,
     print_conversion_status,
     sync_existing_pdfs,
 )
-from config import PDF_DIR, XML_DIR, RUNS_DIR
+from config import PDF_DIR, XML_DIR, MARKDOWN_DIR, RUNS_DIR
 
 
 class IDRDPipeline:
@@ -65,6 +51,7 @@ class IDRDPipeline:
         print(f"  Run logs   : {self.run_dir}")
         print(f"  PDF data   : {PDF_DIR}")
         print(f"  XML data   : {XML_DIR}")
+        print(f"  Markdown   : {MARKDOWN_DIR}")
         print("=" * 70)
 
     # ------------------------------------------------------------------
@@ -219,13 +206,100 @@ class IDRDPipeline:
             converter.close_db()
 
     # ------------------------------------------------------------------
-    # Step 4 / 5 — Placeholders
+    # Step 4 — Extract Markdown
     # ------------------------------------------------------------------
 
-    def step_4_extract_sections(self):
+    def step_4_extract_markdown(
+        self,
+        limit: int = None,
+        overwrite: bool = False,
+    ) -> dict:
         print("\n" + "=" * 70)
-        print("STEP 4: EXTRACTING SECTIONS FROM XML  [NOT YET IMPLEMENTED]")
+        print("STEP 4: EXTRACTING MARKDOWN FROM TEI XML")
         print("=" * 70)
+        print(f"  Limit            : {limit or 'All available'}")
+        print(f"  Overwrite        : {overwrite}")
+        print(f"  Input            : {XML_DIR}")
+        print(f"  Output           : {MARKDOWN_DIR}")
+        print("=" * 70)
+
+        MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
+
+        xml_files = sorted(XML_DIR.glob("*.tei.xml"))
+        if limit:
+            xml_files = xml_files[:limit]
+
+        if not xml_files:
+            print("\n  No .tei.xml files found — skipping extraction.")
+            return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+
+        print(f"\n  Found {len(xml_files)} XML files to process\n")
+
+        results   = []
+        stats     = {"successful": 0, "failed": 0, "skipped": 0}
+
+        for xml_path in xml_files:
+            stem        = xml_path.stem.replace(".tei", "")
+            output_path = MARKDOWN_DIR / f"{stem}.md"
+
+            if output_path.exists() and not overwrite:
+                stats["skipped"] += 1
+                results.append({
+                    "xml":     xml_path.name,
+                    "md":      output_path.name,
+                    "success": True,
+                    "message": "skipped — already exists",
+                })
+                continue
+
+            try:
+                md = extract_markdown(xml_path)
+
+                if not md.strip():
+                    raise ValueError("Empty markdown output")
+
+                output_path.write_text(md, encoding="utf-8")
+                size_kb = output_path.stat().st_size / 1024
+                stats["successful"] += 1
+                print(f"  ✓ {xml_path.name} → {output_path.name} ({size_kb:.1f} KB)")
+                results.append({
+                    "xml":     xml_path.name,
+                    "md":      output_path.name,
+                    "success": True,
+                    "message": f"{size_kb:.1f} KB",
+                })
+
+                # mark in DB
+                self.db.cursor.execute(
+                    'UPDATE publications SET sections_extracted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE pdf_path LIKE %s',
+                    (f"%{stem}%",)
+                )
+                self.db.commit()
+
+            except Exception as e:
+                stats["failed"] += 1
+                print(f"  ✗ {xml_path.name} — {e}")
+                results.append({
+                    "xml":     xml_path.name,
+                    "md":      None,
+                    "success": False,
+                    "message": str(e),
+                })
+
+        print("\n" + "-" * 70)
+        print("STEP 4 COMPLETE")
+        print("-" * 70)
+        print(f"  Extracted : {stats['successful']}")
+        print(f"  Skipped   : {stats['skipped']}")
+        print(f"  Failed    : {stats['failed']}")
+        print("-" * 70)
+
+        self._save_results({"results": results, "stats": stats}, 'extraction_results.json')
+        return {"results": results, "stats": stats}
+
+    # ------------------------------------------------------------------
+    # Step 5 — Placeholder
+    # ------------------------------------------------------------------
 
     def step_5_extract_features(self):
         print("\n" + "=" * 70)
@@ -242,6 +316,7 @@ class IDRDPipeline:
         limit: int = 100,
         open_access_only: bool = True,
         convert_to_xml: bool = True,
+        extract_markdown: bool = True,
         delete_pdfs_after_conversion: bool = False,
     ):
         print("\n" + "=" * 70)
@@ -267,10 +342,15 @@ class IDRDPipeline:
 
             if download_results['stats']['successful'] == 0:
                 print("\n  No PDFs downloaded — skipping XML conversion.")
-            elif convert_to_xml:
-                self.step_3_convert_to_xml(
+                return
+
+            if convert_to_xml:
+                conversion_results = self.step_3_convert_to_xml(
                     delete_pdf=delete_pdfs_after_conversion,
                 )
+
+                if extract_markdown and conversion_results['stats']['successful'] > 0:
+                    self.step_4_extract_markdown()
 
             self._print_final_summary()
 
@@ -328,7 +408,6 @@ class IDRDPipeline:
     # ------------------------------------------------------------------
 
     def _save_results(self, results: dict, filename: str):
-        """Save step results to this run's log folder."""
         out = self.run_dir / 'metadata' / filename
         with open(out, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False, default=str)
@@ -345,6 +424,7 @@ class IDRDPipeline:
         print(f"  Total papers          : {status['total_papers']}")
         print(f"  PDFs downloaded       : {status['pdf_downloaded']}")
         print(f"  Converted to XML      : {status['xml_converted']}")
+        print(f"  Sections extracted    : {status['sections_extracted']}")
         print(f"  Download errors       : {status['pdf_errors']}")
         print(f"  Conversion errors     : {status['xml_errors']}")
         print(f"\n  Started  : {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -353,6 +433,7 @@ class IDRDPipeline:
         print(f"  Run logs : {self.run_dir}")
         print(f"  PDF data : {PDF_DIR}")
         print(f"  XML data : {XML_DIR}")
+        print(f"  Markdown : {MARKDOWN_DIR}")
         print("=" * 70)
 
     def cleanup(self):
@@ -379,6 +460,7 @@ MODES
   Fetch only:         python src/main.py --query "Transformers" --fetch-only
   Download only:      python src/main.py --download-only
   Convert only:       python src/main.py --convert-only
+  Extract only:       python src/main.py --extract-only
   Status:             python src/main.py --status
   Reset tracking:     python src/main.py --reset status
   Full DB reset:      python src/main.py --reset full
@@ -389,6 +471,8 @@ MODES
     mode.add_argument("--fetch-only",    action="store_true")
     mode.add_argument("--download-only", action="store_true")
     mode.add_argument("--convert-only",  action="store_true")
+    mode.add_argument("--extract-only",  action="store_true",
+                      help="Run markdown extraction on existing XMLs in data/xml/")
     mode.add_argument("--status",        action="store_true")
     mode.add_argument("--reset", choices=["status", "full"], metavar="{status|full}")
 
@@ -409,6 +493,12 @@ MODES
     cv.add_argument("--cv-delay",     type=float, default=0.1)
     cv.add_argument("--delete-pdfs",  action="store_true")
     cv.add_argument("--no-xml",       action="store_true")
+
+    ex = parser.add_argument_group("Extract options")
+    ex.add_argument("--ex-limit",     type=int,  default=None)
+    ex.add_argument("--ex-overwrite", action="store_true")
+    ex.add_argument("--no-extract",   action="store_true",
+                    help="Skip markdown extraction step in full pipeline")
 
     return parser
 
@@ -455,6 +545,13 @@ def main():
             )
             return
 
+        if args.extract_only:
+            pipeline.step_4_extract_markdown(
+                limit=args.ex_limit,
+                overwrite=args.ex_overwrite,
+            )
+            return
+
         if not args.query:
             parser.error("--query is required to run the full pipeline")
 
@@ -463,6 +560,7 @@ def main():
             limit=args.limit,
             open_access_only=not args.all_access,
             convert_to_xml=not args.no_xml,
+            extract_markdown=not args.no_extract,
             delete_pdfs_after_conversion=args.delete_pdfs,
         )
 

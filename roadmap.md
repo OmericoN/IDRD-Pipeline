@@ -2,8 +2,8 @@
 
 ## Project Overview
 A research paper processing pipeline that fetches academic papers from Semantic
-Scholar, downloads PDFs, converts them to structured XML, extracts sections, and
-(eventually) uses an LLM to extract features for a RAG system.
+Scholar, downloads PDFs, converts them to structured TEI XML, extracts Markdown
+sections, and (eventually) uses an LLM to extract features for a RAG system.
 
 ---
 
@@ -11,100 +11,68 @@ Scholar, downloads PDFs, converts them to structured XML, extracts sections, and
 
 | Step | Module | Status | Notes |
 |------|--------|--------|-------|
-| 1. Fetch papers | `src/pubfetcher/client.py` | ✅ Done | Renamed from `fetching.py` |
-| 2. Parse & store | `src/db/db.py` | ✅ Done | Migrated SQLite → PostgreSQL |
-| 3. Download PDFs | `src/extractor/downloader.py` | ✅ Done | Still has SQLite-style raw SQL |
-| 4. Convert PDFs → XML | `src/extractor/converter.py` | ✅ Done | Still has SQLite-style raw SQL |
-| 5. Extract sections | `src/extractor/extractor.py` | ❌ Empty | Not started |
-| 6. LLM feature extraction | TBD | ❌ Not started | RAG prep |
-| 7. RAG / Vector search | TBD | ❌ Not started | pgvector planned |
-| Tests | `src/extractor/tests.py` | ⚠️ Partial | Tests still import old-style DB |
-| Config | `src/config.py` | ⚠️ Incomplete | Missing DB + LLM config |
+| 1. Fetch papers | `src/pubfetcher/client.py` | ✅ Done | |
+| 2. Parse & store | `src/db/db.py` | ✅ Done | PostgreSQL |
+| 3. Download PDFs | `src/ingestion/downloader.py` | ✅ Done | |
+| 4. Convert PDFs → XML | `src/ingestion/converter.py` | ✅ Done | GROBID via Docker |
+| 5. Extract Markdown | `src/ingestion/extractor.py` | ✅ Done | TEI XML → `.md` |
+| 6. Ground truth experiment | `experiments/ground_truth/` | ✅ Done | Fully isolated |
+| 7. LLM feature extraction | `src/llm/` | 🔲 Phase 3 | Not started |
+| 8. RAG / Vector search | `src/rag/` | 🔲 Phase 4 | pgvector planned |
 
 ---
 
-## Known Issues Right Now
+## Phase 1 — Core Pipeline ✅ COMPLETE
 
-1. **`downloader.py` and `converter.py`** still use raw SQLite-style queries
-   (`?` placeholders, `= 0`, `= 1` for booleans) — they bypass `db.py` methods
-   and talk directly to `self.db.cursor` with old syntax.
-2. **`main.py`** calls `self.db.cursor` and `self.db.db_path` directly — both
-   are no longer valid after the Postgres migration.
-3. **`config.py`** is incomplete — no DB config, no LLM config.
-4. **`extractor.py`** is empty.
-5. **`src/db/__init__.py`** is empty — `PublicationDatabase` is not exported.
-6. **Tests** mock `db_path` (SQLite) and will fail with the new DB class.
-7. **Redundancy**: DB queries are duplicated inline in `downloader.py`,
-   `converter.py`, and `main.py` instead of using `db.py` methods.
+- [x] Fetch papers from Semantic Scholar API
+- [x] Parse and store in PostgreSQL
+- [x] Download open-access PDFs
+- [x] Convert PDFs to TEI XML via GROBID (Docker)
+- [x] Extract structured Markdown from TEI XML
+- [x] CLI with individual step flags and full pipeline mode
+- [x] Ground truth experiment runner (fully isolated)
+- [x] SQL injection hardening (`psycopg2.sql.Identifier`, parameterised LIMIT)
+- [x] Per-run logs saved to `logs/runs/`
 
 ---
 
-## Roadmap
+## Phase 2 — Quality & Robustness 🔧
 
-### Phase 1 — Stabilise & Refactor (NOW) 🔧
-
-#### 1.1 Fix `src/db/__init__.py`
-Export `PublicationDatabase` so imports are clean across the project.
-
-#### 1.2 Complete `src/config.py`
-Add Postgres and future LLM config in one place.
-
-#### 1.3 Fix `downloader.py`
-- Replace all raw SQL + `?` placeholders with calls to `db.py` methods.
-- Remove `db_path` argument (no longer relevant for Postgres).
-
-#### 1.4 Fix `converter.py`
-- Same as downloader — remove raw SQL, use `db.py` methods.
-- Remove `self.db.db_path` reference.
-
-#### 1.5 Fix `main.py`
-- Remove all direct `self.db.cursor` calls.
-- Use `db.get_pipeline_status()` and `db.get_papers_needing_download()` etc.
-
-#### 1.6 Add `src/utils/db_utils.py`
-Centralise repeated query patterns (sync PDFs, print status, etc.)
-
-#### 1.7 Update tests
-- Mock `psycopg2` instead of SQLite.
-- Or use a test Postgres DB / `pytest-postgresql`.
+- [ ] Add proper logging (`logging` module, replace `print` statements)
+- [ ] Add `alembic` for DB schema migrations
+- [ ] Add connection pooling (`psycopg2.pool`)
+- [ ] Full test suite with `pytest` + `pytest-postgresql`
+- [ ] Docker Compose for Postgres + GROBID + app together
+- [ ] `requirements.txt` audit and pin versions
 
 ---
 
-### Phase 2 — Section Extraction 📄
-
-#### 2.1 Implement `src/extractor/extractor.py`
-Parse TEI XML output from GROBID and extract:
-- Title, Abstract
-- Introduction, Related Work, Methods, Results, Conclusion
-- References
-
-#### 2.2 Add `sections` table to `db.py`
-Store extracted sections per paper.
-
-#### 2.3 Update pipeline in `main.py`
-Wire up `step_4_extract_sections()`.
-
----
-
-### Phase 3 — LLM Feature Extraction 🤖
+## Phase 3 — LLM Feature Extraction 🤖
 
 #### 3.1 Create `src/llm/` module
-- `client.py` — LLM API wrapper (OpenAI / local)
-- `prompts.py` — prompt templates
-- `extractor.py` — run prompts over sections
+- `client.py` — LLM API wrapper (OpenAI / local Ollama)
+- `prompts.py` — prompt templates per section type
+- `extractor.py` — run prompts over extracted Markdown sections
 
-#### 3.2 Define features to extract
-Examples: methodology, dataset used, metrics, findings, limitations.
+#### 3.2 Features to extract (per paper)
+- Methodology used
+- Datasets referenced (implicit + explicit)
+- Metrics and results
+- Limitations
+- Key findings
 
 #### 3.3 Add `features` table to `db.py`
-Store structured LLM output per paper/section.
+Store structured LLM output per paper.
 
-#### 3.4 Update `config.py`
-Add `LLM_MODEL`, `LLM_API_KEY`, `MAX_TOKENS` etc.
+#### 3.4 Wire up `step_5_extract_features()` in `main.py`
+Currently a placeholder — implement once `src/llm/` is ready.
+
+#### 3.5 Update `config.py`
+Add `LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`, `MAX_TOKENS`.
 
 ---
 
-### Phase 4 — RAG & Vector Search 🔍
+## Phase 4 — RAG & Vector Search 🔍
 
 #### 4.1 Enable pgvector
 ```sql
@@ -114,7 +82,7 @@ CREATE INDEX ON publications USING hnsw (embedding vector_cosine_ops);
 ```
 
 #### 4.2 Create `src/rag/` module
-- `embedder.py` — generate embeddings from sections/features
+- `embedder.py` — generate embeddings from Markdown sections
 - `retriever.py` — vector similarity search via pgvector
 - `pipeline.py` — end-to-end RAG query handler
 
@@ -123,62 +91,57 @@ Run embedder over all extracted sections and store in DB.
 
 ---
 
-### Phase 5 — Quality & Production 🚀
+## Phase 5 — Scale (Long Term) 🚀
 
-- [ ] Add connection pooling (`psycopg2.pool` or `asyncpg`)
-- [ ] Add proper logging (`logging` module, replace `print`)
-- [ ] Add `alembic` for DB migrations
-- [ ] Docker Compose for Postgres + GROBID + app
+- [ ] Replace Semantic Scholar API with local S2ORC snapshot (~300 GB metadata)
+  - Drop-in replacement for `client.py` — same `search_papers()` interface
+  - Load S2ORC JSONL shards into PostgreSQL
+  - Elasticsearch or pgvector for full-text title/abstract search
+- [ ] `ThreadPoolExecutor` in downloader (3–5 workers) for I/O throughput
 - [ ] CI/CD with GitHub Actions
-- [ ] Full test coverage with `pytest` + `pytest-postgresql`
+- [ ] Monitoring dashboard for pipeline runs
 
 ---
 
-## Suggested Project Structure (Target)
+## Project Structure (Current)
 
 ```
 IDRD-Pipeline/
 ├── src/
-│   ├── config.py               ✅ exists — needs completion
-│   ├── main.py                 ✅ exists — needs fixes
+│   ├── main.py                      ← pipeline entry point
+│   ├── config.py                    ← all settings
 │   ├── db/
-│   │   ├── __init__.py         ⚠️  empty  — needs export
-│   │   └── db.py               ✅ migrated to Postgres
+│   │   ├── db.py                    ← PostgreSQL manager
+│   │   └── __init__.py
 │   ├── pubfetcher/
-│   │   └── client.py           ✅ renamed
-│   ├── extractor/
-│   │   ├── downloader.py       ⚠️  needs raw SQL removed
-│   │   ├── converter.py        ⚠️  needs raw SQL removed
-│   │   ├── extractor.py        ❌  empty
-│   │   └── tests.py            ⚠️  needs Postgres mocks
-│   ├── llm/                    ❌  not created
-│   │   ├── client.py
-│   │   ├── prompts.py
-│   │   └── extractor.py
-│   ├── rag/                    ❌  not created
-│   │   ├── embedder.py
-│   │   └── retriever.py
+│   │   └── client.py                ← Semantic Scholar client
+│   ├── ingestion/
+│   │   ├── downloader.py            ← PDF downloader
+│   │   ├── converter.py             ← GROBID converter
+│   │   └── extractor.py             ← TEI XML → Markdown
 │   └── utils/
-│       ├── dict_parser.py      ✅ exists
-│       └── db_utils.py         ❌  not created — needed now
-├── outputs/
+│       ├── db_utils.py              ← shared helpers
+│       └── dict_parser.py           ← paper dict parser
+├── experiments/
+│   └── ground_truth/
+│       ├── gt_runner.py             ← GT experiment entry point
+│       ├── gt_fetcher.py            ← fetch GT papers
+│       ├── gt_downloader.py         ← download GT PDFs
+│       └── gt_report.py             ← coverage report
+├── data/
 │   ├── pdf/
 │   ├── xml/
-│   └── metadata/
-├── .env                        ✅ exists
-├── ROADMAP.md                  ✅ this file
-└── requirements.txt            ❓  check exists / up to date
+│   ├── markdown/
+│   ├── ground_truth/
+│   │   └── ground_truth.csv
+│   └── gt_experiment/
+│       ├── pdf/
+│       ├── xml/
+│       ├── markdown/
+│       └── report_*.json
+├── logs/
+│   └── runs/
+├── .env
+├── ROADMAP.md
+└── README.md
 ```
-
----
-
-## Immediate Next Steps (Priority Order)
-
-1. `src/db/__init__.py` — export `PublicationDatabase`
-2. `src/config.py` — add DB + LLM config
-3. `src/utils/db_utils.py` — extract shared helpers
-4. Fix `downloader.py` — remove raw SQL
-5. Fix `converter.py` — remove raw SQL
-6. Fix `main.py` — remove direct cursor access
-7. Implement `extractor.py` — section parsing
-8. Update tests — Postgres mocks

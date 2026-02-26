@@ -1,0 +1,488 @@
+{
+  "run_timestamp": "2026-02-26T11:03:08.689766",
+  "elapsed_seconds": 295.7,
+  "totals": {
+    "in_csv": 50,
+    "found_with_pdf": 24,
+    "found_no_pdf": 16,
+    "not_found": 10,
+    "pdf_downloaded": 14,
+    "pdf_failed": 10,
+    "xml_converted": 14,
+    "xml_failed": 0
+  },
+  "coverage": {
+    "ss_found_pct": 80.0,
+    "ss_with_pdf_pct": 48.0,
+    "pdf_download_pct": 28.0,
+    "xml_converted_pct": 28.0
+  },
+  "found_with_pdf": [
+    {
+      "gt_id": "P006",
+      "paper_id": "36645bc5fdb3a305618b662a3e3b22dec465d108",
+      "title": "You cannot \"count\" how many items people remember in visual working memory: The importance of signal detection-based measures for understanding change detection performance.",
+      "year": 2022,
+      "pdf_url": "https://doi.org/10.1037/xhp0001055"
+    },
+    {
+      "gt_id": "P007",
+      "paper_id": "ee74826c14556857ab071fd524b957c3bb986baf",
+      "title": "Detection and identification of plant leaf diseases using YOLOv4",
+      "year": 2024,
+      "pdf_url": "https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2024.1355941/pdf"
+    },
+    {
+      "gt_id": "P008",
+      "paper_id": "448a41e150ea2e7fad199cfdd1abaa5ed0350935",
+      "title": "Symmetric Projection Attractor Reconstruction: Sex Differences in the ECG",
+      "year": 2021,
+      "pdf_url": "https://www.frontiersin.org/articles/10.3389/fcvm.2021.709457/pdf"
+    },
+    {
+      "gt_id": "P009",
+      "paper_id": "8576d56f7d2217169f695681da9112282e1dbfb0",
+      "title": "Human EEG and artificial neural networks reveal disentangled representations of object real-world size in natural images",
+      "year": 2024,
+      "pdf_url": "https://doi.org/10.1167/jov.24.10.1037"
+    },
+    {
+      "gt_id": "P010",
+      "paper_id": "05405f589e6751bf2dd6678ba077738ee9555fbf",
+      "title": "RoBERTa-LSTM: A Hybrid Model for Sentiment Analysis With Transformer and Recurrent Neural Network",
+      "year": 2022,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/9668973/09716923.pdf"
+    },
+    {
+      "gt_id": "P011",
+      "paper_id": "203d5c05afb0984728236be47e44a323cf0cb953",
+      "title": "Weak and Occluded Vehicle Detection in Complex Infrared Environment Based on Improved YOLOv4",
+      "year": 2021,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/9312710/09349760.pdf"
+    },
+    {
+      "gt_id": "P012",
+      "paper_id": "9c5df80abe6c7dc61bb710707cd7642b80f4198e",
+      "title": "Deep Attention V-Net Architecture for Enhanced Multiple Sclerosis Segmentation",
+      "year": 2024,
+      "pdf_url": "https://doi.org/10.1109/access.2024.3440318"
+    },
+    {
+      "gt_id": "P013",
+      "paper_id": "8ab3266b664a06cc9fa514bfddfc0915e16092bd",
+      "title": "The efficacy of machine learning models in lung cancer risk prediction with explainability",
+      "year": 2024,
+      "pdf_url": "https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0305035&type=printable"
+    },
+    {
+      "gt_id": "P014",
+      "paper_id": "4e87103c67a0c559d5bb907e1a5606d233c3a2ca",
+      "title": "MultiPAD: A Multivariant Partition-Based Method for Audio Adversarial Examples Detection",
+      "year": 2020,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/8948470/09057559.pdf"
+    },
+    {
+      "gt_id": "P015",
+      "paper_id": "617a876f46b5d583ae29a6f61fc331e563e7648b",
+      "title": "Visual Fall Detection From Activities of Daily Living for Assistive Living",
+      "year": 2023,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/10268419.pdf"
+    },
+    {
+      "gt_id": "P018",
+      "paper_id": "9aeeb2509d685b6fb2a41ef85e677dcba22276c3",
+      "title": "Evaluating and Validating the Classification Accuracy of a Screening Instrument to Assess Risk for Commercial Sexual Exploitation of Child Welfare–Involved Children and Adolescents",
+      "year": 2022,
+      "pdf_url": "https://journals.sagepub.com/doi/pdf/10.1177/00333549211065523"
+    },
+    {
+      "gt_id": "P021",
+      "paper_id": "f93967e09baa72e610ec196404c239549297f553",
+      "title": "Transfer Learning for Automatic Image Orientation Detection Using Deep Learning and Logistic Regression",
+      "year": 2022,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/09965403.pdf"
+    },
+    {
+      "gt_id": "P026",
+      "paper_id": "58e106ff11a33d5d17d3c0344fcd8ba9d8b721c8",
+      "title": "serojump: A Bayesian tool for inferring infection timing and antibody kinetics from longitudinal serological data",
+      "year": 2025,
+      "pdf_url": "https://doi.org/10.1101/2025.03.04.25323335"
+    },
+    {
+      "gt_id": "P032",
+      "paper_id": "41fc427eb14de98aa878f8e45f312c8d993242b8",
+      "title": "Small Sample Motor Imagery Classification Using Regularized Riemannian Features",
+      "year": 2019,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/8600701/08681196.pdf"
+    },
+    {
+      "gt_id": "P033",
+      "paper_id": "a8f414796c101fa8c1772295c8ee7014f95b0c04",
+      "title": "Shot Optimization in Quantum Machine Learning Architectures to Accelerate Training",
+      "year": 2023,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/10109117.pdf"
+    },
+    {
+      "gt_id": "P034",
+      "paper_id": "8292796c88e8623432ae6854bbc3fc7fd8f37ba6",
+      "title": "A Weighted Topic Model Learned From Local Semantic Space for Automatic Image Annotation",
+      "year": 2020,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/8948470/09075224.pdf"
+    },
+    {
+      "gt_id": "P035",
+      "paper_id": "28c56ae2585194d8915a086a47b72089764eefc9",
+      "title": "An Efficient Retrieval System for Biomedical Images Based on Radial Associated Laguerre Moments",
+      "year": 2020,
+      "pdf_url": "https://ieeexplore.ieee.org/ielx7/6287639/8948470/09205399.pdf"
+    },
+    {
+      "gt_id": "P041",
+      "paper_id": "f0fc96584f547cb4bca5e0bdc5331bdd617c471a",
+      "title": "Publicly available data reveals association between asthma hospitalizations and unconventional natural gas development in Pennsylvania",
+      "year": 2022,
+      "pdf_url": "https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0265513&type=printable"
+    },
+    {
+      "gt_id": "P042",
+      "paper_id": "acc04523948301886b145aa51464e8d0a5f67416",
+      "title": "Immune-related signature of periodontitis and Alzheimer’s disease linkage",
+      "year": 2023,
+      "pdf_url": "https://www.frontiersin.org/articles/10.3389/fgene.2023.1230245/pdf?isPublishedV2=False"
+    },
+    {
+      "gt_id": "P043",
+      "paper_id": "5061c6bbccff13efab9ebe19b675d21718278f55",
+      "title": "Stroke Disease Detection and Prediction Using Robust Learning Approaches",
+      "year": 2021,
+      "pdf_url": "https://downloads.hindawi.com/journals/jhe/2021/7633381.pdf"
+    },
+    {
+      "gt_id": "P044",
+      "paper_id": "66e3bfe1149a80cc003c0334f4c8ffbe9ac5dd2a",
+      "title": "Studying informal care during the pandemic: mental health, gender and job status",
+      "year": 2023,
+      "pdf_url": "https://doi.org/10.1016/j.ehb.2023.101245"
+    },
+    {
+      "gt_id": "P045",
+      "paper_id": "cba8cc12ce8faa8d2ad2e8f933fa3f595c6a3c34",
+      "title": "Variable selection in social-environmental data: sparse regression and tree ensemble machine learning approaches",
+      "year": 2020,
+      "pdf_url": "https://bmcmedresmethodol.biomedcentral.com/track/pdf/10.1186/s12874-020-01183-9"
+    },
+    {
+      "gt_id": "P047",
+      "paper_id": "5264bcf09e52995572e8040bdbd3f0d4b3a003dd",
+      "title": "An Assessment of Concurrency in Evapotranspiration Trends across Multiple Global Datasets",
+      "year": 2020,
+      "pdf_url": "https://unsworks.unsw.edu.au/bitstreams/e37d8d62-bdf9-4c8d-b1b0-b713d896883f/download"
+    },
+    {
+      "gt_id": "P050",
+      "paper_id": "4ca5d952b412cdf2e3167653ab2876a9f8602b24",
+      "title": "A Typology of Parental Involvement in Student Experience: A Latent Class Analysis",
+      "year": 2020,
+      "pdf_url": "https://academiccommons.columbia.edu/doi/10.7916/d8-0xm9-qk37/download"
+    }
+  ],
+  "found_no_pdf": [
+    {
+      "gt_id": "P002",
+      "paper_id": "3438fe0d6b6a4cc5f3c6a57fa010148df23629ba",
+      "title": "EEG-Based Consumer Behaviour Prediction: An Exploration from Classical Machine Learning to Graph Neural Networks",
+      "year": 2025
+    },
+    {
+      "gt_id": "P003",
+      "paper_id": "e7b00e49425da2875243dd35fe4f4f4faf932801",
+      "title": "LGBP-OrgaNet: Learnable Gaussian Band Pass Fusion of CNN and Transformer Features for Robust Organoid Segmentation and Tracking",
+      "year": 2025
+    },
+    {
+      "gt_id": "P004",
+      "paper_id": "9ecde5263e9fd31b166516097969ae84ab74f179",
+      "title": "Ising energy model for the stochastic prediction of tumor islets",
+      "year": 2025
+    },
+    {
+      "gt_id": "P005",
+      "paper_id": "fc713548e537d78d9f5490ad121b1ac7e0d1138a",
+      "title": "Model-agnostic post-hoc explainability for recommender systems",
+      "year": 2025
+    },
+    {
+      "gt_id": "P019",
+      "paper_id": "28c66784d456599e69ce95522708e5729d65a083",
+      "title": "The Changing Patterns and Determinants of Stay-at-Home Motherhood in Urban China, 1982 to 2015",
+      "year": 2021
+    },
+    {
+      "gt_id": "P023",
+      "paper_id": "c1c8c61c39fcea83b51c2e337164ed1741bd796a",
+      "title": "Evaluation of special educational needs and disability provision in English primary schools using administrative health and education data in the ECHILD database",
+      "year": 2025
+    },
+    {
+      "gt_id": "P024",
+      "paper_id": "ba05ed3905bfceb63a8558bb33c7f981b0f3342b",
+      "title": "From Peak to Plunge: A Multi-Database Analysis of State Level Disparities in Hydromorphone use in the U.S. (2010-2023)",
+      "year": 2025
+    },
+    {
+      "gt_id": "P025",
+      "paper_id": "56a29d765c7e25c2fac7360c71126d0cbb87f87d",
+      "title": "Association Between the Use of Cholesterol-Lowering Prescription Medications and Gastric Cancer (GC): An Analysis from the NHANES Database",
+      "year": 2025
+    },
+    {
+      "gt_id": "P027",
+      "paper_id": "f2de7c33d9ee696e2ae08b81a7410a402fd474b1",
+      "title": "Prediction of COPD Using Machine Learning, Clinical Summary Notes, and Vital Signs",
+      "year": 2024
+    },
+    {
+      "gt_id": "P028",
+      "paper_id": "c19d47eff3fe7af25c5730ed2f569278415085bd",
+      "title": "Deep Learning for Automated Wound Classification And Segmentation",
+      "year": 2024
+    },
+    {
+      "gt_id": "P029",
+      "paper_id": "5f441f2805b79ae7f2370948b0355fb21fb16c68",
+      "title": "Comparing Estimators of Discriminative Performance of Time-to-Event Models",
+      "year": 2024
+    },
+    {
+      "gt_id": "P036",
+      "paper_id": "aded1a0db4866515bf05a624bd32dc586e7a9d5f",
+      "title": "National trends of cerebrospinal fluid Alzheimer's disease biomarker testing in Japan",
+      "year": 2025
+    },
+    {
+      "gt_id": "P037",
+      "paper_id": "ff954ece1de71d6bbdf0177c01e9c821b146c490",
+      "title": "Defining and Characterizing Visits To Emergency Departments For Musculoskeletal Conditions: A Retrospective Analysis Using Two Publicly Available Databases",
+      "year": 2025
+    },
+    {
+      "gt_id": "P038",
+      "paper_id": "a4b4505786a2cf287019a5c91a680acdff022f39",
+      "title": "Predicting Inpatient Risk of Mortality in Diabetic Patients Using Administrative Data and Machine Learning: An External Validation Study Using SPARCS",
+      "year": 2025
+    },
+    {
+      "gt_id": "P040",
+      "paper_id": "3af7386b3abb010e2c4b79dfddd0075249769b04",
+      "title": "Transformer Models Enable Accurate Age Prediction From Sleep Physiology",
+      "year": 2025
+    },
+    {
+      "gt_id": "P048",
+      "paper_id": "0b27fe23957b48f5449c0e7dfa12dac6e1238b75",
+      "title": "Drug-related deaths: Statistics based on death certificates miss one-third of cases",
+      "year": 2020
+    }
+  ],
+  "not_found": [
+    {
+      "gt_id": "P001",
+      "title": "Deriving accurate galaxy cluster masses using X-ray thermodynamic profiles and graph neural networks"
+    },
+    {
+      "gt_id": "P016",
+      "title": "A novel artificial intelligence based intensive care unit monitoring system"
+    },
+    {
+      "gt_id": "P017",
+      "title": "Leveraging community science data for population assessments during a pandemic"
+    },
+    {
+      "gt_id": "P020",
+      "title": "An Age-Period-Cohort Approach to the Incidence and Evolution of Overeducation and Skills Mismatch"
+    },
+    {
+      "gt_id": "P022",
+      "title": "Study Protocol: Prognostic Factors of High Healthcare Utilization Costs Among People with Spinal Disorders"
+    },
+    {
+      "gt_id": "P030",
+      "title": "Extremile scalar-on-function regression with application to climate scenarios"
+    },
+    {
+      "gt_id": "P031",
+      "title": "Does Metallicity affect Protoplanetary Disk Fraction? Answers from the Outer Milky Way"
+    },
+    {
+      "gt_id": "P039",
+      "title": "Estimating dengue force of infection from age-stratified surveillance data in Java Indonesia"
+    },
+    {
+      "gt_id": "P046",
+      "title": "Analysis of Trends in Marine Water Quality Using Environmental Impact Assessment Monitoring Data"
+    },
+    {
+      "gt_id": "P049",
+      "title": "Mammal species composition reveals new insights into Earths remaining wilderness"
+    }
+  ],
+  "download_failures": [
+    {
+      "paper_id": "36645bc5fdb3a305618b662a3e3b22dec465d108",
+      "gt_id": "P006",
+      "title": "You cannot \"count\" how many items people remember in visual ",
+      "reason": "unexpected content-type: text/html; charset=utf-8",
+      "url": "https://doi.org/10.1037/xhp0001055"
+    },
+    {
+      "paper_id": "8576d56f7d2217169f695681da9112282e1dbfb0",
+      "gt_id": "P009",
+      "title": "Human EEG and artificial neural networks reveal disentangled",
+      "reason": "403 Forbidden",
+      "url": "https://doi.org/10.1167/jov.24.10.1037"
+    },
+    {
+      "paper_id": "9c5df80abe6c7dc61bb710707cd7642b80f4198e",
+      "gt_id": "P012",
+      "title": "Deep Attention V-Net Architecture for Enhanced Multiple Scle",
+      "reason": "unexpected content-type: text/html;charset=utf-8",
+      "url": "https://doi.org/10.1109/access.2024.3440318"
+    },
+    {
+      "paper_id": "9aeeb2509d685b6fb2a41ef85e677dcba22276c3",
+      "gt_id": "P018",
+      "title": "Evaluating and Validating the Classification Accuracy of a S",
+      "reason": "403 Forbidden",
+      "url": "https://journals.sagepub.com/doi/pdf/10.1177/00333549211065523"
+    },
+    {
+      "paper_id": "f93967e09baa72e610ec196404c239549297f553",
+      "gt_id": "P021",
+      "title": "Transfer Learning for Automatic Image Orientation Detection ",
+      "reason": "404 Not Found",
+      "url": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/09965403.pdf"
+    },
+    {
+      "paper_id": "58e106ff11a33d5d17d3c0344fcd8ba9d8b721c8",
+      "gt_id": "P026",
+      "title": "serojump: A Bayesian tool for inferring infection timing and",
+      "reason": "unexpected content-type: text/html; charset=utf-8",
+      "url": "https://doi.org/10.1101/2025.03.04.25323335"
+    },
+    {
+      "paper_id": "a8f414796c101fa8c1772295c8ee7014f95b0c04",
+      "gt_id": "P033",
+      "title": "Shot Optimization in Quantum Machine Learning Architectures ",
+      "reason": "404 Not Found",
+      "url": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/10109117.pdf"
+    },
+    {
+      "paper_id": "5061c6bbccff13efab9ebe19b675d21718278f55",
+      "gt_id": "P043",
+      "title": "Stroke Disease Detection and Prediction Using Robust Learnin",
+      "reason": "403 Forbidden",
+      "url": "https://downloads.hindawi.com/journals/jhe/2021/7633381.pdf"
+    },
+    {
+      "paper_id": "66e3bfe1149a80cc003c0334f4c8ffbe9ac5dd2a",
+      "gt_id": "P044",
+      "title": "Studying informal care during the pandemic: mental health, g",
+      "reason": "unexpected content-type: text/html;charset=utf-8",
+      "url": "https://doi.org/10.1016/j.ehb.2023.101245"
+    },
+    {
+      "paper_id": "4ca5d952b412cdf2e3167653ab2876a9f8602b24",
+      "gt_id": "P050",
+      "title": "A Typology of Parental Involvement in Student Experience: A ",
+      "reason": "unexpected content-type: text/html; charset=utf-8",
+      "url": "https://academiccommons.columbia.edu/doi/10.7916/d8-0xm9-qk37/download"
+    }
+  ],
+  "conversion_failures": [
+    {
+      "paper_id": "ee74826c14556857ab071fd524b957c3bb986baf",
+      "gt_id": "P007",
+      "success": true,
+      "message": "Converted: ee74826c14556857ab071fd524b957c3bb986baf.tei.xml (129.1 KB)"
+    },
+    {
+      "paper_id": "448a41e150ea2e7fad199cfdd1abaa5ed0350935",
+      "gt_id": "P008",
+      "success": true,
+      "message": "Converted: 448a41e150ea2e7fad199cfdd1abaa5ed0350935.tei.xml (106.0 KB)"
+    },
+    {
+      "paper_id": "05405f589e6751bf2dd6678ba077738ee9555fbf",
+      "gt_id": "P010",
+      "success": true,
+      "message": "Converted: 05405f589e6751bf2dd6678ba077738ee9555fbf.tei.xml (70.7 KB)"
+    },
+    {
+      "paper_id": "203d5c05afb0984728236be47e44a323cf0cb953",
+      "gt_id": "P011",
+      "success": true,
+      "message": "Converted: 203d5c05afb0984728236be47e44a323cf0cb953.tei.xml (62.0 KB)"
+    },
+    {
+      "paper_id": "8ab3266b664a06cc9fa514bfddfc0915e16092bd",
+      "gt_id": "P013",
+      "success": true,
+      "message": "Converted: 8ab3266b664a06cc9fa514bfddfc0915e16092bd.tei.xml (92.1 KB)"
+    },
+    {
+      "paper_id": "4e87103c67a0c559d5bb907e1a5606d233c3a2ca",
+      "gt_id": "P014",
+      "success": true,
+      "message": "Converted: 4e87103c67a0c559d5bb907e1a5606d233c3a2ca.tei.xml (94.6 KB)"
+    },
+    {
+      "paper_id": "617a876f46b5d583ae29a6f61fc331e563e7648b",
+      "gt_id": "P015",
+      "success": true,
+      "message": "Converted: 617a876f46b5d583ae29a6f61fc331e563e7648b.tei.xml (111.9 KB)"
+    },
+    {
+      "paper_id": "41fc427eb14de98aa878f8e45f312c8d993242b8",
+      "gt_id": "P032",
+      "success": true,
+      "message": "Converted: 41fc427eb14de98aa878f8e45f312c8d993242b8.tei.xml (97.0 KB)"
+    },
+    {
+      "paper_id": "8292796c88e8623432ae6854bbc3fc7fd8f37ba6",
+      "gt_id": "P034",
+      "success": true,
+      "message": "Converted: 8292796c88e8623432ae6854bbc3fc7fd8f37ba6.tei.xml (92.6 KB)"
+    },
+    {
+      "paper_id": "28c56ae2585194d8915a086a47b72089764eefc9",
+      "gt_id": "P035",
+      "success": true,
+      "message": "Converted: 28c56ae2585194d8915a086a47b72089764eefc9.tei.xml (117.9 KB)"
+    },
+    {
+      "paper_id": "f0fc96584f547cb4bca5e0bdc5331bdd617c471a",
+      "gt_id": "P041",
+      "success": true,
+      "message": "Converted: f0fc96584f547cb4bca5e0bdc5331bdd617c471a.tei.xml (86.0 KB)"
+    },
+    {
+      "paper_id": "acc04523948301886b145aa51464e8d0a5f67416",
+      "gt_id": "P042",
+      "success": true,
+      "message": "Converted: acc04523948301886b145aa51464e8d0a5f67416.tei.xml (158.3 KB)"
+    },
+    {
+      "paper_id": "cba8cc12ce8faa8d2ad2e8f933fa3f595c6a3c34",
+      "gt_id": "P045",
+      "success": true,
+      "message": "Converted: cba8cc12ce8faa8d2ad2e8f933fa3f595c6a3c34.tei.xml (80.5 KB)"
+    },
+    {
+      "paper_id": "5264bcf09e52995572e8040bdbd3f0d4b3a003dd",
+      "gt_id": "P047",
+      "success": true,
+      "message": "Converted: 5264bcf09e52995572e8040bdbd3f0d4b3a003dd.tei.xml (127.9 KB)"
+    }
+  ]
+}
