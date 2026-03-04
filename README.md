@@ -9,7 +9,7 @@ extracting features for a RAG system.
 ## Requirements
 
 ```bash
-pip install psycopg2-binary python-dotenv requests tqdm docker pandas openpyxl lxml
+pip install -e . 
 ```
 
 Create a `.env` file in the project root:
@@ -43,6 +43,29 @@ Fetch → Download → Convert → Extract Markdown in one command.
 ```bash
 python src/main.py --query "implicit dataset references" --limit 50
 ```
+
+---
+
+### Resume Pipeline
+Automatically detects the last incomplete stage and continues from there.
+No need to specify which step to run — the pipeline reads the database state.
+
+```bash
+python src/main.py --resume
+```
+
+If no papers exist in the database yet, provide a query so Step 1 can run:
+```bash
+python src/main.py --resume --query "implicit dataset references" --limit 50
+```
+
+| DB State | Resumes at |
+|---|---|
+| No papers in DB | Step 1 — Fetch (requires `--query`) |
+| Papers exist, no PDFs | Step 2 — Download |
+| PDFs downloaded, no XML | Step 3 — Convert |
+| XML converted, no Markdown | Step 4 — Extract |
+| All stages complete | Prints "nothing to resume" |
 
 ---
 
@@ -203,6 +226,7 @@ data/gt_experiment/
 | `--download-only` | Only download PDFs (Step 2) | off |
 | `--convert-only` | Only convert PDFs to XML (Step 3) | off |
 | `--extract-only` | Only extract Markdown from XMLs (Step 4) | off |
+| `--resume` | Resume from last incomplete pipeline stage | off |
 | `--no-xml` | Skip Step 3 in full pipeline | off |
 | `--no-extract` | Skip Step 4 in full pipeline | off |
 | `--all-access` | Include non-open-access papers | off |
@@ -284,7 +308,7 @@ IDRD-Pipeline/
 ```bash
 git clone https://github.com/OmericoN/IDRD-Pipeline.git
 cd IDRD-Pipeline
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ---

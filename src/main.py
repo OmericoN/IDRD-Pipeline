@@ -363,6 +363,87 @@ class IDRDPipeline:
             self.cleanup()
 
     # ------------------------------------------------------------------
+    # Resume
+    # ------------------------------------------------------------------
+
+    def resume_pipeline(
+        self,
+        query: str = None,
+        limit: int = 100,
+        open_access_only: bool = True,
+        delete_pdfs_after_conversion: bool = False,
+    ):
+        """Resume pipeline from the last incomplete stage."""
+        print("\n" + "=" * 70)
+        print("RESUMING IDRD PIPELINE")
+        print("=" * 70)
+
+        status     = self.db.get_pipeline_status()
+        total      = status['total_papers']
+        downloaded = status['pdf_downloaded']
+        converted  = status['xml_converted']
+        extracted  = status['sections_extracted']
+
+        print(f"  Total papers       : {total}")
+        print(f"  PDFs downloaded    : {downloaded}")
+        print(f"  Converted to XML   : {converted}")
+        print(f"  Sections extracted : {extracted}")
+        print("=" * 70)
+
+        try:
+            if total == 0:
+                if not query:
+                    print("\n  No papers in DB and no --query provided — cannot resume.")
+                    print("  Run:  python src/main.py --resume --query \"your query\"")
+                    return
+                print("\n  → Resuming from STEP 1 (no papers in DB)")
+                fetched = self.step_1_fetch_papers(
+                    query=query,
+                    limit=limit,
+                    open_access_only=open_access_only,
+                )
+                if fetched == 0:
+                    return
+                dl = self.step_2_download_pdfs()
+                if dl['stats']['successful'] == 0:
+                    return
+                cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
+                if cv['stats']['successful'] > 0:
+                    self.step_4_extract_markdown()
+
+            elif downloaded == 0:
+                print("\n  → Resuming from STEP 2 (no PDFs downloaded yet)")
+                dl = self.step_2_download_pdfs()
+                if dl['stats']['successful'] == 0:
+                    return
+                cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
+                if cv['stats']['successful'] > 0:
+                    self.step_4_extract_markdown()
+
+            elif converted == 0:
+                print("\n  → Resuming from STEP 3 (PDFs not yet converted)")
+                cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
+                if cv['stats']['successful'] > 0:
+                    self.step_4_extract_markdown()
+
+            elif extracted == 0:
+                print("\n  → Resuming from STEP 4 (markdown not yet extracted)")
+                self.step_4_extract_markdown()
+
+            else:
+                print("\n  ✓ Pipeline appears complete — nothing to resume.")
+                print("    Use --reset status to re-run specific stages.")
+                return
+
+            self._print_final_summary()
+
+        except KeyboardInterrupt:
+            print("\n\n  Pipeline interrupted by user.")
+        except Exception as e:
+            print(f"\n\n  Pipeline error: {e}")
+            raise
+
+    # ------------------------------------------------------------------
     # Status / Reset
     # ------------------------------------------------------------------
 
@@ -473,6 +554,8 @@ MODES
     mode.add_argument("--convert-only",  action="store_true")
     mode.add_argument("--extract-only",  action="store_true",
                       help="Run markdown extraction on existing XMLs in data/xml/")
+    mode.add_argument("--resume",        action="store_true",
+                      help="Resume pipeline from the last incomplete stage")
     mode.add_argument("--status",        action="store_true")
     mode.add_argument("--reset", choices=["status", "full"], metavar="{status|full}")
 
@@ -511,58 +594,61 @@ def main():
     try:
         if args.status:
             pipeline.print_status()
-            return
 
-        if args.reset:
+        elif args.reset:
             pipeline.reset_pipeline(args.reset)
-            return
 
-        if args.fetch_only:
+        elif args.resume:
+            pipeline.resume_pipeline(
+                query=args.query,                          # optional — only needed if DB is empty
+                limit=args.limit,
+                open_access_only=not args.all_access,
+                delete_pdfs_after_conversion=args.delete_pdfs,
+            )
+
+        elif args.fetch_only:
             if not args.query:
-                parser.error("--query is required with --fetch-only")
+                parser.error("--query is required for --fetch-only")
             pipeline.step_1_fetch_papers(
                 query=args.query,
                 limit=args.limit,
                 open_access_only=not args.all_access,
                 fields_of_study=args.fields_of_study,
             )
-            return
 
-        if args.download_only:
+        elif args.download_only:
             pipeline.step_2_download_pdfs(
                 limit=args.dl_limit,
                 overwrite=args.dl_overwrite,
                 delay=args.dl_delay,
             )
-            return
 
-        if args.convert_only:
+        elif args.convert_only:
             pipeline.step_3_convert_to_xml(
                 limit=args.cv_limit,
                 overwrite=args.cv_overwrite,
                 delete_pdf=args.delete_pdfs,
                 delay=args.cv_delay,
             )
-            return
 
-        if args.extract_only:
+        elif args.extract_only:
             pipeline.step_4_extract_markdown(
                 limit=args.ex_limit,
                 overwrite=args.ex_overwrite,
             )
-            return
 
-        if not args.query:
-            parser.error("--query is required to run the full pipeline")
-
-        pipeline.run_full_pipeline(
-            query=args.query,
-            limit=args.limit,
-            open_access_only=not args.all_access,
-            convert_to_xml=not args.no_xml,
-            extract_markdown=not args.no_extract,
-            delete_pdfs_after_conversion=args.delete_pdfs,
-        )
+        else:
+            # Full pipeline — query is required here only
+            if not args.query:
+                parser.error("--query is required to run the full pipeline")
+            pipeline.run_full_pipeline(
+                query=args.query,
+                limit=args.limit,
+                open_access_only=not args.all_access,
+                convert_to_xml=not args.no_xml,
+                extract_markdown=not args.no_extract,
+                delete_pdfs_after_conversion=args.delete_pdfs,
+            )
 
     finally:
         pipeline.cleanup()
