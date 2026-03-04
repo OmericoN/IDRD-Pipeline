@@ -22,7 +22,7 @@ from utils.dict_parser import PaperDictParser
 from db.db import PublicationDatabase
 from ingestion.downloader import PDFDownloader
 from ingestion.converter import GrobidConverter
-from ingestion.extractor import extract_markdown
+from ingestion.renderer import extract_markdown
 from utils.db_utils import (
     print_download_status,
     print_conversion_status,

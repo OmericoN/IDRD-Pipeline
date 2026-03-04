@@ -170,7 +170,7 @@ def _extract_markdown(
     Saves .md files to output_dir.
     Does NOT touch data/markdown/.
     """
-    from ingestion.extractor import extract_markdown
+    from ingestion.renderer import extract_markdown
 
     xml_files = sorted(xml_dir.glob("*.tei.xml"))
 
