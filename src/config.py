@@ -9,6 +9,7 @@ import os
 # Load .env from project root
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
 # ── Semantic Scholar ───────────────────────────────────────────────────────────
 SEMANTIC_SCHOLAR_API_URL = "https://api.semanticscholar.org/graph/v1"
@@ -30,16 +31,15 @@ POSTGRES_DSN = (
 )
 
 # ── LLM (Phase 3) ──────────────────────────────────────────────────────────────
-LLM_PROVIDER   = os.getenv("LLM_PROVIDER",   "openai")
-LLM_MODEL      = os.getenv("LLM_MODEL",      "gpt-4o")
+LLM_BASE_URL = "https://api.groq.com/openai/v1"
 LLM_API_KEY    = os.getenv("LLM_API_KEY",    "")
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.parent
+BASE_DIR = PROJECT_ROOT / "data"
 
 # Pipeline DATA — produced and consumed by pipeline steps
-DATA_DIR     = PROJECT_ROOT / "data"
+DATA_DIR     = BASE_DIR
 PDF_DIR      = DATA_DIR / "pdf"
 XML_DIR      = DATA_DIR / "xml"
 MARKDOWN_DIR = DATA_DIR / "markdown"
