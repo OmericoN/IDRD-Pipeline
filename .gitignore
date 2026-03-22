@@ -1,6 +1,6 @@
 # Byte-compiled / optimized / DLL files
 docs/
-.github/
+.github
 copilot-instructions.md
 .github
 runs/
