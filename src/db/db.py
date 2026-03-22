@@ -10,16 +10,16 @@ import re
 load_dotenv()
 
 
-class PublicationDatabase:
+class IDRDDatabase:
     """PostgreSQL database manager for the IDRD Pipeline."""
 
     _init_count = 0   # class-level counter to detect accidental double-instantiation
 
     def __init__(self):
-        PublicationDatabase._init_count += 1
-        if PublicationDatabase._init_count > 1:
+        IDRDDatabase._init_count += 1
+        if IDRDDatabase._init_count > 1:
             import traceback
-            print(f"\n⚠  WARNING: PublicationDatabase instantiated {PublicationDatabase._init_count} times.")
+            print(f"\n⚠  WARNING: IDRDDatabase instantiated {IDRDDatabase._init_count} times.")
             print("   Stack trace — pinpoints the extra instantiation:")
             traceback.print_stack(limit=8)
 

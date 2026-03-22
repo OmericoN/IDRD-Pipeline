@@ -38,7 +38,7 @@ The schema is created automatically on first run.
 All commands are run from the **project root**.
 
 ### Full Pipeline (recommended starting point)
-Fetch → Download → Convert → Extract Markdown in one command.
+Fetch → Download → Convert → Render Markdown in one command.
 
 ```bash
 python src/main.py --query "implicit dataset references" --limit 50
@@ -64,7 +64,7 @@ python src/main.py --resume --query "implicit dataset references" --limit 50
 | No papers in DB | Step 1 — Fetch (requires `--query`) |
 | Papers exist, no PDFs | Step 2 — Download |
 | PDFs downloaded, no XML | Step 3 — Convert |
-| XML converted, no Markdown | Step 4 — Extract |
+| XML converted, no Markdown | Step 4 — Render |
 | All stages complete | Prints "nothing to resume" |
 
 ---
@@ -123,8 +123,8 @@ python src/main.py --convert-only --cv-overwrite
 
 ---
 
-#### Step 4 — Extract Markdown only
-Extract structured Markdown from TEI XML files already in `data/xml/`.
+#### Step 4 — Render Markdown only
+Render structured Markdown from TEI XML files already in `data/xml/`.
 
 ```bash
 python src/main.py --extract-only
@@ -252,8 +252,8 @@ data/gt_experiment/
 | 1 | Fetch papers | `src/pubfetcher/client.py` | ✅ Done |
 | 2 | Download PDFs | `src/ingestion/downloader.py` | ✅ Done |
 | 3 | Convert PDF → XML | `src/ingestion/converter.py` | ✅ Done |
-| 4 | Extract Markdown | `src/ingestion/extractor.py` | ✅ Done |
-| 5 | LLM feature extraction | `src/llm/` | 🔲 Phase 3 |
+| 4 | Render Markdown | `src/ingestion/renderer.py` | ✅ Done |
+| 5 | LLM feature extraction | `src/extraction/` | 🔲 Phase 3 |
 | 6 | RAG / Vector search | `src/rag/` | 🔲 Phase 4 |
 
 ---
@@ -273,7 +273,7 @@ IDRD-Pipeline/
 │   ├── ingestion/
 │   │   ├── downloader.py            ← PDF downloader
 │   │   ├── converter.py             ← GROBID PDF → TEI XML converter
-│   │   └── extractor.py             ← TEI XML → Markdown extractor
+│   │   └── renderer.py              ← TEI XML → Markdown renderer
 │   └── utils/
 │       ├── db_utils.py              ← shared DB helpers
 │       └── dict_parser.py           ← paper dict parser / exports

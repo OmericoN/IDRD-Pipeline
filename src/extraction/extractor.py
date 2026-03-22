@@ -2,167 +2,261 @@ import re
 import time
 import textwrap
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 import instructor
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+# Import global configuration
+try:
+    from src import config
+except ImportError:
+    # Fallback for direct execution if src package is not in path
+    import sys
+    sys.path.append(str(Path(__file__).parent.parent.parent))
+    from src import config
+
 # --- CONFIGURATION ---
-MARKDOWN_DIR = Path(__file__).parent.parent.parent / "data" / "markdown" 
+MARKDOWN_DIR = config.MARKDOWN_DIR
 
-client = instructor.from_openai(
-    OpenAI(
-        base_url="http://localhost:11434/v1",
-        api_key="ollama",
-    ),
-    mode=instructor.Mode.JSON
-)
-
-# --- 1. THE "PROMPT-ENGINEERED" SCHEMA ---
-# The Field descriptions are the most important part of the prompt in Instructor!
+# --- 1. THE SCHEMA ---
 class DatasetMention(BaseModel):
     dataset_name: str = Field(
-        default="none", 
-        description='The formal name or acronym of the dataset (e.g., "GLEAM", "Global Land Data Assimilation System (GLDAS)", "JRA55"). Do not extract pure algorithms.'
+        ...,
+        description='The formal name, acronym, or clear descriptive name of the dataset (e.g., "GLEAM", "US Census Data", "Survey of Income and Program Participation"). Avoid generic terms like "data" or "results" unless they refer to a specific, identifiable dataset.'
     )
     reference_directness: str = Field(
-        default="none", 
-        description='Classify as "direct" (leads to raw data/repo) or "indirect" (leads to a descriptive paper). Output "none" if not found.'
+        default="none",
+        description='Classify as "direct" (the paper uses the dataset directly for analysis) or "indirect" (the paper discusses the dataset or uses it for background/comparison). Output "none" if unclear.'
     )
     mention_in_abstract: str = Field(
-        default="none", 
-        description='The exact verbatim sentence from the "## Abstract" section mentioning the dataset. If it is only mentioned in the main body, output "none".'
+        default="none",
+        description='The exact verbatim sentence from the Abstract mentioning the dataset. If not mentioned in the abstract, output "none".'
     )
     mention_in_full_text: str = Field(
-        default="none", 
-        description='The exact verbatim sentence where the dataset is formally introduced in the main body (e.g., "The Global Land Evaporation Amsterdam Model (GLEAM) has two...").'
+        default="none",
+        description='The exact verbatim sentence where the dataset is first significantly introduced or described in the main text.'
     )
     mention_section: str = Field(
-        default="none", 
-        description='The exact sub-heading where the dataset is introduced (e.g., "2) GLEAM" or "a. Selected ET datasets").'
+        default="none",
+        description='The section heading where the dataset is primarily introduced (e.g., "2. Data", "Methodology", "Results").'
     )
     standardized_section: str = Field(
-        default="none", 
-        description='Map the Mention Section to a standard category: "Methodology", "Results", "Introduction", or "Data Sources".'
+        default="none",
+        description='Map the Mention Section to a standard category: "Introduction", "Methodology", "Results", "Discussion", "Data Availability", or "Other".'
     )
     reference_title: str = Field(
-        default="none", 
-        description='The full title of the cited paper found in the "## References" section. You MUST cross-reference the inline citation (e.g., "[Martens, 2017]") to the bibliography to find this!'
+        default="none",
+        description='The full title of the cited paper or report associated with the dataset, found in the References section. Cross-reference citations (e.g., "[Smith et al., 2020]") to the bibliography.'
     )
     persistent_identifier: str = Field(
-        default="none", 
-        description='The DOI or URL extracted from the matched entry in the "## References" section (e.g., "10.5194/gmd-10-1903-2017").'
+        default="none",
+        description='The DOI, URL, or other persistent identifier (e.g., handle, ARK) associated with the dataset or its citation.'
     )
     dataset_authors: str = Field(
-        default="none", 
-        description='The author(s) of the dataset or the descriptive paper (e.g., "Martens", "Dee", "Kobayashi").'
+        default="none",
+        description='The author(s) or organization responsible for the dataset (e.g., "NASA", "Smith, J.", "World Bank").'
     )
     dataset_year: str = Field(
-        default="none", 
-        description='The year associated with the dataset or its citation (e.g., "2017", "2011"). Be aware: Year of reference material != Year of dataset'
+        default="none",
+        description='The year of publication or release of the dataset. If not explicitly stated, infer from the citation year.'
     )
     dataset_url: str = Field(
-        default="none", 
-        description='Any explicit web URL pointing to the dataset. If only a DOI exists, output "none".'
+        default="none",
+        description='Direct URL to the dataset download or landing page, if mentioned in the text or references.'
     )
     placement_type: str = Field(
-        default="none", 
-        description='Where the citation lives: "inline text" or "bibliography".'
+        default="none",
+        description='Where the dataset is primarily cited or mentioned: "inline citation", "footnote", "data availability statement", or "bibliography only".'
     )
     placement_content: str = Field(
-        default="none", 
-        description='The exact citation marker found in the text (e.g., "[(Martens et al. 2017;=Martens, 2017]" or "[Dee, 2011]").'
+        default="none",
+        description='The exact citation marker or text used to refer to the dataset in the body (e.g., "(Smith et al., 2020)", "[12]", "footnote 3").'
     )
     reference_material: str = Field(
-        default="none", 
-        description='Type of reference: "data paper", "repository", or "website".'
+        default="none",
+        description='Type of reference material: "data paper" (a paper describing the dataset), "repository" (e.g., GitHub, Zenodo), "website" (project page), or "supplementary material".'
     )
     material_year: str = Field(
-        default="none", 
-        description='The publication year of the reference material.'
+        default="none",
+        description='The publication year of the reference material (may differ from dataset year).'
     )
     dataset_version: str = Field(
-        default="none", 
-        description='Version numbers mentioned in the text (e.g., "v3.3a", "version 1.0", "version 2.0"). Output "none" if missing.'
+        default="none",
+        description='The specific version of the dataset used (e.g., "v1.0", "Release 2021"). Output "none" if not specified.'
     )
     access_date: str = Field(
-        default="none", 
-        description='The date the authors accessed the dataset. Usually "none" unless explicitly stated.'
+        default="none",
+        description='The date the authors state they accessed or downloaded the dataset. Output "none" if not mentioned.'
     )
 
 class ExtractionResult(BaseModel):
-    extractions: List[DatasetMention] = Field(description="A list of the primary datasets evaluated or used in the study.")
+    extractions: List[DatasetMention] = Field(
+        description="A list of all unique datasets identified in the text. Consolidate multiple mentions of the same dataset into a single entry."
+    )
 
-# --- 2. THE SYSTEM PROMPT ---
+# --- 2. PROMPTS ---
 SYSTEM_PROMPT = textwrap.dedent("""\
-    You are an expert academic data librarian. Your task is to extract highly structured metadata about datasets used in the provided academic text.
+    You are an Expert Academic Data Librarian and Metadata Specialist.
+    Your task is to analyze academic publications and extract structured metadata for all datasets used, created, or discussed.
 
-    CRITICAL RULES FOR THIS TEXT:
-    1. PRIMARY vs SECONDARY: The text introduces primary datasets under specific numbered subheadings (e.g., "1) CSIRO", "2) GLEAM", "3) GLDAS"). Focus heavily on these primary datasets.
-    2. CITATION RESOLUTION: The text uses messy XML artifacts for citations, such as `[(Gelaro et al. 2017)=Gelaro, 2017]`. 
-       - You MUST capture this messy string exactly as it appears for the 'placement_content' field.
-       - You MUST use the name/year in that string to search the `## References` section at the bottom of the text to find the full 'reference_title', 'persistent_identifier' (DOI), and 'dataset_authors'.
-    3. STRICT VERBATIM: Do not paraphrase sentences. Copy them exactly as they appear in the markdown.
-    4. NO HALLUCINATION: If a field is missing, output "none".
+    **CORE OBJECTIVES:**
+    1. **Identify Datasets**: Locate all datasets mentioned. These may be:
+       - **Explicit**: Named datasets (e.g., "World Values Survey", "ImageNet").
+       - **Implicit**: Described datasets (e.g., "we collected survey responses from 500 participants", "tweets scraped from 2020-2021").
+       - **Cited**: Datasets referenced via formal citations.
+    
+    2. **Distinguish Roles**:
+       - **Primary Use**: Datasets used to generate the paper's results.
+       - **Comparison/Context**: Datasets discussed for background or comparison.
+       - **Creation**: New datasets generated by this research.
+
+    3. **Extraction Rules**:
+       - **Verbatim Accuracy**: When extracting text (sentences, titles), copy exactly as it appears. Do not paraphrase.
+       - **Citation Resolution**: If a dataset is cited (e.g., "[12]" or "(Doe, 2021)"), you MUST look up the corresponding entry in the References section to fill in details like `reference_title`, `dataset_authors`, and `persistent_identifier`.
+       - **Context Matters**: Use the "Methodology", "Data", and "Results" sections to understand how the dataset was used.
+       - **No Hallucination**: If a field cannot be found or reasonably inferred, explicitly output "none".
+       - **Consolidation**: If a dataset is mentioned multiple times, combine the information into a single comprehensive entry.
+
+    4. **Implicit Datasets**:
+       - For implicit datasets (e.g., "we conducted interviews"), name them descriptively (e.g., "Author-generated Interview Data").
 """)
 
-# --- 3. EXECUTION LOGIC ---
-def chunk_text(text: str, chunk_size: int = 6000) -> List[str]:
-    # We increased chunk size to 6000 so the references section stays attached to the text!
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-
-def is_null_extraction(d: DatasetMention) -> bool:
-    return d.dataset_name.strip().lower() == "none"
-
-def run_test():
-    md_files = list(Path(MARKDOWN_DIR).glob("*.md"))
-    if not md_files:
-        print(f"❌ No markdown files found in {MARKDOWN_DIR}")
-        return
-
-    test_file = md_files[0]
-    print(f"📄 Testing on: {test_file.name}")
-
-    # Notice: We removed the `strip_references_section` function!
-    # The model NEEDS the references section to resolve the DOIs and Titles.
-    document = test_file.read_text(encoding="utf-8")
-    chunks = chunk_text(document, chunk_size=8000) 
+def get_user_prompt(text_chunk: str) -> str:
+    return f"""
+    Please analyze the following text segment from an academic publication.
+    Extract all dataset mentions according to the defined schema.
     
-    all_extracted_datasets = []
+    TEXT SEGMENT:
+    ---
+    {text_chunk}
+    ---
+    """
 
-    try:
-        start_time = time.time()
-        
-        for i, chunk in enumerate(chunks):
-            print(f"🚀 Processing chunk {i+1}/{len(chunks)}...")
-            
-            result = client.chat.completions.create(
-                model="qwen2.5:7b", # or 7b depending on your local hardware limits
+# --- 3. EXECUTION LOGIC ---
+def get_client() -> instructor.Instructor:
+    """Initialize the instructor client with configuration settings."""
+    return instructor.from_openai(
+        OpenAI(
+            base_url=config.LLM_BASE_URL,
+            api_key=config.LLM_API_KEY,
+        ),
+        mode=instructor.Mode.JSON
+    )
+
+def chunk_text(text: str, chunk_size: int = 8000, overlap: int = 500) -> List[str]:
+    """
+    Split text into chunks with overlap to maintain context.
+    Simple character-based chunking for now, but could be improved to be paragraph-aware.
+    """
+    if len(text) <= chunk_size:
+        return [text]
+    
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        start += (chunk_size - overlap)
+    return chunks
+
+def extract_datasets_from_text(text: str, client: instructor.Instructor, model_name: str = "llama3-70b-8192") -> List[DatasetMention]:
+    """
+    Main extraction function. 
+    1. Chunks the text.
+    2. Runs extraction on each chunk.
+    3. (Optional) Could add a consolidation step here if chunks produce duplicate partial datasets.
+    """
+    chunks = chunk_text(text)
+    all_datasets = []
+    
+    print(f"   ℹ️ Split text into {len(chunks)} chunks.")
+
+    for i, chunk in enumerate(chunks):
+        print(f"   🚀 Analyzing chunk {i+1}/{len(chunks)}...")
+        try:
+            resp = client.chat.completions.create(
+                model=model_name,
                 response_model=ExtractionResult,
-                temperature=0.0,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Extract the datasets from the following text:\n\n{chunk}"}
-                ]
+                    {"role": "user", "content": get_user_prompt(chunk)}
+                ],
+                temperature=0.0, # Deterministic output
             )
             
-            valid = [d for d in result.extractions if not is_null_extraction(d)]
-            if valid:
-                all_extracted_datasets.extend(valid)
-                print(f"   ✅ Found {len(valid)} dataset(s).")
+            # Filter out empty/none results
+            valid_results = [
+                d for d in resp.extractions 
+                if d.dataset_name.lower() != "none" and len(d.dataset_name) > 2
+            ]
+            
+            if valid_results:
+                print(f"      ✅ Found {len(valid_results)} candidates in this chunk.")
+                all_datasets.extend(valid_results)
             else:
-                print("   ℹ️ No datasets found.")
+                print("      Running...")
+                
+        except Exception as e:
+            print(f"      ⚠️ Error processing chunk {i+1}: {e}")
 
-        elapsed_time = time.time() - start_time
-        print(f"\n🎉 Extraction Complete! Took {elapsed_time:.1f} seconds.")
-        
-        for idx, dataset in enumerate(all_extracted_datasets):
-            print(f"\n--- DATASET {idx + 1}: {dataset.dataset_name} ---")
-            for key, value in dataset.model_dump().items():
-                print(f"{key.replace('_', ' ').title()}: {value}")
+    return all_datasets
 
-    except Exception as e:
-        print(f"\n❌ Extraction failed: {e}")
+def run_extraction_pipeline(file_path: Path):
+    """
+    Orchestrates the extraction for a single file.
+    """
+    if not file_path.exists():
+        print(f"❌ File not found: {file_path}")
+        return
+
+    print(f"\n📄 Processing: {file_path.name}")
+    text = file_path.read_text(encoding="utf-8")
+    
+    client = get_client()
+    # Note: Using a model that supports JSON mode well. 
+    # If using local Ollama, might need to adjust model name (e.g. "qwen2.5:7b").
+    # If using Groq/OpenAI, use appropriate model name.
+    # We'll default to a high-quality model if available, or fall back to config.
+    
+    # Heuristic: check if we are using local ollama or remote
+    model = "qwen2.5:7b" if "localhost" in config.LLM_BASE_URL else "qwen/qwen3-32b"
+    
+    start_time = time.time()
+    datasets = extract_datasets_from_text(text, client, model_name=model)
+    duration = time.time() - start_time
+    
+    print(f"\n🎉 Extraction Complete! Found {len(datasets)} potential datasets in {duration:.2f}s.")
+    
+    # Display results
+    for idx, d in enumerate(datasets):
+        print(f"\n--- DATASET {idx + 1}: {d.dataset_name} ---")
+        # Print non-none fields for cleaner output
+        for k, v in d.model_dump().items():
+            if v and v.lower() != "none":
+                print(f"  {k}: {v}")
 
 if __name__ == "__main__":
-    run_test()
+    # Simple CLI for testing
+    import argparse
+    parser = argparse.ArgumentParser(description="Extract dataset metadata from markdown files.")
+    parser.add_argument("--file", type=str, help="Path to a specific markdown file to process.")
+    parser.add_argument("--all", action="store_true", help="Process all markdown files in the directory.")
+    
+    args = parser.parse_args()
+    
+    if args.file:
+        run_extraction_pipeline(Path(args.file))
+    elif args.all:
+        files = list(MARKDOWN_DIR.glob("*.md"))
+        print(f"Found {len(files)} markdown files.")
+        for f in files:
+            run_extraction_pipeline(f)
+    else:
+        # Default behavior: run on the first file found (similar to original script)
+        files = list(MARKDOWN_DIR.glob("*.md"))
+        if files:
+            print("No arguments provided. Running on the first available file as a test.")
+            run_extraction_pipeline(files[0])
+        else:
+            print(f"No markdown files found in {MARKDOWN_DIR}")

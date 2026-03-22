@@ -8,7 +8,7 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from db.db import PublicationDatabase
+from db.db import IDRDDatabase
 from config import PDF_DIR
 from utils.db_utils import (
     print_download_status,
@@ -20,11 +20,11 @@ from utils.db_utils import (
 class PDFDownloader:
     """Downloads PDFs and updates database via db.py methods."""
 
-    def __init__(self, output_dir: str = None, db: PublicationDatabase = None):
+    def __init__(self, output_dir: str = None, db: IDRDDatabase = None):
         """
         Args:
             output_dir: Where to save PDFs. Defaults to config.PDF_DIR.
-            db: Shared PublicationDatabase instance. If None, creates its own.
+            db: Shared IDRDDatabase instance. If None, creates its own.
         """
         self.output_dir = Path(output_dir) if output_dir else PDF_DIR
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,7 @@ class PDFDownloader:
 
         # Accept shared DB or create own — avoids duplicate connections in pipeline
         self._owns_db = db is None
-        self.db = db if db is not None else PublicationDatabase()
+        self.db = db if db is not None else IDRDDatabase()
 
         self.headers = {
             'User-Agent': (

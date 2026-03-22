@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from db.db import PublicationDatabase
+    from db.db import IDRDDatabase
 
 
-def print_download_status(db: "PublicationDatabase", output_dir: Path):
+def print_download_status(db: "IDRDDatabase", output_dir: Path):
     """Print current download status from the publications table."""
     db.cursor.execute("""
         SELECT
@@ -34,7 +34,7 @@ def print_download_status(db: "PublicationDatabase", output_dir: Path):
     print("-" * 60)
 
 
-def print_conversion_status(db: "PublicationDatabase", xml_output_dir: Path):
+def print_conversion_status(db: "IDRDDatabase", xml_output_dir: Path):
     """Print current XML conversion status."""
     print("\nCurrent Conversion Status:")
     print("-" * 60)
@@ -47,7 +47,7 @@ def print_conversion_status(db: "PublicationDatabase", xml_output_dir: Path):
     print("-" * 60)
 
 
-def sync_existing_pdfs(db: "PublicationDatabase", pdf_output_dir: Path) -> int:
+def sync_existing_pdfs(db: "IDRDDatabase", pdf_output_dir: Path) -> int:
     """
     Sync PDF files on disk with the database.
     Marks papers as downloaded if the PDF exists but the DB flag is not set.
@@ -91,7 +91,7 @@ def sync_existing_pdfs(db: "PublicationDatabase", pdf_output_dir: Path) -> int:
     return synced
 
 
-def update_pdf_status(db: "PublicationDatabase", paper_id: str, success: bool,
+def update_pdf_status(db: "IDRDDatabase", paper_id: str, success: bool,
                       pdf_path: str = None, error: str = None):
     """Update PDF download status for a single paper."""
     if success:
@@ -115,7 +115,7 @@ def update_pdf_status(db: "PublicationDatabase", paper_id: str, success: bool,
     db.commit()
 
 
-def update_xml_status(db: "PublicationDatabase", paper_id: str, success: bool,
+def update_xml_status(db: "IDRDDatabase", paper_id: str, success: bool,
                       xml_path: str = None, error: str = None):
     """Update XML conversion status for a single paper."""
     if success:

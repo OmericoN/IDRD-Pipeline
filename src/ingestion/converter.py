@@ -10,7 +10,7 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from db.db import PublicationDatabase
+from db.db import IDRDDatabase
 from config import POSTGRES_DSN, PDF_DIR, XML_DIR
 from utils.db_utils import update_xml_status
 
@@ -24,7 +24,7 @@ class GrobidConverter:
         output_dir: str = None,
         grobid_port: int = 8070,
         container_name: str = "grobid-server",
-        db: "PublicationDatabase" = None,       # ← accept shared DB
+        db: "IDRDDatabase" = None,       # ← accept shared DB
     ):
         self.pdf_dir    = Path(pdf_dir)    if pdf_dir    else PDF_DIR
         self.output_dir = Path(output_dir) if output_dir else XML_DIR
@@ -44,7 +44,7 @@ class GrobidConverter:
 
         # Use shared DB from pipeline — only create own if used standalone
         self._owns_db = db is None
-        self.db       = db if db is not None else PublicationDatabase()
+        self.db       = db if db is not None else IDRDDatabase()
 
         print(f"✓ GROBID Converter initialized")
         print(f"  PDF directory   : {self.pdf_dir.absolute()}")

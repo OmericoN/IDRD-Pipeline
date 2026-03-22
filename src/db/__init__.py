@@ -1,4 +1,4 @@
 # It should ONLY export the class — never instantiate it
-from .db import PublicationDatabase
+from .db import IDRDDatabase
 
-__all__ = ["PublicationDatabase"]
+__all__ = ["IDRDDatabase"]

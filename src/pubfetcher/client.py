@@ -216,7 +216,7 @@ class SemanticScholarClient:
 
 # ── Standalone usage ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    from db.db import PublicationDatabase
+    from db.db import IDRDDatabase
 
     client = SemanticScholarClient()
     papers = client.search_papers(query="Transformers", open_access_pdf=True, limit=10)
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     out.parent.mkdir(parents=True, exist_ok=True)
     parser.to_json(str(out))
 
-    db    = PublicationDatabase()
+    db    = IDRDDatabase()
     count = db.insert_publications(papers)
     print(f"✓ Saved {count} papers to database")
     db.close()

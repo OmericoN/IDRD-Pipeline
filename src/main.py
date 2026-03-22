@@ -5,7 +5,7 @@ Pipeline Flow:
     1. Fetch    — Search & store papers from Semantic Scholar
     2. Download — Download open-access PDFs
     3. Convert  — Convert PDFs to TEI XML via GROBID (Docker)
-    4. Extract  — Extract Markdown from TEI XML
+    4. Render   — Render Markdown from TEI XML
     5. Features — LLM feature extraction  [Phase 3]
 """
 
@@ -19,7 +19,7 @@ sys.path.append(str(Path(__file__).parent))
 
 from pubfetcher.client import SemanticScholarClient
 from utils.dict_parser import PaperDictParser
-from db.db import PublicationDatabase
+from db.db import IDRDDatabase
 from ingestion.downloader import PDFDownloader
 from ingestion.converter import GrobidConverter
 from ingestion.renderer import extract_markdown
@@ -35,7 +35,7 @@ class IDRDPipeline:
     """Main pipeline orchestrator for IDRD paper processing."""
 
     def __init__(self):
-        self.db         = PublicationDatabase()
+        self.db         = IDRDDatabase()
         self.parser     = PaperDictParser()
         self.start_time = datetime.now()
 
@@ -206,16 +206,16 @@ class IDRDPipeline:
             converter.close_db()
 
     # ------------------------------------------------------------------
-    # Step 4 — Extract Markdown
+    # Step 4 — Render Markdown
     # ------------------------------------------------------------------
 
-    def step_4_extract_markdown(
+    def step_4_render_markdown(
         self,
         limit: int = None,
         overwrite: bool = False,
     ) -> dict:
         print("\n" + "=" * 70)
-        print("STEP 4: EXTRACTING MARKDOWN FROM TEI XML")
+        print("STEP 4: RENDERING MARKDOWN FROM TEI XML")
         print("=" * 70)
         print(f"  Limit            : {limit or 'All available'}")
         print(f"  Overwrite        : {overwrite}")
@@ -294,7 +294,7 @@ class IDRDPipeline:
         print(f"  Failed    : {stats['failed']}")
         print("-" * 70)
 
-        self._save_results({"results": results, "stats": stats}, 'extraction_results.json')
+        self._save_results({"results": results, "stats": stats}, 'rendering_results.json')
         return {"results": results, "stats": stats}
 
     # ------------------------------------------------------------------
@@ -316,7 +316,7 @@ class IDRDPipeline:
         limit: int = 100,
         open_access_only: bool = True,
         convert_to_xml: bool = True,
-        extract_markdown: bool = True,
+        render_markdown: bool = True,
         delete_pdfs_after_conversion: bool = False,
     ):
         print("\n" + "=" * 70)
@@ -349,8 +349,8 @@ class IDRDPipeline:
                     delete_pdf=delete_pdfs_after_conversion,
                 )
 
-                if extract_markdown and conversion_results['stats']['successful'] > 0:
-                    self.step_4_extract_markdown()
+                if render_markdown and conversion_results['stats']['successful'] > 0:
+                    self.step_4_render_markdown()
 
             self._print_final_summary()
 
@@ -409,7 +409,7 @@ class IDRDPipeline:
                     return
                 cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
                 if cv['stats']['successful'] > 0:
-                    self.step_4_extract_markdown()
+                    self.step_4_render_markdown()
 
             elif downloaded == 0:
                 print("\n  → Resuming from STEP 2 (no PDFs downloaded yet)")
@@ -418,7 +418,7 @@ class IDRDPipeline:
                     return
                 cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
                 if cv['stats']['successful'] > 0:
-                    self.step_4_extract_markdown()
+                    self.step_4_render_markdown()
 
             elif converted == 0:
                 print("\n  → Resuming from STEP 3 (PDFs not yet converted)")
@@ -427,8 +427,8 @@ class IDRDPipeline:
                     self.step_4_extract_markdown()
 
             elif extracted == 0:
-                print("\n  → Resuming from STEP 4 (markdown not yet extracted)")
-                self.step_4_extract_markdown()
+                print("\n  → Resuming from STEP 4 (markdown not yet rendered)")
+                self.step_4_render_markdown()
 
             else:
                 print("\n  ✓ Pipeline appears complete — nothing to resume.")
@@ -553,7 +553,7 @@ MODES
     mode.add_argument("--download-only", action="store_true")
     mode.add_argument("--convert-only",  action="store_true")
     mode.add_argument("--extract-only",  action="store_true",
-                      help="Run markdown extraction on existing XMLs in data/xml/")
+                      help="Run markdown rendering on existing XMLs in data/xml/")
     mode.add_argument("--resume",        action="store_true",
                       help="Resume pipeline from the last incomplete stage")
     mode.add_argument("--status",        action="store_true")
@@ -581,7 +581,7 @@ MODES
     ex.add_argument("--ex-limit",     type=int,  default=None)
     ex.add_argument("--ex-overwrite", action="store_true")
     ex.add_argument("--no-extract",   action="store_true",
-                    help="Skip markdown extraction step in full pipeline")
+                    help="Skip markdown rendering step in full pipeline")
 
     return parser
 
@@ -632,7 +632,7 @@ def main():
             )
 
         elif args.extract_only:
-            pipeline.step_4_extract_markdown(
+            pipeline.step_4_render_markdown(
                 limit=args.ex_limit,
                 overwrite=args.ex_overwrite,
             )
@@ -646,7 +646,7 @@ def main():
                 limit=args.limit,
                 open_access_only=not args.all_access,
                 convert_to_xml=not args.no_xml,
-                extract_markdown=not args.no_extract,
+                render_markdown=not args.no_extract,
                 delete_pdfs_after_conversion=args.delete_pdfs,
             )
 
