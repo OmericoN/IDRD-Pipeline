@@ -1,4 +1,7 @@
 # Byte-compiled / optimized / DLL files
+docs/
+.github/
+copilot-instructions.md
 .github
 runs/
 metadata/
