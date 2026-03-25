@@ -1,8 +1,8 @@
 # IDRD Pipeline
 
 A multi-stage pipeline for fetching academic publications, downloading their PDFs,
-converting them to structured XML, extracting Markdown sections, and (in future phases)
-extracting features for a RAG system.
+converting them to structured TEI-XML, extracting Markdown sections, and (in future phases)
+extracting dataset features for a RAG system to evaluate affiliation with Maastricht University & check formality.
 
 **NEW**: All components now support **database-agnostic operation** - use with DataFrames, JSON, or any data source! See [DataFrame Examples](#dataframe-usage-no-database).
 
