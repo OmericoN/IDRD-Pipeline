@@ -19,7 +19,7 @@ class IDRDDatabase:
         IDRDDatabase._init_count += 1
         if IDRDDatabase._init_count > 1:
             import traceback
-            print(f"\n⚠  WARNING: IDRDDatabase instantiated {IDRDDatabase._init_count} times.")
+            print(f"\n[WARN] WARNING: IDRDDatabase instantiated {IDRDDatabase._init_count} times.")
             print("   Stack trace — pinpoints the extra instantiation:")
             traceback.print_stack(limit=8)
 
@@ -33,7 +33,7 @@ class IDRDDatabase:
         self.conn.autocommit = False
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         self._create_tables()
-        print("✓ PostgreSQL database initialized")
+        print("[OK] PostgreSQL database initialized")
 
     # ------------------------------------------------------------------
     # Schema
@@ -110,7 +110,6 @@ class IDRDDatabase:
         )
 
         self.conn.commit()
-        print("✓ PostgreSQL database initialized")
 
     # ------------------------------------------------------------------
     # Inserts
@@ -666,6 +665,24 @@ class IDRDDatabase:
         self.cursor.execute(query, params)
         return [dict(r) for r in self.cursor.fetchall()]
 
+    def get_papers_needing_rendering(self, limit: int = None) -> List[Dict]:
+        """Get papers that need markdown rendering (have XML but not yet rendered)."""
+        query = '''
+            SELECT "paperId", title, xml_path FROM publications
+            WHERE xml_converted = TRUE
+              AND xml_path IS NOT NULL
+              AND xml_path != ''
+              AND (sections_extracted = FALSE OR sections_extracted IS NULL)
+        '''
+        # SQL Injection Vulnerability resolved: use parameterised placeholder instead of f-string
+        params = []
+        if limit:
+            query += ' LIMIT %s'
+            params.append(limit)
+
+        self.cursor.execute(query, params)
+        return [dict(r) for r in self.cursor.fetchall()]
+
     # ------------------------------------------------------------------
     # Maintenance
     # ------------------------------------------------------------------
@@ -682,7 +699,7 @@ class IDRDDatabase:
                 sql.SQL('DELETE FROM {}').format(sql.Identifier(table))
             )
         self.conn.commit()
-        print("✓ Database cleared")
+        print("[OK] Database cleared")
 
     def drop_tables(self):
         """Drop all tables and recreate them."""
@@ -696,7 +713,7 @@ class IDRDDatabase:
                 sql.SQL('DROP TABLE IF EXISTS {} CASCADE').format(sql.Identifier(table))
             )
         self.conn.commit()
-        print("✓ All tables dropped")
+        print("[OK] All tables dropped")
         self._create_tables()
 
     def reset_database(self, confirm: bool = False):
@@ -731,7 +748,7 @@ class IDRDDatabase:
         for table_name in table_names:
             # guard: only allow safe identifier characters
             if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
-                print(f"  ⚠ Skipping suspicious table name: {table_name!r}")
+                print(f"  [WARN] Skipping suspicious table name: {table_name!r}")
                 continue
             self.cursor.execute(
                 sql.SQL('DROP TABLE IF EXISTS {} CASCADE').format(
@@ -742,7 +759,7 @@ class IDRDDatabase:
         self.conn.commit()
 
         self._create_tables()
-        print("✓ Full database reset complete")
+        print("[OK] Full database reset complete")
 
     @staticmethod
     def _clear_directory(directory: Path) -> int:
@@ -791,7 +808,7 @@ class IDRDDatabase:
         ''')
         self.conn.commit()
         print(f"  Reset tracking columns for {self.cursor.rowcount} publications")
-        print("✓ Pipeline status reset complete")
+        print("[OK] Pipeline status reset complete")
 
     def export_to_json(self, output_path: str, limit: int = None):
         """Export publications to JSON."""
@@ -803,7 +820,7 @@ class IDRDDatabase:
         papers = [self.get_publication(pid) for pid in paper_ids]
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(papers, f, indent=2, ensure_ascii=False, default=str)
-        print(f"✓ Exported {len(papers)} publications to {output_path}")
+        print(f"[OK] Exported {len(papers)} publications to {output_path}")
 
     # ------------------------------------------------------------------
     # Connection helpers

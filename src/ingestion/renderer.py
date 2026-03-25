@@ -15,8 +15,16 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Optional
 from lxml import etree
+
+sys.path.append(str(Path(__file__).parent.parent))
+
+try:
+    from models.results import RenderResult
+except ImportError:
+    # Allow standalone usage without models
+    RenderResult = None
 
 # TEI namespace
 TEI = "http://www.tei-c.org/ns/1.0"
@@ -419,6 +427,156 @@ def extract_markdown_to_file(xml_path: str | Path, output_path: str | Path = Non
     output_path.write_text(md, encoding="utf-8")
     print(f"✓ Extracted markdown → {output_path}")
     return output_path
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NEW API: Results-based rendering (database-agnostic)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def render_to_markdown(
+    xml_path: Path,
+    output_path: Path = None,
+    paper_id: str = None,
+    overwrite: bool = False
+) -> 'RenderResult':
+    """
+    Render a single TEI XML file to Markdown and return structured result.
+    
+    Args:
+        xml_path: Path to TEI XML file
+        output_path: Output markdown path (auto-generated if None)
+        paper_id: Paper ID (extracted from filename if None)
+        overwrite: Whether to re-render existing files
+        
+    Returns:
+        RenderResult with success status, paths, error info, etc.
+    """
+    if RenderResult is None:
+        raise ImportError("RenderResult not available - install models package")
+    
+    xml_path = Path(xml_path)
+    paper_id = paper_id or xml_path.stem.replace(".tei", "")
+    
+    if output_path is None:
+        markdown_dir = Path(__file__).parent.parent.parent / "data" / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        output_path = markdown_dir / f"{paper_id}.md"
+    else:
+        output_path = Path(output_path)
+    
+    # Check if already exists
+    if output_path.exists() and not overwrite:
+        return RenderResult(
+            paper_id=paper_id,
+            xml_path=xml_path,
+            md_path=output_path,
+            success=True,
+            message=f"Already exists: {output_path.name}"
+        )
+    
+    # Attempt rendering
+    try:
+        md_content = extract_markdown(xml_path)
+        
+        # Count some metrics
+        sections = len(re.findall(r'^##\s', md_content, re.MULTILINE))
+        references = len(re.findall(r'^\- \*\*\[', md_content, re.MULTILINE))
+        
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(md_content, encoding="utf-8")
+        
+        return RenderResult(
+            paper_id=paper_id,
+            xml_path=xml_path,
+            md_path=output_path,
+            success=True,
+            message=f"Rendered: {output_path.name}",
+            sections_extracted=sections,
+            references_count=references
+        )
+    
+    except Exception as e:
+        return RenderResult(
+            paper_id=paper_id,
+            xml_path=xml_path,
+            md_path=output_path,
+            success=False,
+            message=f"Error: {str(e)}",
+            error=str(e)
+        )
+
+
+def render_papers(
+    papers: List[Dict],
+    paper_id_key: str = 'paperId',
+    xml_path_key: str = 'xml_path',
+    output_dir: Optional[Path] = None,
+    overwrite: bool = False
+) -> List['RenderResult']:
+    """
+    Render multiple TEI XML files to Markdown (database-agnostic).
+    
+    This method works with any data source - DataFrame, JSON, database query result, etc.
+    Results can be persisted to database, DataFrame, or any storage backend.
+    
+    Args:
+        papers: List of dictionaries containing paper metadata with XML paths
+        paper_id_key: Key for paper ID in dictionary (default: 'paperId')
+        xml_path_key: Key for XML file path (default: 'xml_path')
+        output_dir: Output directory for markdown files (auto-detected if None)
+        overwrite: Whether to re-render existing files (default: False)
+        
+    Returns:
+        List of RenderResult objects with success/failure info
+        
+    Example:
+        >>> papers = [{'paperId': '123', 'xml_path': '/path/to/file.tei.xml'}]
+        >>> results = render_papers(papers)
+        >>> successful = [r for r in results if r.success]
+    """
+    if RenderResult is None:
+        raise ImportError("RenderResult not available - install models package")
+    
+    if not papers:
+        print("No papers to render")
+        return []
+    
+    if output_dir is None:
+        output_dir = Path(__file__).parent.parent.parent / "data" / "markdown"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\nRendering {len(papers)} XML files to Markdown...")
+    results = []
+    
+    for paper in papers:
+        paper_id = paper.get(paper_id_key)
+        xml_path_str = paper.get(xml_path_key)
+        
+        if not paper_id or not xml_path_str:
+            result = RenderResult(
+                paper_id=paper_id or 'unknown',
+                xml_path=Path(xml_path_str) if xml_path_str else Path('unknown'),
+                md_path=Path('unknown'),
+                success=False,
+                message="Missing paper ID or XML path",
+                error="Missing required fields"
+            )
+            results.append(result)
+            continue
+        
+        xml_path = Path(xml_path_str)
+        output_path = output_dir / f"{paper_id}.md"
+        
+        result = render_to_markdown(xml_path, output_path, paper_id, overwrite)
+        results.append(result)
+    
+    # Summary
+    successful = sum(1 for r in results if r.success)
+    failed = sum(1 for r in results if not r.success)
+    print(f"\n✓ Rendering complete: {successful} successful, {failed} failed")
+    
+    return results
 
 
 # ──────────────────────────────────────────────────────────────────────────────

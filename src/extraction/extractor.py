@@ -160,7 +160,7 @@ def chunk_text(text: str, chunk_size: int = 8000, overlap: int = 500) -> List[st
         start += (chunk_size - overlap)
     return chunks
 
-def extract_datasets_from_text(text: str, client: instructor.Instructor, model_name: str = "llama3-70b-8192") -> List[DatasetMention]:
+def extract_datasets_from_text(text: str, client: instructor.Instructor, model_name: str = "qwen/qwen3-32b") -> List[DatasetMention]:
     """
     Main extraction function. 
     1. Chunks the text.

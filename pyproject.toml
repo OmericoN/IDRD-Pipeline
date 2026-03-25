@@ -1,0 +1,21 @@
+[project]
+name = "idrd-pipeline"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docker>=7.1.0",
+    "dotenv>=0.9.9",
+    "fqdn>=1.5.1",
+    "groq>=1.1.1",
+    "ipykernel>=7.2.0",
+    "jupyter>=1.1.1",
+    "langextract>=1.2.0",
+    "lxml>=6.0.2",
+    "numpy>=2.4.3",
+    "openai>=2.29.0",
+    "pandas>=3.0.1",
+    "psycopg2-binary>=2.9.11",
+    "requests>=2.32.5",
+]

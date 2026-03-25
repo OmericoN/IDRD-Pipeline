@@ -109,7 +109,7 @@ class IDRDPipeline:
         return count
 
     # ------------------------------------------------------------------
-    # Step 2 — Download
+    # Step 2 — Download PDFs (Results-Based API)
     # ------------------------------------------------------------------
 
     def step_2_download_pdfs(
@@ -127,32 +127,57 @@ class IDRDPipeline:
         print(f"  Output           : {PDF_DIR}")
         print("=" * 70)
 
-        downloader = PDFDownloader(db=self.db)
+        downloader = PDFDownloader(output_dir=str(PDF_DIR), db=None)  # No DB coupling
 
         try:
             print_download_status(self.db, downloader.output_dir)
             sync_existing_pdfs(self.db, downloader.output_dir)
 
-            results = downloader.download_from_database(
-                limit=limit,
+            # Get papers from DB (data source)
+            papers = self.db.get_papers_needing_download(limit=limit)
+            
+            if not papers:
+                print("\n  No papers need PDF downloads.")
+                return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+
+            # Download PDFs (no DB coupling in component)
+            results = downloader.download_papers(
+                papers=papers,
+                paper_id_key='paperId',
+                url_key='url',
                 overwrite=overwrite,
                 delay=delay,
             )
 
-            downloader.print_statistics()
+            # Persist results to DB (separate persistence step)
+            from utils.db_utils import persist_download_results
+            persist_download_results(self.db, results)
+
+            # Calculate stats
+            stats = {
+                "successful": sum(1 for r in results if r.success and r.message != "skipped — already exists"),
+                "failed": sum(1 for r in results if not r.success),
+                "skipped": sum(1 for r in results if r.success and r.message == "skipped — already exists"),
+            }
+
             print("\n" + "-" * 70)
             print("STEP 2 COMPLETE")
             print("-" * 70)
+            print(f"  Successful : {stats['successful']}")
+            print(f"  Failed     : {stats['failed']}")
+            print(f"  Skipped    : {stats['skipped']}")
+            print("-" * 70)
             print_download_status(self.db, downloader.output_dir)
 
-            self._save_results(results, 'download_results.json')
-            return results
+            output = {"results": [vars(r) for r in results], "stats": stats}
+            self._save_results(output, 'download_results.json')
+            return output
 
         finally:
             downloader.close()
 
     # ------------------------------------------------------------------
-    # Step 3 — Convert
+    # Step 3 — Convert to XML (Results-Based API)
     # ------------------------------------------------------------------
 
     def step_3_convert_to_xml(
@@ -172,41 +197,68 @@ class IDRDPipeline:
         print(f"  Output           : {XML_DIR}")
         print("=" * 70)
 
-        converter = GrobidConverter(db=self.db)
+        # Create converter (no DB coupling)
+        converter = GrobidConverter(output_dir=str(XML_DIR), db=None)
 
         try:
             print_conversion_status(self.db, converter.output_dir)
 
+            # Start GROBID automatically (pulls image, starts container, waits for ready)
             print("\n" + "-" * 70)
             print("Starting GROBID Docker container...")
             print("-" * 70)
             converter.start_grobid(wait_time=30)
 
-            results = converter.convert_from_database(
-                limit=limit,
+            # Get papers from DB (data source)
+            papers = self.db.get_papers_needing_conversion(limit=limit)
+            
+            if not papers:
+                print("\n  No papers need conversion.")
+                return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+
+            # Convert PDFs (no DB coupling in component)
+            results = converter.convert_papers(
+                papers=papers,
+                paper_id_key='paperId',
+                pdf_path_key='pdf_path',
                 overwrite=overwrite,
                 delete_pdf=delete_pdf,
                 delay=delay,
             )
 
-            converter.print_statistics()
+            # Persist results to DB (separate persistence step)
+            from utils.db_utils import persist_conversion_results
+            persist_conversion_results(self.db, results)
+
+            # Calculate stats
+            stats = {
+                "successful": sum(1 for r in results if r.success and "already converted" not in r.message.lower()),
+                "failed": sum(1 for r in results if not r.success),
+                "skipped": sum(1 for r in results if r.success and "already converted" in r.message.lower()),
+            }
+
             print("\n" + "-" * 70)
             print("STEP 3 COMPLETE")
             print("-" * 70)
+            print(f"  Successful : {stats['successful']}")
+            print(f"  Failed     : {stats['failed']}")
+            print(f"  Skipped    : {stats['skipped']}")
+            print("-" * 70)
             print_conversion_status(self.db, converter.output_dir)
 
-            self._save_results(results, 'conversion_results.json')
-            return results
+            output = {"results": [vars(r) for r in results], "stats": stats}
+            self._save_results(output, 'conversion_results.json')
+            return output
 
         except Exception as e:
             print(f"\n  Error in conversion step: {e}")
             raise
         finally:
             converter.stop_grobid()
-            converter.close_db()
+            # Note: converter.close_db() not needed - converter doesn't own DB connection
 
     # ------------------------------------------------------------------
-    # Step 4 — Render Markdown
+    # Step 4 — Render Markdown (Results-Based API)
     # ------------------------------------------------------------------
 
     def step_4_render_markdown(
@@ -225,77 +277,88 @@ class IDRDPipeline:
 
         MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
 
-        xml_files = sorted(XML_DIR.glob("*.tei.xml"))
-        if limit:
-            xml_files = xml_files[:limit]
-
-        if not xml_files:
-            print("\n  No .tei.xml files found — skipping extraction.")
+        # Get papers from DB (data source)
+        papers = self.db.get_papers_needing_rendering(limit=limit)
+        
+        if not papers:
+            print("\n  No papers need markdown rendering.")
             return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
 
-        print(f"\n  Found {len(xml_files)} XML files to process\n")
+        print(f"\n  Found {len(papers)} papers to render\n")
 
-        results   = []
-        stats     = {"successful": 0, "failed": 0, "skipped": 0}
+        # Render markdown (no DB coupling - uses render_to_markdown)
+        from ingestion.renderer import render_to_markdown
+        
+        results = []
+        stats = {"successful": 0, "failed": 0, "skipped": 0}
 
-        for xml_path in xml_files:
-            stem        = xml_path.stem.replace(".tei", "")
-            output_path = MARKDOWN_DIR / f"{stem}.md"
+        for paper in papers:
+            paper_id = paper['paperId']
+            xml_path = Path(paper['xml_path'])
+            md_path = MARKDOWN_DIR / f"{paper_id}.md"
 
-            if output_path.exists() and not overwrite:
+            if md_path.exists() and not overwrite:
                 stats["skipped"] += 1
                 results.append({
-                    "xml":     xml_path.name,
-                    "md":      output_path.name,
+                    "paper_id": paper_id,
+                    "xml": xml_path.name,
+                    "md": md_path.name,
                     "success": True,
                     "message": "skipped — already exists",
                 })
                 continue
 
             try:
-                md = extract_markdown(xml_path)
-
-                if not md.strip():
-                    raise ValueError("Empty markdown output")
-
-                output_path.write_text(md, encoding="utf-8")
-                size_kb = output_path.stat().st_size / 1024
+                # Use results-based renderer function
+                result = render_to_markdown(xml_path, md_path)
+                
                 stats["successful"] += 1
-                print(f"  ✓ {xml_path.name} → {output_path.name} ({size_kb:.1f} KB)")
+                size_kb = md_path.stat().st_size / 1024
+                print(f"  [OK] {xml_path.name} -> {md_path.name} ({size_kb:.1f} KB)")
+                
                 results.append({
-                    "xml":     xml_path.name,
-                    "md":      output_path.name,
-                    "success": True,
-                    "message": f"{size_kb:.1f} KB",
+                    "paper_id": paper_id,
+                    "xml": xml_path.name,
+                    "md": md_path.name,
+                    "success": result.success,
+                    "message": result.message,
+                    "sections_extracted": result.sections_extracted,
+                    "references_count": result.references_count,
                 })
 
-                # mark in DB
+                # Persist to DB (separate step)
                 self.db.cursor.execute(
-                    'UPDATE publications SET sections_extracted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE pdf_path LIKE %s',
-                    (f"%{stem}%",)
+                    '''UPDATE publications 
+                       SET sections_extracted = TRUE, 
+                           updated_at = CURRENT_TIMESTAMP 
+                       WHERE "paperId" = %s''',
+                    (paper_id,)
                 )
                 self.db.commit()
 
             except Exception as e:
                 stats["failed"] += 1
-                print(f"  ✗ {xml_path.name} — {e}")
+                error_msg = f"Failed to render {xml_path.name}: {type(e).__name__}: {str(e)}"
+                print(f"  ✗ {error_msg}")
                 results.append({
-                    "xml":     xml_path.name,
-                    "md":      None,
+                    "paper_id": paper_id,
+                    "xml": xml_path.name,
+                    "md": None,
                     "success": False,
-                    "message": str(e),
+                    "message": error_msg,
                 })
 
         print("\n" + "-" * 70)
         print("STEP 4 COMPLETE")
         print("-" * 70)
-        print(f"  Extracted : {stats['successful']}")
-        print(f"  Skipped   : {stats['skipped']}")
-        print(f"  Failed    : {stats['failed']}")
+        print(f"  Successful : {stats['successful']}")
+        print(f"  Skipped    : {stats['skipped']}")
+        print(f"  Failed     : {stats['failed']}")
         print("-" * 70)
 
-        self._save_results({"results": results, "stats": stats}, 'rendering_results.json')
-        return {"results": results, "stats": stats}
+        output = {"results": results, "stats": stats}
+        self._save_results(output, 'rendering_results.json')
+        return output
 
     # ------------------------------------------------------------------
     # Step 5 — Placeholder
@@ -373,7 +436,14 @@ class IDRDPipeline:
         open_access_only: bool = True,
         delete_pdfs_after_conversion: bool = False,
     ):
-        """Resume pipeline from the last incomplete stage."""
+        """Resume pipeline from the last incomplete stage.
+        
+        Intelligently detects which stage needs work by comparing counts:
+        - If total == 0: Fetch papers (Step 1)
+        - If downloaded < total: Download PDFs (Step 2)
+        - If converted < downloaded: Convert to XML (Step 3)
+        - If extracted < converted: Render markdown (Step 4)
+        """
         print("\n" + "=" * 70)
         print("RESUMING IDRD PIPELINE")
         print("=" * 70)
@@ -391,47 +461,37 @@ class IDRDPipeline:
         print("=" * 70)
 
         try:
-            if total == 0:
-                if not query:
-                    print("\n  No papers in DB and no --query provided — cannot resume.")
-                    print("  Run:  python src/main.py --resume --query \"your query\"")
-                    return
-                print("\n  → Resuming from STEP 1 (no papers in DB)")
-                fetched = self.step_1_fetch_papers(
-                    query=query,
-                    limit=limit,
-                    open_access_only=open_access_only,
-                )
-                if fetched == 0:
-                    return
-                dl = self.step_2_download_pdfs()
-                if dl['stats']['successful'] == 0:
-                    return
-                cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
-                if cv['stats']['successful'] > 0:
-                    self.step_4_render_markdown()
+            # Query database to see what ACTUALLY needs to be done (not just count differences)
+            papers_needing_download = self.db.get_papers_needing_download(limit=1)
+            papers_needing_conversion = self.db.get_papers_needing_conversion(limit=1)
+            papers_needing_rendering = self.db.get_papers_needing_rendering(limit=1)
 
-            elif downloaded == 0:
-                print("\n  → Resuming from STEP 2 (no PDFs downloaded yet)")
-                dl = self.step_2_download_pdfs()
-                if dl['stats']['successful'] == 0:
-                    return
-                cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
-                if cv['stats']['successful'] > 0:
-                    self.step_4_render_markdown()
+            # Run ONLY the next step based on what's actually available in DB
+            if len(papers_needing_download) > 0:
+                all_needing_download = self.db.get_papers_needing_download()
+                count = len(all_needing_download)
+                print(f"\n  -> Next Step: DOWNLOAD PDFs ({count} papers need downloads)")
+                self.step_2_download_pdfs()
 
-            elif converted == 0:
-                print("\n  → Resuming from STEP 3 (PDFs not yet converted)")
-                cv = self.step_3_convert_to_xml(delete_pdf=delete_pdfs_after_conversion)
-                if cv['stats']['successful'] > 0:
-                    self.step_4_extract_markdown()
+            elif len(papers_needing_conversion) > 0:
+                all_needing_conversion = self.db.get_papers_needing_conversion()
+                count = len(all_needing_conversion)
+                print(f"\n  -> Next Step: CONVERT to XML ({count} PDFs need conversion)")
+                self.step_3_convert_to_xml()
 
-            elif extracted == 0:
-                print("\n  → Resuming from STEP 4 (markdown not yet rendered)")
+            elif len(papers_needing_rendering) > 0:
+                all_needing_rendering = self.db.get_papers_needing_rendering()
+                count = len(all_needing_rendering)
+                print(f"\n  -> Next Step: RENDER to Markdown ({count} XMLs need rendering)")
+                self.step_4_render_markdown()
+
+            elif extracted < converted:
+                # Some XMLs still need markdown rendering
+                print(f"\n  -> Resuming from STEP 4 ({converted - extracted} XMLs need rendering)")
                 self.step_4_render_markdown()
 
             else:
-                print("\n  ✓ Pipeline appears complete — nothing to resume.")
+                print("\n  [OK] Pipeline appears complete - nothing to resume.")
                 print("    Use --reset status to re-run specific stages.")
                 return
 
@@ -525,9 +585,9 @@ class IDRDPipeline:
         print("\n  Pipeline resources cleaned up.")
 
 
-# ──────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------
 # CLI
-# ──────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -536,7 +596,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 MODES
-─────
+-----
   Full pipeline:      python src/main.py --query "Transformers" --limit 50
   Fetch only:         python src/main.py --query "Transformers" --fetch-only
   Download only:      python src/main.py --download-only
@@ -555,7 +615,7 @@ MODES
     mode.add_argument("--extract-only",  action="store_true",
                       help="Run markdown rendering on existing XMLs in data/xml/")
     mode.add_argument("--resume",        action="store_true",
-                      help="Resume pipeline from the last incomplete stage")
+                      help="Check database state and run the next incomplete step (download/convert/render)")
     mode.add_argument("--status",        action="store_true")
     mode.add_argument("--reset", choices=["status", "full"], metavar="{status|full}")
 
@@ -599,12 +659,7 @@ def main():
             pipeline.reset_pipeline(args.reset)
 
         elif args.resume:
-            pipeline.resume_pipeline(
-                query=args.query,                          # optional — only needed if DB is empty
-                limit=args.limit,
-                open_access_only=not args.all_access,
-                delete_pdfs_after_conversion=args.delete_pdfs,
-            )
+            pipeline.resume_pipeline()
 
         elif args.fetch_only:
             if not args.query:

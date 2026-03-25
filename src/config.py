@@ -48,6 +48,24 @@ MARKDOWN_DIR = DATA_DIR / "markdown"
 LOGS_DIR = PROJECT_ROOT / "logs"
 RUNS_DIR = LOGS_DIR / "runs"
 
+# ── Pipeline Settings ──────────────────────────────────────────────────────────
+
+# PDF Downloader
+DOWNLOAD_TIMEOUT_SEC = 60          # HTTP request timeout for downloading PDFs
+DOWNLOAD_CHUNK_SIZE_BYTES = 8192   # Chunk size for streaming downloads
+DOWNLOAD_DELAY_SEC = 0.5           # Delay between downloads to avoid rate limiting
+DOWNLOAD_MAX_RETRIES = 3           # Maximum retry attempts for failed downloads
+
+# GROBID Converter  
+GROBID_STARTUP_TIMEOUT_SEC = 30    # Wait time for GROBID server to start
+GROBID_ALIVE_CHECK_TIMEOUT_SEC = 2 # Timeout for /api/isalive endpoint
+GROBID_CONVERSION_TIMEOUT_SEC = 300  # Timeout for PDF→XML conversion
+GROBID_STARTUP_RETRY_TIMEOUT_SEC = 5  # Timeout when checking if GROBID started
+CONVERSION_DELAY_SEC = 0.1         # Delay between conversions
+
+# Renderer
+RENDER_TIMEOUT_SEC = 30            # Timeout for markdown rendering operations
+
 # Create directories on import
 for _dir in (PDF_DIR, XML_DIR, MARKDOWN_DIR, RUNS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

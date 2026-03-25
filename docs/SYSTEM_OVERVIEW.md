@@ -2,7 +2,9 @@
 
 > **Document purpose:** A detailed technical reference for each package and module in the IDRD Pipeline. Intended for progress reporting, internal documentation, and onboarding.
 >
-> **Last updated:** 2026-03-12
+> **Last updated:** 2026-03-24
+>
+> **Recent changes:** Refactored all components to use results-based design (database-agnostic). See section on Architecture Changes below.
 
 ---
 

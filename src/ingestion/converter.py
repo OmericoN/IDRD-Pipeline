@@ -2,6 +2,7 @@ import docker
 from docker.errors import NotFound, APIError, ImageNotFound
 import requests
 import time
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
@@ -11,12 +12,27 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from db.db import IDRDDatabase
-from config import POSTGRES_DSN, PDF_DIR, XML_DIR
+from config import (
+    POSTGRES_DSN,
+    PDF_DIR,
+    XML_DIR,
+    GROBID_STARTUP_TIMEOUT_SEC,
+    GROBID_ALIVE_CHECK_TIMEOUT_SEC,
+    GROBID_CONVERSION_TIMEOUT_SEC,
+    GROBID_STARTUP_RETRY_TIMEOUT_SEC,
+    CONVERSION_DELAY_SEC,
+)
+from models.results import ConversionResult, PipelineStats
 from utils.db_utils import update_xml_status
 
 
 class GrobidConverter:
-    """Converts PDFs to TEI XML via GROBID and updates DB via db.py methods."""
+    """
+    Converts PDFs to TEI XML via GROBID with flexible storage options.
+    
+    Decoupled from database - returns ConversionResult objects that can be persisted
+    to database, DataFrame, JSON, or any other storage backend.
+    """
 
     def __init__(
         self,
@@ -24,8 +40,16 @@ class GrobidConverter:
         output_dir: str = None,
         grobid_port: int = 8070,
         container_name: str = "grobid-server",
-        db: "IDRDDatabase" = None,       # ← accept shared DB
+        db: "IDRDDatabase" = None,
     ):
+        """
+        Args:
+            pdf_dir: Directory containing PDF files
+            output_dir: Directory for XML output
+            grobid_port: Port for GROBID service
+            container_name: Docker container name
+            db: (Optional) Database instance for backward compatibility
+        """
         self.pdf_dir    = Path(pdf_dir)    if pdf_dir    else PDF_DIR
         self.output_dir = Path(output_dir) if output_dir else XML_DIR
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -42,11 +66,11 @@ class GrobidConverter:
         self.container = None
         self.stats = {'successful': 0, 'failed': 0, 'skipped': 0}
 
-        # Use shared DB from pipeline — only create own if used standalone
-        self._owns_db = db is None
-        self.db       = db if db is not None else IDRDDatabase()
+        # DB is now optional - only needed for legacy methods
+        self._owns_db = db is None  # Own DB if none was provided
+        self.db = db
 
-        print(f"✓ GROBID Converter initialized")
+        print(f"[OK] GROBID Converter initialized")
         print(f"  PDF directory   : {self.pdf_dir.absolute()}")
         print(f"  Output directory: {self.output_dir.absolute()}")
         print(f"  GROBID URL      : {self.grobid_url}")
@@ -59,11 +83,11 @@ class GrobidConverter:
         image_name = "lfoppiano/grobid:0.8.0"
         try:
             self.docker_client.images.get(image_name)
-            print(f"✓ GROBID image available: {image_name}")
+            print(f"[OK] GROBID image available: {image_name}")
         except ImageNotFound:
             print(f"Pulling GROBID image: {image_name}...")
             self.docker_client.images.pull(image_name)
-            print("✓ GROBID image pulled")
+            print("[OK] GROBID image pulled")
 
     def start_grobid(self, wait_time: int = 30):
         self._pull_grobid_image()
@@ -86,13 +110,13 @@ class GrobidConverter:
 
         if not self._wait_for_grobid(timeout=wait_time):
             raise RuntimeError("GROBID did not start within timeout period")
-        print("✓ GROBID is ready")
+        print("[OK] GROBID is ready")
 
-    def _wait_for_grobid(self, timeout: int = 30) -> bool:
+    def _wait_for_grobid(self, timeout: int = GROBID_STARTUP_TIMEOUT_SEC) -> bool:
         start = time.time()
         while time.time() - start < timeout:
             try:
-                r = requests.get(f"{self.grobid_url}/api/isalive", timeout=2)
+                r = requests.get(f"{self.grobid_url}/api/isalive", timeout=GROBID_ALIVE_CHECK_TIMEOUT_SEC)
                 if r.status_code == 200:
                     return True
             except requests.exceptions.RequestException:
@@ -100,16 +124,24 @@ class GrobidConverter:
             time.sleep(2)
         return False
 
+    def _is_grobid_available(self) -> bool:
+        """Check if GROBID service is accessible (quick check)."""
+        try:
+            r = requests.get(f"{self.grobid_url}/api/isalive", timeout=2)
+            return r.status_code == 200
+        except requests.exceptions.RequestException:
+            return False
+
     def stop_grobid(self):
         if self.container:
             try:
                 self.container.stop()
-                print("✓ GROBID container stopped")
+                print("[OK] GROBID container stopped")
             except Exception as e:
-                print(f"Warning: {e}")
+                print(f"[WARN] Could not stop GROBID: {e}")
 
     # ------------------------------------------------------------------
-    # Core conversion
+    # Core conversion (returns ConversionResult)
     # ------------------------------------------------------------------
 
     def convert_pdf(
@@ -118,10 +150,22 @@ class GrobidConverter:
         paper_id: str = None,
         overwrite: bool = False,
         delete_pdf: bool = False,
-    ) -> Tuple[bool, str]:
+    ) -> ConversionResult:
+        """
+        Convert a single PDF to TEI XML and return structured result.
+        
+        Returns:
+            ConversionResult with success status, XML path, error info, etc.
+        """
         if not pdf_path.exists():
             self.stats['failed'] += 1
-            return False, f"PDF not found: {pdf_path}"
+            return ConversionResult(
+                paper_id=paper_id or pdf_path.stem,
+                success=False,
+                message=f"PDF not found: {pdf_path}",
+                pdf_path=pdf_path,
+                error="PDF file not found"
+            )
 
         paper_id    = paper_id or pdf_path.stem
         output_path = self.output_dir / f"{paper_id}.tei.xml"
@@ -133,40 +177,158 @@ class GrobidConverter:
                     pdf_path.unlink()
                 except Exception:
                     pass
-            return True, f"Already converted: {paper_id}.tei.xml"
+            xml_size = output_path.stat().st_size
+            return ConversionResult(
+                paper_id=paper_id,
+                success=True,
+                message=f"Already converted: {paper_id}.tei.xml",
+                xml_path=output_path,
+                pdf_path=pdf_path,
+                xml_size_bytes=xml_size
+            )
 
         try:
             with open(pdf_path, 'rb') as f:
                 response = requests.post(
                     f"{self.grobid_url}/api/processFulltextDocument",
                     files={'input': f},
-                    timeout=300,
+                    timeout=GROBID_CONVERSION_TIMEOUT_SEC,
                 )
 
             if response.status_code == 200:
                 output_path.write_text(response.text, encoding='utf-8')
                 self.stats['successful'] += 1
-                size_kb = output_path.stat().st_size / 1024
+                xml_size = output_path.stat().st_size
+                
                 if delete_pdf:
                     try:
                         pdf_path.unlink()
                     except Exception:
                         pass
-                return True, f"Converted: {paper_id}.tei.xml ({size_kb:.1f} KB)"
+                
+                size_kb = xml_size / 1024
+                return ConversionResult(
+                    paper_id=paper_id,
+                    success=True,
+                    message=f"Converted: {paper_id}.tei.xml ({size_kb:.1f} KB)",
+                    xml_path=output_path,
+                    pdf_path=pdf_path,
+                    xml_size_bytes=xml_size
+                )
 
             elif response.status_code == 503:
                 self.stats['failed'] += 1
-                return False, "GROBID service unavailable (503)"
+                return ConversionResult(
+                    paper_id=paper_id,
+                    success=False,
+                    message="GROBID service unavailable (503)",
+                    pdf_path=pdf_path,
+                    error="GROBID service unavailable"
+                )
             else:
                 self.stats['failed'] += 1
-                return False, f"GROBID error: {response.status_code}"
+                return ConversionResult(
+                    paper_id=paper_id,
+                    success=False,
+                    message=f"GROBID error: {response.status_code}",
+                    pdf_path=pdf_path,
+                    error=f"GROBID HTTP {response.status_code}"
+                )
 
         except requests.exceptions.Timeout:
             self.stats['failed'] += 1
-            return False, "Conversion timeout (>5 min)"
+            return ConversionResult(
+                paper_id=paper_id,
+                success=False,
+                message="Conversion timeout (>5 min)",
+                pdf_path=pdf_path,
+                error="Request timeout"
+            )
         except Exception as e:
             self.stats['failed'] += 1
-            return False, f"Error: {str(e)}"
+            return ConversionResult(
+                paper_id=paper_id,
+                success=False,
+                message=f"Error: {str(e)}",
+                pdf_path=pdf_path,
+                error=str(e)
+            )
+
+    # ------------------------------------------------------------------
+    # NEW API: Results-based batch conversion (database-agnostic)
+    # ------------------------------------------------------------------
+
+    def convert_papers(
+        self,
+        papers: List[Dict],
+        paper_id_key: str = 'paperId',
+        pdf_path_key: str = 'pdf_path',
+        overwrite: bool = False,
+        delete_pdf: bool = False,
+        delay: float = CONVERSION_DELAY_SEC,
+    ) -> List[ConversionResult]:
+        """
+        Convert PDFs to TEI XML from a list of paper dictionaries (database-agnostic).
+        
+        This method works with any data source - DataFrame, JSON, database query result, etc.
+        Results can be persisted to database, DataFrame, or any storage backend.
+        
+        Args:
+            papers: List of dictionaries containing paper metadata with PDF paths
+            paper_id_key: Key for paper ID in dictionary (default: 'paperId')
+            pdf_path_key: Key for PDF file path (default: 'pdf_path')
+            overwrite: Whether to re-convert existing XMLs (default: False)
+            delete_pdf: Whether to delete PDF after successful conversion (default: False)
+            delay: Seconds to wait between conversions (default: 0.1)
+            
+        Returns:
+            List of ConversionResult objects with success/failure info
+            
+        Example:
+            >>> converter = GrobidConverter()
+            >>> converter.start_grobid()
+            >>> papers = [{'paperId': '123', 'pdf_path': '/path/to/file.pdf'}]
+            >>> results = converter.convert_papers(papers)
+            >>> successful = [r for r in results if r.success]
+        """
+        if not papers:
+            print("No papers to convert")
+            return []
+
+        print(f"\nConverting {len(papers)} PDFs...")
+        results = []
+
+        with tqdm(total=len(papers), desc="Converting PDFs", unit="file") as pbar:
+            for paper in papers:
+                paper_id = paper.get(paper_id_key)
+                pdf_path_str = paper.get(pdf_path_key)
+
+                if not paper_id or not pdf_path_str:
+                    result = ConversionResult(
+                        paper_id=paper_id or 'unknown',
+                        success=False,
+                        message="Missing paper ID or PDF path",
+                        error="Missing required fields"
+                    )
+                    results.append(result)
+                    self.stats['failed'] += 1
+                    pbar.update(1)
+                    continue
+
+                pdf_path = Path(pdf_path_str)
+                result = self.convert_pdf(pdf_path, paper_id, overwrite, delete_pdf)
+                results.append(result)
+                pbar.set_postfix_str(result.message[:50])
+                pbar.update(1)
+                
+                if delay > 0:
+                    time.sleep(delay)
+
+        return results
+
+    # ------------------------------------------------------------------
+    # LEGACY API: Database-coupled methods (deprecated)
+    # ------------------------------------------------------------------
 
     def convert_from_database(
         self,
@@ -175,7 +337,22 @@ class GrobidConverter:
         delete_pdf: bool = False,
         delay: float = 0.1,
     ) -> Dict:
-        # Use db.py method — no raw SQL here
+        """
+        DEPRECATED: Use convert_papers() + persist_conversion_results() instead.
+        
+        Legacy method that couples conversion with database updates.
+        Kept for backward compatibility with existing pipeline code.
+        """
+        warnings.warn(
+            "convert_from_database() is deprecated. Use convert_papers() with "
+            "persist_conversion_results() for better separation of concerns.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
+        if self.db is None:
+            raise ValueError("Database not provided to constructor - cannot use convert_from_database()")
+        
         papers = self.db.get_papers_needing_conversion(limit=limit)
 
         if not papers:
@@ -197,14 +374,19 @@ class GrobidConverter:
                     pbar.update(1)
                     continue
 
-                success, message = self.convert_pdf(pdf_path, paper_id, overwrite, delete_pdf)
+                result = self.convert_pdf(pdf_path, paper_id, overwrite, delete_pdf)
 
-                # Use centralised db_utils helper — no raw SQL
-                xml_path = str(self.output_dir / f"{paper_id}.tei.xml") if success else None
-                update_xml_status(self.db, paper_id, success, xml_path=xml_path, error=message)
+                # Update database (legacy behavior)
+                xml_path = str(result.xml_path) if result.xml_path else None
+                update_xml_status(self.db, paper_id, result.success, 
+                                xml_path=xml_path, error=result.error)
 
-                results.append({'paper_id': paper_id, 'success': success, 'message': message})
-                pbar.set_postfix_str(message[:50])
+                results.append({
+                    'paper_id': paper_id,
+                    'success': result.success,
+                    'message': result.message
+                })
+                pbar.set_postfix_str(result.message[:50])
                 pbar.update(1)
                 if delay > 0:
                     time.sleep(delay)
@@ -230,8 +412,8 @@ class GrobidConverter:
         print(f"{'='*60}")
 
     def close_db(self):
-        """Only close DB if this instance owns it."""
-        if self._owns_db:
+        """Close database connection if we own it."""
+        if self._owns_db and self.db is not None:
             self.db.close()
 
     def __enter__(self):

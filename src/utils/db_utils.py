@@ -1,12 +1,15 @@
 """
 Shared database helper utilities.
 Centralises repeated query patterns used across downloader, converter, and main.
+
+Includes new persistence functions for results-based API.
 """
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from db.db import IDRDDatabase
+    from models.results import DownloadResult, ConversionResult, RenderResult
 
 
 def print_download_status(db: "IDRDDatabase", output_dir: Path):
@@ -137,3 +140,88 @@ def update_xml_status(db: "IDRDDatabase", paper_id: str, success: bool,
             WHERE "paperId" = %s
         ''', (error, paper_id))
     db.commit()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NEW API: Batch persistence functions for results-based components
+# ──────────────────────────────────────────────────────────────────────────────
+
+def persist_download_results(db: "IDRDDatabase", results: List["DownloadResult"]) -> int:
+    """
+    Persist download results to database in batch.
+    
+    Args:
+        db: Database instance
+        results: List of DownloadResult objects
+        
+    Returns:
+        Number of records updated
+    """
+    updated = 0
+    for result in results:
+        pdf_path = str(result.filepath) if result.filepath else None
+        update_pdf_status(db, result.paper_id, result.success, 
+                         pdf_path=pdf_path, error=result.error)
+        updated += 1
+    return updated
+
+
+def persist_conversion_results(db: "IDRDDatabase", results: List["ConversionResult"]) -> int:
+    """
+    Persist conversion results to database in batch.
+    
+    Args:
+        db: Database instance
+        results: List of ConversionResult objects
+        
+    Returns:
+        Number of records updated
+    """
+    updated = 0
+    for result in results:
+        xml_path = str(result.xml_path) if result.xml_path else None
+        update_xml_status(db, result.paper_id, result.success,
+                         xml_path=xml_path, error=result.error)
+        updated += 1
+    return updated
+
+
+def persist_render_results(db: "IDRDDatabase", results: List["RenderResult"]) -> int:
+    """
+    Persist render results to database in batch.
+    
+    This updates markdown_extracted flag and markdown_path in the database.
+    
+    Args:
+        db: Database instance
+        results: List of RenderResult objects
+        
+    Returns:
+        Number of records updated
+    """
+    updated = 0
+    for result in results:
+        md_path = str(result.md_path) if result.md_path else None
+        
+        if result.success:
+            db.cursor.execute('''
+                UPDATE publications SET
+                    markdown_extracted    = TRUE,
+                    markdown_extract_date = CURRENT_TIMESTAMP,
+                    markdown_path         = %s,
+                    markdown_error        = NULL,
+                    updated_at            = CURRENT_TIMESTAMP
+                WHERE "paperId" = %s
+            ''', (md_path, result.paper_id))
+        else:
+            db.cursor.execute('''
+                UPDATE publications SET
+                    markdown_extracted = FALSE,
+                    markdown_error     = %s,
+                    updated_at         = CURRENT_TIMESTAMP
+                WHERE "paperId" = %s
+            ''', (result.error, result.paper_id))
+        updated += 1
+    
+    db.commit()
+    return updated

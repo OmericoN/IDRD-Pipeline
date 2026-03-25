@@ -4,6 +4,8 @@ A multi-stage pipeline for fetching academic publications, downloading their PDF
 converting them to structured XML, extracting Markdown sections, and (in future phases)
 extracting features for a RAG system.
 
+**NEW**: All components now support **database-agnostic operation** - use with DataFrames, JSON, or any data source! See [DataFrame Examples](#dataframe-usage-no-database).
+
 ---
 
 ## Requirements
@@ -255,6 +257,84 @@ data/gt_experiment/
 | 4 | Render Markdown | `src/ingestion/renderer.py` | ✅ Done |
 | 5 | LLM feature extraction | `src/extraction/` | 🔲 Phase 3 |
 | 6 | RAG / Vector search | `src/rag/` | 🔲 Phase 4 |
+
+---
+
+## DataFrame Usage (No Database)
+
+**NEW**: All pipeline components can now be used without a database! Perfect for experiments, prototyping, and integration with existing pandas workflows.
+
+### Quick Example
+
+```python
+import pandas as pd
+from ingestion.downloader import PDFDownloader
+from ingestion.converter import GrobidConverter
+from ingestion.renderer import render_papers
+
+# Download PDFs from a DataFrame
+papers_df = pd.DataFrame([
+    {'paperId': '123', 'url': 'https://example.com/paper.pdf'}
+])
+
+downloader = PDFDownloader(output_dir="./downloads")
+results = downloader.download_papers(papers_df.to_dict('records'))
+
+# Results are returned as structured objects
+for r in results:
+    print(f"{r.paper_id}: {r.success} - {r.message}")
+
+# Convert results to DataFrame for analysis
+results_df = pd.DataFrame([
+    {'id': r.paper_id, 'success': r.success, 'size_mb': r.file_size_mb}
+    for r in results
+])
+
+# Save to CSV instead of database
+results_df.to_csv("results.csv")
+```
+
+### Full Examples
+
+See `examples/dataframe_pipeline.py` for complete examples including:
+- Download PDFs with DataFrame
+- Convert PDFs to XML with DataFrame
+- Render Markdown with DataFrame
+- Full pipeline using only DataFrames and CSV files (no database!)
+
+### Benefits
+
+✅ **No database setup** - Perfect for quick experiments  
+✅ **Pandas integration** - Works seamlessly with existing data workflows  
+✅ **Easy testing** - Unit tests don't need database mocking  
+✅ **Flexible storage** - Save to CSV, JSON, Parquet, or any format  
+✅ **Reusable components** - Same code works with DB, DataFrame, or API
+
+---
+
+## Architecture: Results-Based Design
+
+All components now follow a **results-based** architecture:
+
+1. **Components** accept simple data (List[Dict]) - no database required
+2. **Business logic** performs the operation (download, convert, render)
+3. **Results** are returned as structured dataclasses (DownloadResult, ConversionResult, RenderResult)
+4. **You decide** how to persist: database, DataFrame, JSON, or skip persistence entirely
+
+```python
+# Old (tightly coupled to database)
+downloader = PDFDownloader(db=database)
+downloader.download_from_database()  # ← Automatically updates DB
+
+# New (database-agnostic)
+downloader = PDFDownloader()  # No DB required!
+results = downloader.download_papers(papers)  # ← Returns results
+
+# You choose how to persist
+persist_download_results(db, results)  # ← To database
+results_df = pd.DataFrame([...])       # ← To DataFrame
+json.dump(results, file)               # ← To JSON
+```
 
 ---
 
