@@ -66,6 +66,12 @@ uv run src/main.py --query "implicit dataset references" --limit 50 --mode concu
 
 `--mode` applies to full pipeline runs only. `--resume` and single-step modes remain sequential.
 
+Live runtime monitor controls (full pipeline runs):
+```bash
+uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent --monitor live
+uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent --monitor off
+```
+
 ---
 
 ### Resume Pipeline
@@ -210,6 +216,8 @@ uv run src/main.py --reset full
 | `--query TEXT` | Semantic Scholar search query | required for fetch |
 | `--limit N` | Max papers to fetch | 100 |
 | `--mode {sequential\|concurrent}` | Full pipeline execution strategy (full run only) | sequential |
+| `--monitor {auto\|live\|off}` | Runtime monitor mode for full pipeline runs | auto |
+| `--monitor-refresh N` | Live monitor refresh interval in seconds | 0.3 |
 | `--fetch-only` | Only fetch papers (Step 1) | off |
 | `--download-only` | Only download PDFs (Step 2) | off |
 | `--convert-only` | Only convert PDFs to XML (Step 3) | off |
@@ -230,6 +238,8 @@ uv run src/main.py --reset full
 | `--ex-overwrite` | Re-extract existing `.md` files | off |
 | `--status` | Show pipeline status and exit | — |
 | `--reset {status\|full}` | Reset pipeline tracking or full DB | — |
+
+Runtime monitor events are saved to `logs/runs/<timestamp>/metadata/runtime_events.jsonl`.
 
 ---
 
