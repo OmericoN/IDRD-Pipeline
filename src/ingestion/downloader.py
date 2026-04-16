@@ -1,6 +1,7 @@
 import requests
 import time
 import warnings
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
@@ -22,6 +23,8 @@ from utils.db_utils import (
     sync_existing_pdfs,
     update_pdf_status,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PDFDownloader:
@@ -55,8 +58,8 @@ class PDFDownloader:
             )
         }
         self.stats = {'successful': 0, 'failed': 0, 'skipped': 0, 'total_size': 0}
-        print(f"[OK] PDF Downloader initialized")
-        print(f"  Output directory: {self.output_dir.absolute()}")
+        logger.info("PDF Downloader initialized")
+        logger.info("Output directory: %s", self.output_dir.absolute())
 
     # ------------------------------------------------------------------
     # Helpers
@@ -259,7 +262,7 @@ class PDFDownloader:
             >>> results = downloader.download_papers(papers)
             >>> successful = [r for r in results if r.success]
         """
-        print(f"\nDownloading {len(papers)} papers...")
+        logger.info("Downloading %s papers...", len(papers))
         results = []
 
         with tqdm(total=len(papers), desc="Downloading PDFs", unit="paper") as pbar:
@@ -367,10 +370,10 @@ class PDFDownloader:
         papers_to_download = self.db.get_papers_needing_download(limit=limit)
 
         if not papers_to_download:
-            print("No papers need PDF download")
+            logger.info("No papers need PDF download")
             return {'results': [], 'stats': self.stats}
 
-        print(f"\nDownloading {len(papers_to_download)} PDFs from database...")
+        logger.info("Downloading %s PDFs from database...", len(papers_to_download))
         results = []
 
         with tqdm(total=len(papers_to_download), desc="Downloading PDFs", unit="paper") as pbar:
@@ -413,14 +416,14 @@ class PDFDownloader:
 
     def print_statistics(self):
         stats = self.get_statistics()
-        print(f"\n{'='*60}\nDOWNLOAD STATISTICS\n{'='*60}")
-        print(f"Successful:   {stats['successful']}")
-        print(f"Failed:       {stats['failed']}")
-        print(f"Skipped:      {stats['skipped']}")
-        print(f"Success rate: {stats['success_rate']:.1f}%")
-        print(f"Total size:   {stats['total_size_mb']:.2f} MB")
-        print(f"Average size: {stats['avg_size_mb']:.2f} MB")
-        print(f"{'='*60}")
+        logger.info("%s\nDOWNLOAD STATISTICS\n%s", "=" * 60, "=" * 60)
+        logger.info("Successful:   %s", stats['successful'])
+        logger.info("Failed:       %s", stats['failed'])
+        logger.info("Skipped:      %s", stats['skipped'])
+        logger.info("Success rate: %.1f%%", stats['success_rate'])
+        logger.info("Total size:   %.2f MB", stats['total_size_mb'])
+        logger.info("Average size: %.2f MB", stats['avg_size_mb'])
+        logger.info("%s", "=" * 60)
 
     def close(self):
         """Close database connection if we own it."""

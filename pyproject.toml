@@ -17,5 +17,17 @@ dependencies = [
     "openai>=2.29.0",
     "pandas>=3.0.1",
     "psycopg2-binary>=2.9.11",
+    "pytest>=9.0.3",
     "requests>=2.32.5",
+]
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+useLibraryCodeForTypes = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
 ]

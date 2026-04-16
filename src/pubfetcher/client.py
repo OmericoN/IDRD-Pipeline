@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import logging
 import requests
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -11,6 +12,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
 from utils.dict_parser import PaperDictParser
+
+logger = logging.getLogger(__name__)
 
 
 class SemanticScholarClient:
@@ -26,9 +29,9 @@ class SemanticScholarClient:
 
         if self.api_key:
             self.headers["x-api-key"] = self.api_key
-            print("  API key loaded ✓")
+            logger.info("API key loaded")
         else:
-            print("  ⚠ No API key — using anonymous access (stricter rate limits)")
+            logger.warning("No API key — using anonymous access (stricter rate limits)")
 
     # ------------------------------------------------------------------
     # Public
@@ -57,11 +60,11 @@ class SemanticScholarClient:
         Returns:
             List of paper dicts.
         """
-        print(f"Fetching from Semantic Scholar (limit={limit}) papers about '{query}'...")
+        logger.info("Fetching from Semantic Scholar (limit=%s) papers about '%s'...", limit, query)
         if fields_of_study:
-            print(f"  Fields of study : {fields_of_study}")
+            logger.info("Fields of study: %s", fields_of_study)
         if open_access_pdf:
-            print(f"  Filter          : Open Access PDFs only")
+            logger.info("Filter: Open Access PDFs only")
 
         default_fields = fields or [
             "paperId", "title", "abstract", "year",
@@ -115,7 +118,7 @@ class SemanticScholarClient:
                 if batch_idx < total_batches - 1:
                     time.sleep(self._REQUEST_DELAY)
 
-        print(f"Fetched {len(all_papers)} papers.")
+        logger.info("Fetched %s papers.", len(all_papers))
         return all_papers
 
     # ------------------------------------------------------------------
@@ -170,7 +173,12 @@ class SemanticScholarClient:
                 if response.status_code == 429:
                     wait = backoff * (2 ** attempt)
                     if attempt < max_retries - 1:
-                        print(f"\n  Rate limited — waiting {wait}s (attempt {attempt + 1}/{max_retries})...")
+                        logger.warning(
+                            "Rate limited — waiting %ss (attempt %s/%s)...",
+                            wait,
+                            attempt + 1,
+                            max_retries,
+                        )
                         time.sleep(wait)
                         continue
                     return [], 0, "Rate limited — max retries reached"
@@ -179,7 +187,13 @@ class SemanticScholarClient:
                 if response.status_code >= 500:
                     wait = backoff * (2 ** attempt)
                     if attempt < max_retries - 1:
-                        print(f"\n  Server error {response.status_code} — waiting {wait}s (attempt {attempt + 1}/{max_retries})...")
+                        logger.warning(
+                            "Server error %s — waiting %ss (attempt %s/%s)...",
+                            response.status_code,
+                            wait,
+                            attempt + 1,
+                            max_retries,
+                        )
                         time.sleep(wait)
                         continue
                     return [], 0, f"Server error {response.status_code} after {max_retries} attempts"
@@ -195,7 +209,12 @@ class SemanticScholarClient:
             except requests.exceptions.Timeout:
                 wait = backoff * (2 ** attempt)
                 if attempt < max_retries - 1:
-                    print(f"\n  Timeout — waiting {wait}s (attempt {attempt + 1}/{max_retries})...")
+                    logger.warning(
+                        "Timeout — waiting %ss (attempt %s/%s)...",
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
                     time.sleep(wait)
                     continue
                 return [], 0, f"Timeout after {max_retries} attempts"
@@ -203,7 +222,13 @@ class SemanticScholarClient:
             except requests.exceptions.RequestException as e:
                 wait = backoff * (2 ** attempt)
                 if attempt < max_retries - 1:
-                    print(f"\n  Network error: {e} — waiting {wait}s (attempt {attempt + 1}/{max_retries})...")
+                    logger.warning(
+                        "Network error: %s — waiting %ss (attempt %s/%s)...",
+                        e,
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
                     time.sleep(wait)
                     continue
                 return [], 0, f"Network error: {e}"
@@ -230,5 +255,5 @@ if __name__ == "__main__":
 
     db    = IDRDDatabase()
     count = db.insert_publications(papers)
-    print(f"✓ Saved {count} papers to database")
+    logger.info("Saved %s papers to database", count)
     db.close()

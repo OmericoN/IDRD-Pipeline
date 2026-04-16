@@ -1,6 +1,7 @@
 import re
 import time
 import textwrap
+import logging
 from pathlib import Path
 from typing import List, Optional
 import instructor
@@ -18,6 +19,7 @@ except ImportError:
 
 # --- CONFIGURATION ---
 MARKDOWN_DIR = config.MARKDOWN_DIR
+logger = logging.getLogger(__name__)
 
 # --- 1. THE SCHEMA ---
 class DatasetMention(BaseModel):
@@ -170,10 +172,10 @@ def extract_datasets_from_text(text: str, client: instructor.Instructor, model_n
     chunks = chunk_text(text)
     all_datasets = []
     
-    print(f"   ℹ️ Split text into {len(chunks)} chunks.")
+    logger.info("Split text into %s chunks.", len(chunks))
 
     for i, chunk in enumerate(chunks):
-        print(f"   🚀 Analyzing chunk {i+1}/{len(chunks)}...")
+        logger.info("Analyzing chunk %s/%s...", i + 1, len(chunks))
         try:
             resp = client.chat.completions.create(
                 model=model_name,
@@ -192,13 +194,13 @@ def extract_datasets_from_text(text: str, client: instructor.Instructor, model_n
             ]
             
             if valid_results:
-                print(f"      ✅ Found {len(valid_results)} candidates in this chunk.")
+                logger.info("Found %s candidates in chunk %s.", len(valid_results), i + 1)
                 all_datasets.extend(valid_results)
             else:
-                print("      Running...")
+                logger.info("No candidates found in chunk %s.", i + 1)
                 
         except Exception as e:
-            print(f"      ⚠️ Error processing chunk {i+1}: {e}")
+            logger.exception("Error processing chunk %s/%s", i + 1, len(chunks))
 
     return all_datasets
 
@@ -207,10 +209,10 @@ def run_extraction_pipeline(file_path: Path):
     Orchestrates the extraction for a single file.
     """
     if not file_path.exists():
-        print(f"❌ File not found: {file_path}")
+        logger.error("File not found: %s", file_path)
         return
 
-    print(f"\n📄 Processing: {file_path.name}")
+    logger.info("Processing: %s", file_path.name)
     text = file_path.read_text(encoding="utf-8")
     
     client = get_client()
@@ -226,15 +228,15 @@ def run_extraction_pipeline(file_path: Path):
     datasets = extract_datasets_from_text(text, client, model_name=model)
     duration = time.time() - start_time
     
-    print(f"\n🎉 Extraction Complete! Found {len(datasets)} potential datasets in {duration:.2f}s.")
+    logger.info("Extraction complete: found %s potential datasets in %.2fs.", len(datasets), duration)
     
     # Display results
     for idx, d in enumerate(datasets):
-        print(f"\n--- DATASET {idx + 1}: {d.dataset_name} ---")
+        logger.info("--- DATASET %s: %s ---", idx + 1, d.dataset_name)
         # Print non-none fields for cleaner output
         for k, v in d.model_dump().items():
             if v and v.lower() != "none":
-                print(f"  {k}: {v}")
+                logger.info("  %s: %s", k, v)
 
 if __name__ == "__main__":
     # Simple CLI for testing
@@ -249,14 +251,14 @@ if __name__ == "__main__":
         run_extraction_pipeline(Path(args.file))
     elif args.all:
         files = list(MARKDOWN_DIR.glob("*.md"))
-        print(f"Found {len(files)} markdown files.")
+        logger.info("Found %s markdown files.", len(files))
         for f in files:
             run_extraction_pipeline(f)
     else:
         # Default behavior: run on the first file found (similar to original script)
         files = list(MARKDOWN_DIR.glob("*.md"))
         if files:
-            print("No arguments provided. Running on the first available file as a test.")
+            logger.info("No arguments provided. Running on the first available file as a test.")
             run_extraction_pipeline(files[0])
         else:
-            print(f"No markdown files found in {MARKDOWN_DIR}")
+            logger.warning("No markdown files found in %s", MARKDOWN_DIR)

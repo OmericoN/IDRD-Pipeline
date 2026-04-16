@@ -3,6 +3,7 @@ from docker.errors import NotFound, APIError, ImageNotFound
 import requests
 import time
 import warnings
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
@@ -24,6 +25,8 @@ from config import (
 )
 from models.results import ConversionResult, PipelineStats
 from utils.db_utils import update_xml_status
+
+logger = logging.getLogger(__name__)
 
 
 class GrobidConverter:
@@ -70,10 +73,10 @@ class GrobidConverter:
         self._owns_db = db is None  # Own DB if none was provided
         self.db = db
 
-        print(f"[OK] GROBID Converter initialized")
-        print(f"  PDF directory   : {self.pdf_dir.absolute()}")
-        print(f"  Output directory: {self.output_dir.absolute()}")
-        print(f"  GROBID URL      : {self.grobid_url}")
+        logger.info("GROBID Converter initialized")
+        logger.info("PDF directory: %s", self.pdf_dir.absolute())
+        logger.info("Output directory: %s", self.output_dir.absolute())
+        logger.info("GROBID URL: %s", self.grobid_url)
 
     # ------------------------------------------------------------------
     # Docker helpers  (unchanged logic)
@@ -83,11 +86,11 @@ class GrobidConverter:
         image_name = "lfoppiano/grobid:0.8.0"
         try:
             self.docker_client.images.get(image_name)
-            print(f"[OK] GROBID image available: {image_name}")
+            logger.info("GROBID image available: %s", image_name)
         except ImageNotFound:
-            print(f"Pulling GROBID image: {image_name}...")
+            logger.info("Pulling GROBID image: %s...", image_name)
             self.docker_client.images.pull(image_name)
-            print("[OK] GROBID image pulled")
+            logger.info("GROBID image pulled")
 
     def start_grobid(self, wait_time: int = 30):
         self._pull_grobid_image()
@@ -110,7 +113,7 @@ class GrobidConverter:
 
         if not self._wait_for_grobid(timeout=wait_time):
             raise RuntimeError("GROBID did not start within timeout period")
-        print("[OK] GROBID is ready")
+        logger.info("GROBID is ready")
 
     def _wait_for_grobid(self, timeout: int = GROBID_STARTUP_TIMEOUT_SEC) -> bool:
         start = time.time()
@@ -136,9 +139,9 @@ class GrobidConverter:
         if self.container:
             try:
                 self.container.stop()
-                print("[OK] GROBID container stopped")
+                logger.info("GROBID container stopped")
             except Exception as e:
-                print(f"[WARN] Could not stop GROBID: {e}")
+                logger.warning("Could not stop GROBID: %s", e)
 
     # ------------------------------------------------------------------
     # Core conversion (returns ConversionResult)
@@ -292,10 +295,10 @@ class GrobidConverter:
             >>> successful = [r for r in results if r.success]
         """
         if not papers:
-            print("No papers to convert")
+            logger.info("No papers to convert")
             return []
 
-        print(f"\nConverting {len(papers)} PDFs...")
+        logger.info("Converting %s PDFs...", len(papers))
         results = []
 
         with tqdm(total=len(papers), desc="Converting PDFs", unit="file") as pbar:
@@ -356,10 +359,10 @@ class GrobidConverter:
         papers = self.db.get_papers_needing_conversion(limit=limit)
 
         if not papers:
-            print("No PDFs need conversion")
+            logger.info("No PDFs need conversion")
             return {'results': [], 'stats': self.stats}
 
-        print(f"\nConverting {len(papers)} PDFs...")
+        logger.info("Converting %s PDFs...", len(papers))
         results = []
 
         with tqdm(total=len(papers), desc="Converting PDFs", unit="file") as pbar:
@@ -404,12 +407,12 @@ class GrobidConverter:
 
     def print_statistics(self):
         stats = self.get_statistics()
-        print(f"\n{'='*60}\nCONVERSION STATISTICS\n{'='*60}")
-        print(f"Successful:   {stats['successful']}")
-        print(f"Failed:       {stats['failed']}")
-        print(f"Skipped:      {stats['skipped']}")
-        print(f"Success rate: {stats['success_rate']:.1f}%")
-        print(f"{'='*60}")
+        logger.info("%s\nCONVERSION STATISTICS\n%s", "=" * 60, "=" * 60)
+        logger.info("Successful:   %s", stats['successful'])
+        logger.info("Failed:       %s", stats['failed'])
+        logger.info("Skipped:      %s", stats['skipped'])
+        logger.info("Success rate: %.1f%%", stats['success_rate'])
+        logger.info("%s", "=" * 60)
 
     def close_db(self):
         """Close database connection if we own it."""

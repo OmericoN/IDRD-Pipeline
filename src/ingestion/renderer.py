@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import sys
+import logging
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
 from lxml import etree
@@ -29,6 +30,7 @@ except ImportError:
 # TEI namespace
 TEI = "http://www.tei-c.org/ns/1.0"
 NS  = {"t": TEI}
+logger = logging.getLogger(__name__)
 
 # ── Sections to exclude (case-insensitive, partial match) ─────────────────────
 EXCLUDED_SECTION_PATTERNS = [
@@ -425,7 +427,7 @@ def extract_markdown_to_file(xml_path: str | Path, output_path: str | Path = Non
 
     md = extract_markdown(xml_path)
     output_path.write_text(md, encoding="utf-8")
-    print(f"✓ Extracted markdown → {output_path}")
+    logger.info("Extracted markdown -> %s", output_path)
     return output_path
 
 
@@ -538,7 +540,7 @@ def render_papers(
         raise ImportError("RenderResult not available - install models package")
     
     if not papers:
-        print("No papers to render")
+        logger.info("No papers to render")
         return []
     
     if output_dir is None:
@@ -546,7 +548,7 @@ def render_papers(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"\nRendering {len(papers)} XML files to Markdown...")
+    logger.info("Rendering %s XML files to Markdown...", len(papers))
     results = []
     
     for paper in papers:
@@ -574,7 +576,7 @@ def render_papers(
     # Summary
     successful = sum(1 for r in results if r.success)
     failed = sum(1 for r in results if not r.success)
-    print(f"\n✓ Rendering complete: {successful} successful, {failed} failed")
+    logger.info("Rendering complete: %s successful, %s failed", successful, failed)
     
     return results
 
@@ -588,12 +590,12 @@ if __name__ == "__main__":
         xml = Path(__file__).parent.parent.parent / "data" / "xml"
         files = list(xml.glob("*.tei.xml"))
         if not files:
-            print("No .tei.xml files found in data/xml/")
+            logger.error("No .tei.xml files found in data/xml/")
             sys.exit(1)
         target = files[0]
     else:
         target = Path(sys.argv[1])
 
     out = extract_markdown_to_file(target)
-    print(f"\nPreview (first 2000 chars):\n{'='*60}")
-    print(out.read_text(encoding="utf-8")[:2000])
+    logger.info("Preview (first 2000 chars):\n%s", "=" * 60)
+    logger.info("%s", out.read_text(encoding="utf-8")[:2000])

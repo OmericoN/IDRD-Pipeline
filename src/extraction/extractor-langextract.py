@@ -1,6 +1,7 @@
 import time
 import textwrap
 import re
+import logging
 from pathlib import Path
 import langextract as lx
 from langextract.providers.openai import OpenAILanguageModel
@@ -9,6 +10,7 @@ from config import LLM_API_KEY, MARKDOWN_DIR
 # --- CONFIGURATION ---
 # Resolve markdown dir relative to project root
 MARKDOWN_DIR = Path(__file__).parent.parent.parent / "data" / "markdown" 
+logger = logging.getLogger(__name__)
 
 # Run local qwen model via ollama
 local_model = OpenAILanguageModel(
@@ -152,18 +154,21 @@ examples = [
 def run_test():
     md_files = list(Path(MARKDOWN_DIR).glob("*.md"))
     if not md_files:
-        print(f"No markdown files found in {MARKDOWN_DIR}")
+        logger.warning("No markdown files found in %s", MARKDOWN_DIR)
         return
 
     test_file = md_files[0]
-    print(f"Testing on: {test_file.name} - An Assessment of Concurrency in Evapotranspiration Trends across Multiple Global Datasets")
+    logger.info(
+        "Testing on: %s - An Assessment of Concurrency in Evapotranspiration Trends across Multiple Global Datasets",
+        test_file.name,
+    )
 
     # Read the file
     document = test_file.read_text(encoding="utf-8")
     original_len = len(document)
 
     try:
-        print("Sending text to Qwen... (Check the Ollama terminal for action!)")
+        logger.info("Sending text to Qwen... (Check the Ollama terminal for action!)")
         start_time = time.time() # Start the stopwatch!
 
         # Run the extraction 
@@ -177,15 +182,15 @@ def run_test():
         
         elapsed_time = time.time() - start_time 
 
-        print(f"\n✅ Extraction Complete! Took {elapsed_time:.1f} seconds.")
-        print("\n--- Parsed Results ---")
+        logger.info("Extraction complete. Took %.1f seconds.", elapsed_time)
+        logger.info("--- Parsed Results ---")
         for ext in result.extractions:
-            print(f"Type: {ext.extraction_class.upper()}")
-            print(f"Text: {ext.extraction_text}")
-            print(f"Attributes: {ext.attributes}\n")
+            logger.info("Type: %s", ext.extraction_class.upper())
+            logger.info("Text: %s", ext.extraction_text)
+            logger.info("Attributes: %s", ext.attributes)
 
     except Exception as e:
-        print(f"\n❌ Extraction failed: {e}")
+        logger.exception("Extraction failed")
 
 if __name__ == "__main__":
     run_test()

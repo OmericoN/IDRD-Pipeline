@@ -1,8 +1,11 @@
 import json
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+import logging
 import pandas as pd
 import os
+
+logger = logging.getLogger(__name__)
 
 
 class PaperDictParser:
@@ -193,7 +196,7 @@ class PaperDictParser:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.parsed_papers, f, indent=indent, ensure_ascii=ensure_ascii)
         
-        print(f"✓ Saved {len(self.parsed_papers)} papers to {output_path}")
+        logger.info("Saved %s papers to %s", len(self.parsed_papers), output_path)
         return output_path
     
     def to_dataframe(self) -> pd.DataFrame:
@@ -272,7 +275,7 @@ class PaperDictParser:
         
         df = self.to_dataframe()
         df.to_csv(output_path, index=False, encoding='utf-8')
-        print(f"✓ Saved {len(df)} papers to {output_path}")
+        logger.info("Saved %s papers to %s", len(df), output_path)
         return output_path
     
     def to_excel(self, filename: str = 'parsed_papers.xlsx'):
@@ -286,7 +289,7 @@ class PaperDictParser:
         
         df = self.to_dataframe()
         df.to_excel(output_path, index=False, engine='openpyxl')
-        print(f"✓ Saved {len(df)} papers to {output_path}")
+        logger.info("Saved %s papers to %s", len(df), output_path)
         return output_path
     
     def save_all_formats(self, base_filename: str = 'papers'):
@@ -307,7 +310,7 @@ class PaperDictParser:
         try:
             paths['excel'] = self.to_excel(f'{base_filename}.xlsx')
         except ImportError:
-            print("⚠ Excel export requires openpyxl. Install with: pip install openpyxl")
+            logger.warning("Excel export requires openpyxl. Install with: pip install openpyxl")
         
         return paths
     
@@ -371,7 +374,7 @@ class PaperDictParser:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(stats, f, indent=2)
         
-        print(f"✓ Saved statistics to {output_path}")
+        logger.info("Saved statistics to %s", output_path)
         return output_path
     
     def filter_papers(

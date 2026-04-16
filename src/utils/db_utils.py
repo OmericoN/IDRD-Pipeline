@@ -4,12 +4,15 @@ Centralises repeated query patterns used across downloader, converter, and main.
 
 Includes new persistence functions for results-based API.
 """
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from db.db import IDRDDatabase
     from models.results import DownloadResult, ConversionResult, RenderResult
+
+logger = logging.getLogger(__name__)
 
 
 def print_download_status(db: "IDRDDatabase", output_dir: Path):
@@ -28,26 +31,29 @@ def print_download_status(db: "IDRDDatabase", output_dir: Path):
 
     pdf_files = list(output_dir.glob("*.pdf")) if output_dir.exists() else []
 
-    print("\nCurrent Download Status:")
-    print("-" * 60)
-    print(f"  Total papers in DB  : {row['total']}")
-    print(f"  PDFs downloaded     : {row['downloaded']}")
-    print(f"  Download errors     : {row['errors']}")
-    print(f"  PDF files on disk   : {len(pdf_files)}")
-    print("-" * 60)
+    logger.info(
+        "Current Download Status:\n%s\n  Total papers in DB  : %s\n  PDFs downloaded     : %s\n  Download errors     : %s\n  PDF files on disk   : %s\n%s",
+        "-" * 60,
+        row['total'],
+        row['downloaded'],
+        row['errors'],
+        len(pdf_files),
+        "-" * 60,
+    )
 
 
 def print_conversion_status(db: "IDRDDatabase", xml_output_dir: Path):
     """Print current XML conversion status."""
-    print("\nCurrent Conversion Status:")
-    print("-" * 60)
-
     status = db.get_pipeline_status()
-    print(f"  Papers with PDFs    : {status['pdf_downloaded']}")
-    print(f"  Converted to XML    : {status['xml_converted']}")
-    print(f"  Conversion errors   : {status['xml_errors']}")
-    print(f"  XML files on disk   : {len(list(xml_output_dir.glob('*.tei.xml')))}")
-    print("-" * 60)
+    logger.info(
+        "Current Conversion Status:\n%s\n  Papers with PDFs    : %s\n  Converted to XML    : %s\n  Conversion errors   : %s\n  XML files on disk   : %s\n%s",
+        "-" * 60,
+        status['pdf_downloaded'],
+        status['xml_converted'],
+        status['xml_errors'],
+        len(list(xml_output_dir.glob('*.tei.xml'))),
+        "-" * 60,
+    )
 
 
 def sync_existing_pdfs(db: "IDRDDatabase", pdf_output_dir: Path) -> int:
@@ -65,7 +71,7 @@ def sync_existing_pdfs(db: "IDRDDatabase", pdf_output_dir: Path) -> int:
     if status['pdf_downloaded'] >= len(existing_pdfs):
         return 0  # already in sync
 
-    print(f"\nSyncing {len(existing_pdfs)} existing PDFs with database...")
+    logger.info("Syncing %s existing PDFs with database...", len(existing_pdfs))
     synced = 0
 
     for pdf_file in existing_pdfs:
@@ -90,7 +96,7 @@ def sync_existing_pdfs(db: "IDRDDatabase", pdf_output_dir: Path) -> int:
             synced += 1
 
     db.commit()
-    print(f"  Synced {synced} PDFs")
+    logger.info("Synced %s PDFs", synced)
     return synced
 
 

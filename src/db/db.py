@@ -4,10 +4,13 @@ from dotenv import load_dotenv
 import psycopg2
 import psycopg2.extras
 import os
+import json
+import logging
 from psycopg2 import sql
 import re
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 class IDRDDatabase:
@@ -19,8 +22,8 @@ class IDRDDatabase:
         IDRDDatabase._init_count += 1
         if IDRDDatabase._init_count > 1:
             import traceback
-            print(f"\n[WARN] WARNING: IDRDDatabase instantiated {IDRDDatabase._init_count} times.")
-            print("   Stack trace — pinpoints the extra instantiation:")
+            logger.warning("WARNING: IDRDDatabase instantiated %s times.", IDRDDatabase._init_count)
+            logger.warning("Stack trace — pinpoints the extra instantiation:")
             traceback.print_stack(limit=8)
 
         self.conn = psycopg2.connect(
@@ -33,7 +36,7 @@ class IDRDDatabase:
         self.conn.autocommit = False
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         self._create_tables()
-        print("[OK] PostgreSQL database initialized")
+        logger.info("PostgreSQL database initialized")
 
     # ------------------------------------------------------------------
     # Schema
@@ -205,7 +208,7 @@ class IDRDDatabase:
 
             # open access
             oa = paper.get('openAccessPdf')
-            if oa:
+            if isinstance(oa, dict):
                 self.cursor.execute('''
                     INSERT INTO open_access ("paperId", url, status, license, disclaimer)
                     VALUES (%s,%s,%s,%s,%s)
@@ -293,7 +296,7 @@ class IDRDDatabase:
 
         except Exception as e:
             self.conn.rollback()
-            print(f"Error inserting paper {paper.get('paperId')}: {e}")
+            logger.exception("Error inserting paper %s", paper.get('paperId'))
             return False
 
     def insert_publications(self, papers: List[Dict]) -> int:
@@ -390,9 +393,9 @@ class IDRDDatabase:
 
             except Exception as e:
                 self.conn.rollback()
-                print(f"Error inserting paper {paper.get('paperId')}: {e}")
+                logger.exception("Error inserting paper %s", paper.get('paperId'))
 
-        print(f"✓ Inserted {count}/{len(papers)} publications into database")
+        logger.info("Inserted %s/%s publications into database", count, len(papers))
         return count
 
     def load_from_json(self, json_path: str) -> int:
@@ -699,7 +702,7 @@ class IDRDDatabase:
                 sql.SQL('DELETE FROM {}').format(sql.Identifier(table))
             )
         self.conn.commit()
-        print("[OK] Database cleared")
+        logger.info("Database cleared")
 
     def drop_tables(self):
         """Drop all tables and recreate them."""
@@ -713,16 +716,16 @@ class IDRDDatabase:
                 sql.SQL('DROP TABLE IF EXISTS {} CASCADE').format(sql.Identifier(table))
             )
         self.conn.commit()
-        print("[OK] All tables dropped")
+        logger.info("All tables dropped")
         self._create_tables()
 
     def reset_database(self, confirm: bool = False):
         """Drop and recreate all tables AND delete all data/log files."""
         if not confirm:
-            print("WARNING: Call reset_database(confirm=True) to proceed.")
+            logger.warning("Call reset_database(confirm=True) to proceed.")
             return
 
-        print("\nPerforming full database reset...")
+        logger.info("Performing full database reset...")
 
         pdf_dir      = Path(__file__).parent.parent.parent / 'data' / 'pdf'
         xml_dir      = Path(__file__).parent.parent.parent / 'data' / 'xml'
@@ -734,10 +737,10 @@ class IDRDDatabase:
         markdown_deleted = self._clear_directory(markdown_dir)
         json_deleted     = self._clear_directory(runs_dir)
 
-        print(f"  Deleted {pdf_deleted}      PDF files      from {pdf_dir}")
-        print(f"  Deleted {xml_deleted}      XML files      from {xml_dir}")
-        print(f"  Deleted {markdown_deleted} Markdown files from {markdown_dir}")
-        print(f"  Deleted {json_deleted}     log files      from {runs_dir}")
+        logger.info("Deleted %s PDF files from %s", pdf_deleted, pdf_dir)
+        logger.info("Deleted %s XML files from %s", xml_deleted, xml_dir)
+        logger.info("Deleted %s Markdown files from %s", markdown_deleted, markdown_dir)
+        logger.info("Deleted %s log files from %s", json_deleted, runs_dir)
 
         self.cursor.execute("""
             SELECT tablename FROM pg_tables
@@ -748,7 +751,7 @@ class IDRDDatabase:
         for table_name in table_names:
             # guard: only allow safe identifier characters
             if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
-                print(f"  [WARN] Skipping suspicious table name: {table_name!r}")
+                logger.warning("Skipping suspicious table name: %r", table_name)
                 continue
             self.cursor.execute(
                 sql.SQL('DROP TABLE IF EXISTS {} CASCADE').format(
@@ -759,7 +762,7 @@ class IDRDDatabase:
         self.conn.commit()
 
         self._create_tables()
-        print("[OK] Full database reset complete")
+        logger.info("Full database reset complete")
 
     @staticmethod
     def _clear_directory(directory: Path) -> int:
@@ -775,7 +778,7 @@ class IDRDDatabase:
 
     def reset_pipeline_status(self):
         """Reset pipeline tracking columns and delete all data files."""
-        print("\nResetting pipeline status...")
+        logger.info("Resetting pipeline status...")
 
         pdf_dir      = Path(__file__).parent.parent.parent / 'data' / 'pdf'
         xml_dir      = Path(__file__).parent.parent.parent / 'data' / 'xml'
@@ -787,10 +790,10 @@ class IDRDDatabase:
         markdown_deleted = self._clear_directory(markdown_dir)
         json_deleted     = self._clear_directory(runs_dir)
 
-        print(f"  Deleted {pdf_deleted}      PDF files      from {pdf_dir}")
-        print(f"  Deleted {xml_deleted}      XML files      from {xml_dir}")
-        print(f"  Deleted {markdown_deleted} Markdown files from {markdown_dir}")
-        print(f"  Deleted {json_deleted}     log files      from {runs_dir}")
+        logger.info("Deleted %s PDF files from %s", pdf_deleted, pdf_dir)
+        logger.info("Deleted %s XML files from %s", xml_deleted, xml_dir)
+        logger.info("Deleted %s Markdown files from %s", markdown_deleted, markdown_dir)
+        logger.info("Deleted %s log files from %s", json_deleted, runs_dir)
 
         self.cursor.execute('''
             UPDATE publications SET
@@ -807,8 +810,8 @@ class IDRDDatabase:
                 updated_at           = CURRENT_TIMESTAMP
         ''')
         self.conn.commit()
-        print(f"  Reset tracking columns for {self.cursor.rowcount} publications")
-        print("[OK] Pipeline status reset complete")
+        logger.info("Reset tracking columns for %s publications", self.cursor.rowcount)
+        logger.info("Pipeline status reset complete")
 
     def export_to_json(self, output_path: str, limit: int = None):
         """Export publications to JSON."""
@@ -820,7 +823,7 @@ class IDRDDatabase:
         papers = [self.get_publication(pid) for pid in paper_ids]
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(papers, f, indent=2, ensure_ascii=False, default=str)
-        print(f"[OK] Exported {len(papers)} publications to {output_path}")
+        logger.info("Exported %s publications to %s", len(papers), output_path)
 
     # ------------------------------------------------------------------
     # Connection helpers
