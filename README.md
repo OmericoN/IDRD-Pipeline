@@ -8,6 +8,7 @@ extracting features for a RAG system.
 
 ## Requirements
 - uv ( [installation guide](https://docs.astral.sh/uv/getting-started/installation/) )
+#### uv quick-start guide
 ```bash
 uv sync
 ```
@@ -57,6 +58,13 @@ Fetch → Download → Convert → Extract Markdown in one command.
 ```bash
 uv run src/main.py --query "implicit dataset references" --limit 50
 ```
+
+Run the full pipeline with concurrent stage execution (download/convert/render):
+```bash
+uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent
+```
+
+`--mode` applies to full pipeline runs only. `--resume` and single-step modes remain sequential.
 
 ---
 
@@ -201,6 +209,7 @@ uv run src/main.py --reset full
 |---|---|---|
 | `--query TEXT` | Semantic Scholar search query | required for fetch |
 | `--limit N` | Max papers to fetch | 100 |
+| `--mode {sequential\|concurrent}` | Full pipeline execution strategy (full run only) | sequential |
 | `--fetch-only` | Only fetch papers (Step 1) | off |
 | `--download-only` | Only download PDFs (Step 2) | off |
 | `--convert-only` | Only convert PDFs to XML (Step 3) | off |
