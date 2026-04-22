@@ -2,11 +2,13 @@
 IDRD Pipeline - Main Orchestrator
 ==================================
 Pipeline Flow:
-    1. Fetch    — Search & store papers from Semantic Scholar
-    2. Download — Download open-access PDFs
-    3. Convert  — Convert PDFs to TEI XML via GROBID (Docker)
-    4. Render   — Render Markdown from TEI XML
-    5. Features — LLM feature extraction  [Phase 3]
+    1. Fetch    - Search & store papers from Semantic Scholar
+    2. Download - Download open-access PDFs
+    3. Convert  - Convert PDFs to TEI XML via GROBID (Docker)
+    4. Render   - Render Markdown from TEI XML
+    5. Extract  - LLM feature extraction  [Phase 3] : TO DO
+    6. Affiliation Check - Identify if dataset belongs to UM : TO DOI
+    7. Formality Evaluation - Determine formality score for the dataset reference
 """
 
 import sys
@@ -40,19 +42,20 @@ from config import PDF_DIR, XML_DIR, MARKDOWN_DIR, RUNS_DIR
 
 class IDRDPipeline:
     """Main pipeline orchestrator for IDRD paper processing."""
+
     DEFAULT_DOWNLOAD_WORKERS = 8
     DEFAULT_CONVERT_WORKERS = 4
     DEFAULT_RENDER_WORKERS = 8
 
     def __init__(self):
-        self.db         = IDRDDatabase()
-        self.parser     = PaperDictParser()
+        self.db = IDRDDatabase()
+        self.parser = PaperDictParser()
         self.start_time = datetime.now()
 
-        run_label    = self.start_time.strftime('%Y-%m-%d_%H-%M-%S')
+        run_label = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
         self.run_dir = RUNS_DIR / run_label
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        (self.run_dir / 'metadata').mkdir(exist_ok=True)
+        (self.run_dir / "metadata").mkdir(exist_ok=True)
 
         print("\n" + "=" * 70)
         print("IDRD PIPELINE INITIALIZED")
@@ -68,19 +71,27 @@ class IDRDPipeline:
     def _download_result_status(result) -> str:
         if not result.success:
             return "failed"
-        return "skipped" if result.message.lower().startswith("already exists:") else "successful"
+        return (
+            "skipped"
+            if result.message.lower().startswith("already exists:")
+            else "successful"
+        )
 
     @staticmethod
     def _convert_result_status(result) -> str:
         if not result.success:
             return "failed"
-        return "skipped" if "already converted" in result.message.lower() else "successful"
+        return (
+            "skipped" if "already converted" in result.message.lower() else "successful"
+        )
 
     @staticmethod
     def _render_result_status(success: bool, message: str) -> str:
         if not success:
             return "failed"
-        return "skipped" if message.lower().startswith("already exists:") else "successful"
+        return (
+            "skipped" if message.lower().startswith("already exists:") else "successful"
+        )
 
     @staticmethod
     def _summarize_status_counts(statuses: list[str]) -> dict:
@@ -131,18 +142,24 @@ class IDRDPipeline:
 
         if not papers:
             if runtime_state:
-                runtime_state.task_finished("fetch", "skipped", query, "No papers found matching criteria.")
+                runtime_state.task_finished(
+                    "fetch", "skipped", query, "No papers found matching criteria."
+                )
             print("\n  No papers found matching criteria.")
             return 0
 
         self.parser.parse_papers(papers)
-        json_path = self.run_dir / 'metadata' / 'retrieved_results.json'
+        json_path = self.run_dir / "metadata" / "retrieved_results.json"
         self.parser.to_json(str(json_path))
 
         count = self.db.insert_publications(papers)
 
-        open_access_count = sum(1 for p in papers if (p.get('openAccessPdf') or {}).get('url'))
-        papers_with_doi   = sum(1 for p in papers if (p.get('externalIds') or {}).get('DOI'))
+        open_access_count = sum(
+            1 for p in papers if (p.get("openAccessPdf") or {}).get("url")
+        )
+        papers_with_doi = sum(
+            1 for p in papers if (p.get("externalIds") or {}).get("DOI")
+        )
 
         print("\n" + "-" * 70)
         print("STEP 1 SUMMARY")
@@ -155,7 +172,9 @@ class IDRDPipeline:
         print("-" * 70)
 
         if runtime_state:
-            runtime_state.task_finished("fetch", "successful", query, f"Fetched {len(papers)} papers.")
+            runtime_state.task_finished(
+                "fetch", "successful", query, f"Fetched {len(papers)} papers."
+            )
         return count
 
     # ------------------------------------------------------------------
@@ -190,7 +209,10 @@ class IDRDPipeline:
 
             if not papers:
                 print("\n  No papers need PDF downloads.")
-                return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+                return {
+                    "results": [],
+                    "stats": {"successful": 0, "failed": 0, "skipped": 0},
+                }
 
             if runtime_state:
                 runtime_state.queue_items("download", len(papers))
@@ -221,7 +243,9 @@ class IDRDPipeline:
                 status = self._download_result_status(result)
                 result_statuses.append(status)
                 if runtime_state:
-                    runtime_state.task_finished("download", status, paper_id, result.error or result.message)
+                    runtime_state.task_finished(
+                        "download", status, paper_id, result.error or result.message
+                    )
                 results.append(result)
 
                 if delay > 0 and idx < len(papers) - 1:
@@ -240,7 +264,7 @@ class IDRDPipeline:
             print_download_status(self.db, downloader.output_dir)
 
             output = {"results": [vars(r) for r in results], "stats": stats}
-            self._save_results(output, 'download_results.json')
+            self._save_results(output, "download_results.json")
             return output
 
         finally:
@@ -270,7 +294,10 @@ class IDRDPipeline:
 
             if not papers:
                 print("\n  No papers need PDF downloads.")
-                return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+                return {
+                    "results": [],
+                    "stats": {"successful": 0, "failed": 0, "skipped": 0},
+                }
 
             from models.results import DownloadResult
             from utils.db_utils import persist_download_results
@@ -300,13 +327,17 @@ class IDRDPipeline:
 
                 if runtime_state:
                     status = self._download_result_status(result)
-                    runtime_state.task_finished("download", status, paper_id, result.error or result.message)
+                    runtime_state.task_finished(
+                        "download", status, paper_id, result.error or result.message
+                    )
                 return result
 
             max_workers = min(self.DEFAULT_DOWNLOAD_WORKERS, max(1, len(papers)))
             results = []
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [executor.submit(run_download_task, paper) for paper in papers]
+                futures = [
+                    executor.submit(run_download_task, paper) for paper in papers
+                ]
                 for future in as_completed(futures):
                     results.append(future.result())
 
@@ -366,12 +397,16 @@ class IDRDPipeline:
 
             # Get papers from DB (data source)
             papers = self.db.get_papers_needing_conversion(limit=limit)
-            
+
             if not papers:
                 print("\n  No papers need conversion.")
-                return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+                return {
+                    "results": [],
+                    "stats": {"successful": 0, "failed": 0, "skipped": 0},
+                }
 
             from models.results import ConversionResult
+
             results = []
             result_statuses = []
 
@@ -396,13 +431,17 @@ class IDRDPipeline:
                         success=False,
                         message=f"Unhandled conversion error: {type(e).__name__}: {e}",
                         error=str(e),
-                        pdf_path=Path(paper["pdf_path"]) if paper.get("pdf_path") else None,
+                        pdf_path=Path(paper["pdf_path"])
+                        if paper.get("pdf_path")
+                        else None,
                     )
 
                 status = self._convert_result_status(result)
                 result_statuses.append(status)
                 if runtime_state:
-                    runtime_state.task_finished("convert", status, paper_id, result.error or result.message)
+                    runtime_state.task_finished(
+                        "convert", status, paper_id, result.error or result.message
+                    )
                 results.append(result)
 
                 if delay > 0 and idx < len(papers) - 1:
@@ -410,6 +449,7 @@ class IDRDPipeline:
 
             # Persist results to DB (separate persistence step)
             from utils.db_utils import persist_conversion_results
+
             persist_conversion_results(self.db, results)
 
             stats = self._summarize_status_counts(result_statuses)
@@ -424,7 +464,7 @@ class IDRDPipeline:
             print_conversion_status(self.db, converter.output_dir)
 
             output = {"results": [vars(r) for r in results], "stats": stats}
-            self._save_results(output, 'conversion_results.json')
+            self._save_results(output, "conversion_results.json")
             return output
 
         except Exception as e:
@@ -463,7 +503,10 @@ class IDRDPipeline:
             papers = self.db.get_papers_needing_conversion(limit=limit)
             if not papers:
                 print("\n  No papers need conversion.")
-                return {"results": [], "stats": {"successful": 0, "failed": 0, "skipped": 0}}
+                return {
+                    "results": [],
+                    "stats": {"successful": 0, "failed": 0, "skipped": 0},
+                }
 
             from models.results import ConversionResult
             from utils.db_utils import persist_conversion_results
@@ -488,12 +531,16 @@ class IDRDPipeline:
                         success=False,
                         message=f"Unhandled conversion error: {type(e).__name__}: {e}",
                         error=str(e),
-                        pdf_path=Path(paper["pdf_path"]) if paper.get("pdf_path") else None,
+                        pdf_path=Path(paper["pdf_path"])
+                        if paper.get("pdf_path")
+                        else None,
                     )
 
                 if runtime_state:
                     status = self._convert_result_status(result)
-                    runtime_state.task_finished("convert", status, paper_id, result.error or result.message)
+                    runtime_state.task_finished(
+                        "convert", status, paper_id, result.error or result.message
+                    )
                 return result
 
             max_workers = min(self.DEFAULT_CONVERT_WORKERS, max(1, len(papers)))
@@ -550,7 +597,7 @@ class IDRDPipeline:
         papers = self.db.get_papers_needing_rendering(limit=limit)
         eligible_count = len(papers)
         not_eligible_count = max(base_total - eligible_count, 0)
-        
+
         if not papers:
             print("\n  No papers need markdown rendering.")
             return {
@@ -568,30 +615,34 @@ class IDRDPipeline:
 
         # Render markdown (no DB coupling - uses render_to_markdown)
         from ingestion.renderer import render_to_markdown
-        
+
         results = []
         stats = {"successful": 0, "failed": 0, "skipped": 0}
         if runtime_state:
             runtime_state.queue_items("render", len(papers))
 
         for paper in papers:
-            paper_id = paper['paperId']
-            xml_path = Path(paper['xml_path'])
+            paper_id = paper["paperId"]
+            xml_path = Path(paper["xml_path"])
             md_path = MARKDOWN_DIR / f"{paper_id}.md"
             if runtime_state:
                 runtime_state.task_started("render", paper_id)
 
             if md_path.exists() and not overwrite:
                 stats["skipped"] += 1
-                results.append({
-                    "paper_id": paper_id,
-                    "xml": xml_path.name,
-                    "md": md_path.name,
-                    "success": True,
-                    "message": f"Already exists: {md_path.name}",
-                })
+                results.append(
+                    {
+                        "paper_id": paper_id,
+                        "xml": xml_path.name,
+                        "md": md_path.name,
+                        "success": True,
+                        "message": f"Already exists: {md_path.name}",
+                    }
+                )
                 if runtime_state:
-                    runtime_state.task_finished("render", "skipped", paper_id, f"Already exists: {md_path.name}")
+                    runtime_state.task_finished(
+                        "render", "skipped", paper_id, f"Already exists: {md_path.name}"
+                    )
                 continue
 
             try:
@@ -604,27 +655,33 @@ class IDRDPipeline:
                     else:
                         stats["skipped"] += 1
                     if runtime_state:
-                        runtime_state.task_finished("render", status, paper_id, result.message)
+                        runtime_state.task_finished(
+                            "render", status, paper_id, result.message
+                        )
 
                     size_kb = md_path.stat().st_size / 1024 if md_path.exists() else 0
-                    print(f"  [OK] {xml_path.name} -> {md_path.name} ({size_kb:.1f} KB)")
-                    results.append({
-                        "paper_id": paper_id,
-                        "xml": xml_path.name,
-                        "md": md_path.name,
-                        "success": True,
-                        "message": result.message,
-                        "sections_extracted": result.sections_extracted,
-                        "references_count": result.references_count,
-                    })
+                    print(
+                        f"  [OK] {xml_path.name} -> {md_path.name} ({size_kb:.1f} KB)"
+                    )
+                    results.append(
+                        {
+                            "paper_id": paper_id,
+                            "xml": xml_path.name,
+                            "md": md_path.name,
+                            "success": True,
+                            "message": result.message,
+                            "sections_extracted": result.sections_extracted,
+                            "references_count": result.references_count,
+                        }
+                    )
 
                     if status == "successful":
                         self.db.cursor.execute(
-                            '''UPDATE publications
+                            """UPDATE publications
                                SET sections_extracted = TRUE,
                                    updated_at = CURRENT_TIMESTAMP
-                               WHERE "paperId" = %s''',
-                            (paper_id,)
+                               WHERE "paperId" = %s""",
+                            (paper_id,),
                         )
                         self.db.commit()
                 else:
@@ -632,28 +689,36 @@ class IDRDPipeline:
                     error_message = result.error or result.message
                     print(f"  ✗ Failed to render {xml_path.name}: {error_message}")
                     if runtime_state:
-                        runtime_state.task_finished("render", "failed", paper_id, error_message)
-                    results.append({
+                        runtime_state.task_finished(
+                            "render", "failed", paper_id, error_message
+                        )
+                    results.append(
+                        {
+                            "paper_id": paper_id,
+                            "xml": xml_path.name,
+                            "md": None,
+                            "success": False,
+                            "message": error_message,
+                        }
+                    )
+
+            except Exception as e:
+                stats["failed"] += 1
+                error_msg = (
+                    f"Failed to render {xml_path.name}: {type(e).__name__}: {str(e)}"
+                )
+                print(f"  ✗ {error_msg}")
+                if runtime_state:
+                    runtime_state.task_finished("render", "failed", paper_id, error_msg)
+                results.append(
+                    {
                         "paper_id": paper_id,
                         "xml": xml_path.name,
                         "md": None,
                         "success": False,
-                        "message": error_message,
-                    })
-
-            except Exception as e:
-                stats["failed"] += 1
-                error_msg = f"Failed to render {xml_path.name}: {type(e).__name__}: {str(e)}"
-                print(f"  ✗ {error_msg}")
-                if runtime_state:
-                    runtime_state.task_finished("render", "failed", paper_id, error_msg)
-                results.append({
-                    "paper_id": paper_id,
-                    "xml": xml_path.name,
-                    "md": None,
-                    "success": False,
-                    "message": error_msg,
-                })
+                        "message": error_msg,
+                    }
+                )
 
         print("\n" + "-" * 70)
         print("STEP 4 COMPLETE")
@@ -669,7 +734,7 @@ class IDRDPipeline:
         stats["eligible"] = eligible_count
         stats["not_eligible"] = not_eligible_count
         output = {"results": results, "stats": stats}
-        self._save_results(output, 'rendering_results.json')
+        self._save_results(output, "rendering_results.json")
         return output
 
     def step_4_render_markdown_concurrent(
@@ -711,6 +776,7 @@ class IDRDPipeline:
         print(f"\n  Found {eligible_count} papers to render\n")
 
         from ingestion.renderer import render_to_markdown
+
         results = []
         max_workers = min(self.DEFAULT_RENDER_WORKERS, max(1, len(papers)))
         if runtime_state:
@@ -724,7 +790,9 @@ class IDRDPipeline:
                 runtime_state.task_started("render", paper_id)
 
             try:
-                render_result = render_to_markdown(xml_path, md_path, paper_id, overwrite)
+                render_result = render_to_markdown(
+                    xml_path, md_path, paper_id, overwrite
+                )
                 result_payload = {
                     "paper_id": paper_id,
                     "xml": xml_path.name,
@@ -735,13 +803,21 @@ class IDRDPipeline:
                     "references_count": render_result.references_count,
                 }
                 if runtime_state:
-                    status = self._render_result_status(render_result.success, render_result.message)
-                    runtime_state.task_finished("render", status, paper_id, render_result.message)
+                    status = self._render_result_status(
+                        render_result.success, render_result.message
+                    )
+                    runtime_state.task_finished(
+                        "render", status, paper_id, render_result.message
+                    )
                 return result_payload
             except Exception as e:
-                error_message = f"Failed to render {xml_path.name}: {type(e).__name__}: {str(e)}"
+                error_message = (
+                    f"Failed to render {xml_path.name}: {type(e).__name__}: {str(e)}"
+                )
                 if runtime_state:
-                    runtime_state.task_finished("render", "failed", paper_id, error_message)
+                    runtime_state.task_finished(
+                        "render", "failed", paper_id, error_message
+                    )
                 return {
                     "paper_id": paper_id,
                     "xml": xml_path.name,
@@ -756,23 +832,28 @@ class IDRDPipeline:
                 results.append(future.result())
 
         successful_results = [
-            r for r in results
+            r
+            for r in results
             if r["success"] and not r["message"].lower().startswith("already exists:")
         ]
         if successful_results:
             for result in successful_results:
                 self.db.cursor.execute(
-                    '''UPDATE publications
+                    """UPDATE publications
                        SET sections_extracted = TRUE,
                            updated_at = CURRENT_TIMESTAMP
-                       WHERE "paperId" = %s''',
-                    (result["paper_id"],)
+                       WHERE "paperId" = %s""",
+                    (result["paper_id"],),
                 )
             self.db.commit()
 
         stats = {
             "successful": len(successful_results),
-            "skipped": sum(1 for r in results if r["success"] and r["message"].lower().startswith("already exists:")),
+            "skipped": sum(
+                1
+                for r in results
+                if r["success"] and r["message"].lower().startswith("already exists:")
+            ),
             "failed": sum(1 for r in results if not r["success"]),
         }
 
@@ -835,7 +916,9 @@ class IDRDPipeline:
         )
         enable_live_monitor = should_enable_live_monitor(mode, monitor)
 
-        with RuntimeLiveSession(runtime_state, enabled=enable_live_monitor, refresh_seconds=monitor_refresh):
+        with RuntimeLiveSession(
+            runtime_state, enabled=enable_live_monitor, refresh_seconds=monitor_refresh
+        ):
             try:
                 papers_fetched = self.step_1_fetch_papers(
                     query=query,
@@ -849,11 +932,15 @@ class IDRDPipeline:
                     return
 
                 if mode == "concurrent":
-                    download_results = self.step_2_download_pdfs_concurrent(runtime_state=runtime_state)
+                    download_results = self.step_2_download_pdfs_concurrent(
+                        runtime_state=runtime_state
+                    )
                 else:
-                    download_results = self.step_2_download_pdfs(runtime_state=runtime_state)
+                    download_results = self.step_2_download_pdfs(
+                        runtime_state=runtime_state
+                    )
 
-                if download_results['stats']['successful'] == 0:
+                if download_results["stats"]["successful"] == 0:
                     print("\n  No PDFs downloaded — skipping XML conversion.")
                     return
 
@@ -869,9 +956,14 @@ class IDRDPipeline:
                             runtime_state=runtime_state,
                         )
 
-                    if render_markdown and conversion_results['stats']['successful'] > 0:
+                    if (
+                        render_markdown
+                        and conversion_results["stats"]["successful"] > 0
+                    ):
                         if mode == "concurrent":
-                            self.step_4_render_markdown_concurrent(runtime_state=runtime_state)
+                            self.step_4_render_markdown_concurrent(
+                                runtime_state=runtime_state
+                            )
                         else:
                             self.step_4_render_markdown(runtime_state=runtime_state)
 
@@ -895,7 +987,7 @@ class IDRDPipeline:
         delete_pdfs_after_conversion: bool = False,
     ):
         """Resume pipeline from the last incomplete stage.
-        
+
         Intelligently detects which stage needs work by comparing counts:
         - If total == 0: Fetch papers (Step 1)
         - If downloaded < total: Download PDFs (Step 2)
@@ -906,11 +998,11 @@ class IDRDPipeline:
         print("RESUMING IDRD PIPELINE")
         print("=" * 70)
 
-        status     = self.db.get_pipeline_status()
-        total      = status['total_papers']
-        downloaded = status['pdf_downloaded']
-        converted  = status['xml_converted']
-        extracted  = status['sections_extracted']
+        status = self.db.get_pipeline_status()
+        total = status["total_papers"]
+        downloaded = status["pdf_downloaded"]
+        converted = status["xml_converted"]
+        extracted = status["sections_extracted"]
 
         print(f"  Total papers       : {total}")
         print(f"  PDFs downloaded    : {downloaded}")
@@ -928,24 +1020,32 @@ class IDRDPipeline:
             if len(papers_needing_download) > 0:
                 all_needing_download = self.db.get_papers_needing_download()
                 count = len(all_needing_download)
-                print(f"\n  -> Next Step: DOWNLOAD PDFs ({count} papers need downloads)")
+                print(
+                    f"\n  -> Next Step: DOWNLOAD PDFs ({count} papers need downloads)"
+                )
                 self.step_2_download_pdfs()
 
             elif len(papers_needing_conversion) > 0:
                 all_needing_conversion = self.db.get_papers_needing_conversion()
                 count = len(all_needing_conversion)
-                print(f"\n  -> Next Step: CONVERT to XML ({count} PDFs need conversion)")
+                print(
+                    f"\n  -> Next Step: CONVERT to XML ({count} PDFs need conversion)"
+                )
                 self.step_3_convert_to_xml()
 
             elif len(papers_needing_rendering) > 0:
                 all_needing_rendering = self.db.get_papers_needing_rendering()
                 count = len(all_needing_rendering)
-                print(f"\n  -> Next Step: RENDER to Markdown ({count} XMLs need rendering)")
+                print(
+                    f"\n  -> Next Step: RENDER to Markdown ({count} XMLs need rendering)"
+                )
                 self.step_4_render_markdown()
 
             elif extracted < converted:
                 # Some XMLs still need markdown rendering
-                print(f"\n  -> Resuming from STEP 4 ({converted - extracted} XMLs need rendering)")
+                print(
+                    f"\n  -> Resuming from STEP 4 ({converted - extracted} XMLs need rendering)"
+                )
                 self.step_4_render_markdown()
 
             else:
@@ -990,7 +1090,7 @@ class IDRDPipeline:
             print("⚠  WARNING: FULL DATABASE RESET")
             print("=" * 70)
             confirm1 = input("\n  Type 'yes' to continue: ")
-            if confirm1.lower() != 'yes':
+            if confirm1.lower() != "yes":
                 print("  Reset cancelled.")
                 return
             confirm2 = input("  Type your full name 'Omer Nidam' to confirm: ")
@@ -1007,15 +1107,15 @@ class IDRDPipeline:
     # ------------------------------------------------------------------
 
     def _save_results(self, results: dict, filename: str):
-        out = self.run_dir / 'metadata' / filename
-        with open(out, 'w', encoding='utf-8') as f:
+        out = self.run_dir / "metadata" / filename
+        with open(out, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, ensure_ascii=False, default=str)
         print(f"  Log saved to: {out}")
 
     def _print_final_summary(self):
         end_time = datetime.now()
         duration = end_time - self.start_time
-        status   = self.db.get_pipeline_status()
+        status = self.db.get_pipeline_status()
 
         print("\n" + "=" * 70)
         print("PIPELINE COMPLETE")
@@ -1047,6 +1147,7 @@ class IDRDPipeline:
 # CLI
 # ----------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python src/main.py",
@@ -1068,14 +1169,20 @@ MODES
     )
 
     mode = parser.add_argument_group("Pipeline modes")
-    mode.add_argument("--fetch-only",    action="store_true")
+    mode.add_argument("--fetch-only", action="store_true")
     mode.add_argument("--download-only", action="store_true")
-    mode.add_argument("--convert-only",  action="store_true")
-    mode.add_argument("--extract-only",  action="store_true",
-                      help="Run markdown rendering on existing XMLs in data/xml/")
-    mode.add_argument("--resume",        action="store_true",
-                      help="Check database state and run the next incomplete step (download/convert/render)")
-    mode.add_argument("--status",        action="store_true")
+    mode.add_argument("--convert-only", action="store_true")
+    mode.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Run markdown rendering on existing XMLs in data/xml/",
+    )
+    mode.add_argument(
+        "--resume",
+        action="store_true",
+        help="Check database state and run the next incomplete step (download/convert/render)",
+    )
+    mode.add_argument("--status", action="store_true")
     mode.add_argument("--reset", choices=["status", "full"], metavar="{status|full}")
     mode.add_argument(
         "--mode",
@@ -1097,35 +1204,38 @@ MODES
     )
 
     fetch = parser.add_argument_group("Fetch options")
-    fetch.add_argument("--query",           type=str)
-    fetch.add_argument("--limit",           type=int, default=100)
+    fetch.add_argument("--query", type=str)
+    fetch.add_argument("--limit", type=int, default=100)
     fetch.add_argument("--fields-of-study", type=str)
-    fetch.add_argument("--all-access",      action="store_true")
+    fetch.add_argument("--all-access", action="store_true")
 
     dl = parser.add_argument_group("Download options")
-    dl.add_argument("--dl-limit",     type=int,   default=None)
+    dl.add_argument("--dl-limit", type=int, default=None)
     dl.add_argument("--dl-overwrite", action="store_true")
-    dl.add_argument("--dl-delay",     type=float, default=0.5)
+    dl.add_argument("--dl-delay", type=float, default=0.5)
 
     cv = parser.add_argument_group("Convert options")
-    cv.add_argument("--cv-limit",     type=int,   default=None)
+    cv.add_argument("--cv-limit", type=int, default=None)
     cv.add_argument("--cv-overwrite", action="store_true")
-    cv.add_argument("--cv-delay",     type=float, default=0.1)
-    cv.add_argument("--delete-pdfs",  action="store_true")
-    cv.add_argument("--no-xml",       action="store_true")
+    cv.add_argument("--cv-delay", type=float, default=0.1)
+    cv.add_argument("--delete-pdfs", action="store_true")
+    cv.add_argument("--no-xml", action="store_true")
 
     ex = parser.add_argument_group("Extract options")
-    ex.add_argument("--ex-limit",     type=int,  default=None)
+    ex.add_argument("--ex-limit", type=int, default=None)
     ex.add_argument("--ex-overwrite", action="store_true")
-    ex.add_argument("--no-extract",   action="store_true",
-                    help="Skip markdown rendering step in full pipeline")
+    ex.add_argument(
+        "--no-extract",
+        action="store_true",
+        help="Skip markdown rendering step in full pipeline",
+    )
 
     return parser
 
 
 def main():
-    parser   = build_parser()
-    args     = parser.parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
     pipeline = IDRDPipeline()
 
     try:

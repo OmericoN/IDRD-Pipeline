@@ -54,18 +54,26 @@ All commands are run from the **project root**.
 ### Full Pipeline (recommended starting point)
 Fetch → Download → Convert → Extract Markdown in one command.
 
+##### Sequential Mode (default)
+Each stage (component) must finish before proceeding to the next.
+Each components handles the data points one by one.
 (Example)
 ```bash
 uv run src/main.py --query "implicit dataset references" --limit 50
 ```
 
-Run the full pipeline with concurrent stage execution (download/convert/render):
+##### Concurrent Mode
+Run the full pipeline with concurrent stage execution (download/convert/render).
+Applies threading on each component to parallelize its execution.
 ```bash
 uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent
 ```
 
 `--mode` applies to full pipeline runs only. `--resume` and single-step modes remain sequential.
 
+**Note**: Actual stages are still sequential; one stage must complete before proceeding to the other
+
+#### Pretty Monitoring
 Live runtime monitor controls (full pipeline runs):
 ```bash
 uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent --monitor live

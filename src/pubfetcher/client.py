@@ -17,15 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 class SemanticScholarClient:
-    """Client for fetching publications from the Semantic Scholar API."""
+    """Client for fetching publications from the Semantic Scholar API.
+    ...
+
+    Attributes
+    ----------
+    api_key : str
+        the semantic scholar API key
+
+    """
 
     # Semantic Scholar free tier: 1 req/s  |  with key: 10 req/s
     _REQUEST_DELAY = 0.15
 
     def __init__(self, api_key: str = None):
-        self.api_key  = api_key or SEMANTIC_SCHOLAR_API_KEY
+        self.api_key = api_key or SEMANTIC_SCHOLAR_API_KEY
         self.base_url = SEMANTIC_SCHOLAR_API_URL
-        self.headers  = {}
+        self.headers = {}
 
         if self.api_key:
             self.headers["x-api-key"] = self.api_key
@@ -58,43 +66,62 @@ class SemanticScholarClient:
             open_access_pdf: Only return papers that have a free PDF.
 
         Returns:
-            List of paper dicts.
+            List of paper/publication dicts.
         """
-        logger.info("Fetching from Semantic Scholar (limit=%s) papers about '%s'...", limit, query)
+        logger.info(
+            "Fetching from Semantic Scholar (limit=%s) papers about '%s'...",
+            limit,
+            query,
+        )
         if fields_of_study:
             logger.info("Fields of study: %s", fields_of_study)
         if open_access_pdf:
             logger.info("Filter: Open Access PDFs only")
 
         default_fields = fields or [
-            "paperId", "title", "abstract", "year",
-            "authors", "citationCount", "referenceCount",
-            "influentialCitationCount", "venue", "publicationDate",
-            "publicationTypes", "journal", "fieldsOfStudy",
-            "url", "externalIds", "isOpenAccess", "openAccessPdf", "tldr",
+            "paperId",
+            "title",
+            "abstract",
+            "year",
+            "authors",
+            "citationCount",
+            "referenceCount",
+            "influentialCitationCount",
+            "venue",
+            "publicationDate",
+            "publicationTypes",
+            "journal",
+            "fieldsOfStudy",
+            "url",
+            "externalIds",
+            "isOpenAccess",
+            "openAccessPdf",
+            "tldr",
         ]
 
-        all_papers    = []
-        batch_size    = min(100, limit)  # API max is 100
+        all_papers = []
+        batch_size = min(100, limit)  # API max is 100
         total_batches = (limit + batch_size - 1) // batch_size
-        actual_total  = None
+        actual_total = None
 
         with tqdm(total=limit, desc="Fetching papers", unit="paper") as pbar:
             for batch_idx in range(total_batches):
                 current_offset = offset + batch_idx * batch_size
-                current_limit  = min(batch_size, limit - batch_idx * batch_size)
+                current_limit = min(batch_size, limit - batch_idx * batch_size)
 
                 if actual_total is not None and current_offset >= actual_total:
-                    pbar.write(f"Reached actual total papers ({actual_total:,}) — stopping.")
+                    pbar.write(
+                        f"Reached actual total papers ({actual_total:,}) — stopping."
+                    )
                     break
 
                 papers, total, error = self._fetch_batch(
-                    query           = query,
-                    limit           = current_limit,
-                    offset          = current_offset,
-                    fields          = default_fields,
-                    fields_of_study = fields_of_study,
-                    open_access_pdf = open_access_pdf,
+                    query=query,
+                    limit=current_limit,
+                    offset=current_offset,
+                    fields=default_fields,
+                    fields_of_study=fields_of_study,
+                    open_access_pdf=open_access_pdf,
                 )
 
                 if error:
@@ -141,24 +168,25 @@ class SemanticScholarClient:
         Returns:
             (papers, total, error_message) — error_message is None on success.
         """
-        url    = f"{self.base_url}/paper/search"
+        url = f"{self.base_url}/paper/search"
         params = {
-            "query":  query,
+            "query": query,
             "fields": ",".join(fields),
-            "limit":  limit,
+            "limit": limit,
             "offset": offset,
         }
 
         if fields_of_study:
             params["fieldsOfStudy"] = (
-                ",".join(fields_of_study) if isinstance(fields_of_study, list)
+                ",".join(fields_of_study)
+                if isinstance(fields_of_study, list)
                 else fields_of_study.strip()
             )
 
         if open_access_pdf:
             # Send both params — isOpenAccess broadens results,
             # openAccessPdf ensures a direct PDF URL is returned
-            params["isOpenAccess"]  = ""
+            params["isOpenAccess"] = ""
             params["openAccessPdf"] = ""
 
         backoff = 5  # initial wait (s); doubles on each retry
@@ -171,7 +199,7 @@ class SemanticScholarClient:
 
                 # Rate limited — exponential backoff
                 if response.status_code == 429:
-                    wait = backoff * (2 ** attempt)
+                    wait = backoff * (2**attempt)
                     if attempt < max_retries - 1:
                         logger.warning(
                             "Rate limited — waiting %ss (attempt %s/%s)...",
@@ -185,7 +213,7 @@ class SemanticScholarClient:
 
                 # Server error — transient, retry with backoff
                 if response.status_code >= 500:
-                    wait = backoff * (2 ** attempt)
+                    wait = backoff * (2**attempt)
                     if attempt < max_retries - 1:
                         logger.warning(
                             "Server error %s — waiting %ss (attempt %s/%s)...",
@@ -196,18 +224,26 @@ class SemanticScholarClient:
                         )
                         time.sleep(wait)
                         continue
-                    return [], 0, f"Server error {response.status_code} after {max_retries} attempts"
+                    return (
+                        [],
+                        0,
+                        f"Server error {response.status_code} after {max_retries} attempts",
+                    )
 
                 # Client error — permanent, don't retry
                 if 400 <= response.status_code < 500:
-                    return [], 0, f"Client error {response.status_code}: {response.text[:200]}"
+                    return (
+                        [],
+                        0,
+                        f"Client error {response.status_code}: {response.text[:200]}",
+                    )
 
                 # Success
                 data = response.json()
                 return data.get("data", []), data.get("total", 0), None
 
             except requests.exceptions.Timeout:
-                wait = backoff * (2 ** attempt)
+                wait = backoff * (2**attempt)
                 if attempt < max_retries - 1:
                     logger.warning(
                         "Timeout — waiting %ss (attempt %s/%s)...",
@@ -220,7 +256,7 @@ class SemanticScholarClient:
                 return [], 0, f"Timeout after {max_retries} attempts"
 
             except requests.exceptions.RequestException as e:
-                wait = backoff * (2 ** attempt)
+                wait = backoff * (2**attempt)
                 if attempt < max_retries - 1:
                     logger.warning(
                         "Network error: %s — waiting %ss (attempt %s/%s)...",
@@ -249,11 +285,16 @@ if __name__ == "__main__":
     parser = PaperDictParser()
     parser.parse_papers(papers)
 
-    out = Path(__file__).parent.parent.parent / 'outputs' / 'metadata' / 'retrieved_results.json'
+    out = (
+        Path(__file__).parent.parent.parent
+        / "outputs"
+        / "metadata"
+        / "retrieved_results.json"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     parser.to_json(str(out))
 
-    db    = IDRDDatabase()
+    db = IDRDDatabase()
     count = db.insert_publications(papers)
     logger.info("Saved %s papers to database", count)
     db.close()
