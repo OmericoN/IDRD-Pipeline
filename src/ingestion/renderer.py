@@ -3,7 +3,7 @@ TEI XML → Markdown extractor.
 
 Extracts:
   - Title, authors, abstract
-  - Body sections (excluding Discussion, Conclusion, Acknowledgement, etc.)
+  - Body sections (excluding Related Work, Discussion, Conclusion, Acknowledgement, etc.)
   - Only cited references
   - Footnotes used in body
 
@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 # ── Sections to exclude (case-insensitive, partial match) ─────────────────────
 EXCLUDED_SECTION_PATTERNS = [
+    r"related.work",
+    r"literature.review",
     r"discuss",
     r"conclusion",
     r"acknowledg",
