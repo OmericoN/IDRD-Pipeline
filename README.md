@@ -10,8 +10,9 @@
   <a href="https://library.maastrichtuniversity.nl/" target="_blank">
     <img src="https://img.shields.io/badge/Maastricht%20University-Library-002D72?logo=readthedocs&logoColor=white" alt="Maastricht University Library">
   </a>
-  
 </div>
+
+
 DataSight finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. It is now organized as an API-first backend so a GUI can run, monitor, and reset the pipeline without requiring users to understand the CLI.
 
 ## Repository Map
