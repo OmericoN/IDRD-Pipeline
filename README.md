@@ -1,6 +1,8 @@
-# IDRD Pipeline
+<div align="center">
+  <img src="assets/banner.png" width="600" />
+</div>
 
-IDRD finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. It is now organized as an API-first backend so a GUI can run, monitor, and reset the pipeline without requiring users to understand the CLI.
+DataSight finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. It is now organized as an API-first backend so a GUI can run, monitor, and reset the pipeline without requiring users to understand the CLI.
 
 ## Repository Map
 
