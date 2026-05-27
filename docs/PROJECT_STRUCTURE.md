@@ -1,6 +1,6 @@
 # Project Structure
 
-The project is organized so contributors can separate API concerns, pipeline logic, persistence, and generated files.
+The project is organized as a small layered system. Interfaces accept user input, application use cases coordinate pipeline behavior, domain modules hold shared types, and infrastructure adapters talk to databases, queues, HTTP APIs, and the filesystem.
 
 ## Root Layout
 
@@ -30,27 +30,41 @@ Dockerfile      Backend application image
 
 ```text
 src/idrd/
-  api/          FastAPI app, routes, and HTTP schemas
-  pipeline/     Stage orchestration, Celery tasks, service functions, pipeline schemas
-  storage/      PostgreSQL repository and reset/filesystem storage services
-  ingestion/    PDF download, GROBID conversion, markdown rendering
+  domain/        Pure enums, Pydantic domain schemas, and operation result DTOs
+  application/   Pipeline use cases, full-run orchestration, and shared stage registry
+  infrastructure/
+    persistence/ Focused PostgreSQL repository modules composed into PipelineRepository
+    ingestion/   PDF download, GROBID conversion, and markdown rendering adapters
+    pubfetcher/  Publication metadata clients
+    worker/      Celery app and task entrypoints
+    health/      Redis, Celery, and GROBID readiness probes
+  interfaces/
+    api/         FastAPI router assembly and route modules
+    cli/         Operator/developer CLI
+  api/          Compatibility package for existing FastAPI imports and HTTP schemas
+  pipeline/     Compatibility package for older service/task/schema imports
+  storage/      Reset service and repository compatibility import
+  ingestion/    Compatibility imports for ingestion adapters
   matching/     UM dataset matching and normalization
-  pubfetcher/   Publication search clients
-  models/       Shared result models
-  cli.py        Operator/developer CLI
+  pubfetcher/   Compatibility import for publication clients
+  models/       Compatibility imports for result DTOs
+  cli.py        Compatibility CLI entrypoint
 ```
 
-The `idrd` console script points to `idrd.cli:main`. `src/main.py` is kept only as a compatibility entry point for older commands and tests.
+The `idrd` console script still points to `idrd.cli:main`, which delegates to `idrd.interfaces.cli.main`. `src/main.py` remains a compatibility entry point for older commands and tests.
 
 ## Frontend Package
 
 ```text
 frontend/
   src/
-    components/ui/  Small reusable UI primitives
-    lib/            API client, pipeline helpers, and frontend tests
+    app/            App shell and provider wiring
+    features/runs/  Pipeline dashboard workflow and run-specific helpers
+    shared/api/     Fetch client, API types, and API client tests
+    shared/lib/     Cross-feature utilities
+    shared/ui/      Small reusable UI primitives
     test/           Vitest setup
-    App.tsx         Main GUI workflow
+    App.tsx         Compatibility export for the app shell
   package.json      Node scripts and dependencies
 ```
 
@@ -70,9 +84,11 @@ The reset service only deletes configured generated storage paths that resolve u
 
 ## Backend Boundaries
 
-- API routes validate input, call services/orchestrators, and return typed Pydantic responses.
-- Pipeline services own stage behavior and are shared by CLI, Celery, and API.
-- The repository owns SQL and database transactions.
+- Interface adapters validate input, call application use cases, and return typed responses or CLI JSON.
+- Application use cases own stage behavior and are shared by API, CLI, and Celery tasks.
+- The stage registry is the single source for stage order, descriptions, required arguments, keyword mapping, and Celery task lookup.
+- Infrastructure adapters own SQL, HTTP clients, queues, generated files, and health probes.
+- Domain modules do not import interface or infrastructure code.
 - Reset logic lives in `idrd.storage.reset` so destructive behavior is isolated and testable.
 
 ## Repository Hygiene
@@ -81,4 +97,4 @@ The reset service only deletes configured generated storage paths that resolve u
 - Keep generated files under `storage/` or `outputs/`; both are ignored and can be recreated.
 - Keep secrets in `.env`; commit only `.env.example`.
 - Put schema changes in Alembic migration files under `migrations/versions/`.
-- Prefer adding tests beside the behavior boundary being changed: API tests for route contracts, service tests for orchestration logic, repository tests for SQL behavior, and frontend tests under `frontend/src/lib`.
+- Prefer adding tests beside the behavior boundary being changed: API tests for route contracts, application tests for orchestration logic, repository tests for SQL behavior, and frontend tests under their feature or shared package.

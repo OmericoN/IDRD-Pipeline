@@ -5,8 +5,8 @@ IDRD finds hidden dataset references in scholarly publications and matches them 
 ## Repository Map
 
 ```text
-src/idrd/     Python backend package: API, pipeline, ingestion, matching, storage
-frontend/     Vite React GUI that talks to the FastAPI backend through /api/v1
+src/idrd/     Python backend package: domain, application, infrastructure, and interfaces
+frontend/     Vite React GUI organized into app, feature, shared API, and shared UI packages
 migrations/   Alembic migrations for the PostgreSQL/pgvector schema
 tests/        Python tests for API, services, storage, CLI, and matching behavior
 docs/         Operator, API, architecture, and repository structure guides
@@ -139,4 +139,5 @@ More detail:
 
 - [API Guide](docs/API_GUIDE.md)
 - [Project Structure](docs/PROJECT_STRUCTURE.md)
+- [Architecture Walkthrough](docs/ARCHITECTURE_WALKTHROUGH.md)
 - [Setup And CLI Guide](docs/SETUP_AND_CLI_GUIDE.md)

@@ -23,10 +23,10 @@ def test_health_returns_polling_ready_shape(monkeypatch):
         def healthcheck(self):
             return {"ready": True, "alembic_revision": "20260527_0003"}
 
-    monkeypatch.setattr("idrd.api.routes.PipelineRepository", FakeRepo)
-    monkeypatch.setattr("idrd.api.routes._redis_ready", lambda: True)
-    monkeypatch.setattr("idrd.api.routes.celery_worker_available", lambda: True)
-    monkeypatch.setattr("idrd.api.routes._grobid_ready", lambda: False)
+    monkeypatch.setattr("idrd.interfaces.api.routes.health.PipelineRepository", FakeRepo)
+    monkeypatch.setattr("idrd.interfaces.api.routes.health.redis_ready", lambda: True)
+    monkeypatch.setattr("idrd.interfaces.api.routes.health.celery_worker_available", lambda: True)
+    monkeypatch.setattr("idrd.interfaces.api.routes.health.grobid_ready", lambda: False)
 
     response = client.get("/api/v1/health")
 
@@ -43,7 +43,7 @@ def test_create_run_enqueues_pipeline(monkeypatch):
         assert kwargs["limit"] == 5
         return {"pipeline_run_id": 7, "task_id": "task-1", "status": "queued"}
 
-    monkeypatch.setattr("idrd.api.routes.orchestrator.enqueue_run_all", fake_enqueue_run_all)
+    monkeypatch.setattr("idrd.interfaces.api.routes.runs.orchestrator.enqueue_run_all", fake_enqueue_run_all)
 
     response = client.post(
         "/api/v1/runs",
@@ -82,7 +82,7 @@ def test_get_run_returns_stage_progress(monkeypatch):
                 ],
             }
 
-    monkeypatch.setattr("idrd.api.routes.PipelineRepository", FakeRepo)
+    monkeypatch.setattr("idrd.interfaces.api.routes.runs.PipelineRepository", FakeRepo)
 
     response = client.get("/api/v1/runs/42")
 
@@ -118,7 +118,7 @@ def test_get_run_events_returns_structured_log_entries(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("idrd.api.routes.PipelineRepository", FakeRepo)
+    monkeypatch.setattr("idrd.interfaces.api.routes.runs.PipelineRepository", FakeRepo)
 
     response = client.get("/api/v1/runs/42/events?limit=50")
 
@@ -137,7 +137,7 @@ def test_get_run_events_rejects_unknown_run(monkeypatch):
         def get_pipeline_run(self, run_id):
             return None
 
-    monkeypatch.setattr("idrd.api.routes.PipelineRepository", FakeRepo)
+    monkeypatch.setattr("idrd.interfaces.api.routes.runs.PipelineRepository", FakeRepo)
 
     response = client.get("/api/v1/runs/404/events")
 
@@ -152,7 +152,7 @@ def test_reset_rejects_wrong_confirmation():
 
 def test_reset_calls_service_with_confirmation(monkeypatch):
     monkeypatch.setattr(
-        "idrd.api.routes.reset_everything",
+        "idrd.interfaces.api.routes.admin.reset_everything",
         lambda force=False: {
             "status": "successful",
             "active_runs": 0,

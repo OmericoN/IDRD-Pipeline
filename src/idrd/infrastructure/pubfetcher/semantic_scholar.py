@@ -1,0 +1,271 @@
+import os
+import json
+import time
+import logging
+import requests
+from typing import Dict, List, Optional, Tuple
+from tqdm import tqdm
+
+from idrd.config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
+
+logger = logging.getLogger(__name__)
+
+
+class SemanticScholarClient:
+    """Client for fetching publications from the Semantic Scholar API.
+    ...
+
+    Attributes
+    ----------
+    api_key : str
+        the semantic scholar API key
+
+    """
+
+    # Semantic Scholar free tier: 1 req/s  |  with key: 10 req/s
+    _REQUEST_DELAY = 0.15
+
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or SEMANTIC_SCHOLAR_API_KEY
+        self.base_url = SEMANTIC_SCHOLAR_API_URL
+        self.headers = {}
+
+        if self.api_key:
+            self.headers["x-api-key"] = self.api_key
+            logger.info("API key loaded")
+        else:
+            logger.warning("No API key — using anonymous access (stricter rate limits)")
+
+    # ------------------------------------------------------------------
+    # Public
+    # ------------------------------------------------------------------
+
+    def search_papers(
+        self,
+        query: str,
+        limit: int = 100,
+        offset: int = 0,
+        fields: List[str] | None = None,
+        fields_of_study: str | None = None,
+        open_access_pdf: bool = False,
+    ) -> List[Dict]:
+        """
+        Search Semantic Scholar for papers matching a query.
+
+        Args:
+            query:           Search string.
+            limit:           Max number of papers to return.
+            offset:          Pagination offset.
+            fields:          API fields to request (uses sensible defaults if None).
+            fields_of_study: Filter e.g. "Computer Science".
+            open_access_pdf: Only return papers that have a free PDF.
+
+        Returns:
+            List of paper/publication dicts.
+        """
+        logger.info(
+            "Fetching from Semantic Scholar (limit=%s) papers about '%s'...",
+            limit,
+            query,
+        )
+        if fields_of_study:
+            logger.info("Fields of study: %s", fields_of_study)
+        if open_access_pdf:
+            logger.info("Filter: Open Access PDFs only")
+
+        default_fields = fields or [
+            "paperId",
+            "title",
+            "abstract",
+            "year",
+            "authors",
+            "citationCount",
+            "referenceCount",
+            "influentialCitationCount",
+            "venue",
+            "publicationDate",
+            "publicationTypes",
+            "journal",
+            "fieldsOfStudy",
+            "url",
+            "externalIds",
+            "isOpenAccess",
+            "openAccessPdf",
+            "tldr",
+        ]
+
+        all_papers = []
+        batch_size = min(100, limit)  # API max is 100
+        total_batches = (limit + batch_size - 1) // batch_size
+        actual_total = None
+
+        with tqdm(total=limit, desc="Fetching papers", unit="paper") as pbar:
+            for batch_idx in range(total_batches):
+                current_offset = offset + batch_idx * batch_size
+                current_limit = min(batch_size, limit - batch_idx * batch_size)
+
+                if actual_total is not None and current_offset >= actual_total:
+                    pbar.write(
+                        f"Reached actual total papers ({actual_total:,}) — stopping."
+                    )
+                    break
+
+                papers, total, error = self._fetch_batch(
+                    query=query,
+                    limit=current_limit,
+                    offset=current_offset,
+                    fields=default_fields,
+                    fields_of_study=fields_of_study,
+                    open_access_pdf=open_access_pdf,
+                )
+
+                if error:
+                    pbar.write(f"  ⚠ Batch {batch_idx + 1} failed: {error} — skipping.")
+                    continue
+
+                if batch_idx == 0:
+                    pbar.write("API call successful!")
+                    pbar.write(f"Total papers: {total:,}")
+                    actual_total = total
+                    if actual_total < limit:
+                        pbar.total = actual_total
+                        pbar.refresh()
+
+                if not papers:
+                    break
+
+                all_papers.extend(papers)
+                pbar.update(len(papers))
+
+                if batch_idx < total_batches - 1:
+                    time.sleep(self._REQUEST_DELAY)
+
+        logger.info("Fetched %s papers.", len(all_papers))
+        return all_papers
+
+    # ------------------------------------------------------------------
+    # Private
+    # ------------------------------------------------------------------
+
+    def _fetch_batch(
+        self,
+        query: str,
+        limit: int,
+        offset: int,
+        fields: List[str],
+        fields_of_study: str | None = None,
+        open_access_pdf: bool = False,
+        max_retries: int = 10,
+    ) -> Tuple[List[Dict], int, Optional[str]]:
+        """
+        Fetch one batch of papers with exponential-backoff retry.
+
+        Returns:
+            (papers, total, error_message) — error_message is None on success.
+        """
+        url = f"{self.base_url}/paper/search"
+        params = {
+            "query": query,
+            "fields": ",".join(fields),
+            "limit": limit,
+            "offset": offset,
+        }
+
+        if fields_of_study:
+            params["fieldsOfStudy"] = (
+                ",".join(fields_of_study)
+                if isinstance(fields_of_study, list)
+                else fields_of_study.strip()
+            )
+
+        if open_access_pdf:
+            # Send both params — isOpenAccess broadens results,
+            # openAccessPdf ensures a direct PDF URL is returned
+            params["isOpenAccess"] = ""
+            params["openAccessPdf"] = ""
+
+        backoff = 5  # initial wait (s); doubles on each retry
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(
+                    url, params=params, headers=self.headers, timeout=30
+                )
+
+                # Rate limited — exponential backoff
+                if response.status_code == 429:
+                    wait = backoff * (2**attempt)
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            "Rate limited — waiting %ss (attempt %s/%s)...",
+                            wait,
+                            attempt + 1,
+                            max_retries,
+                        )
+                        time.sleep(wait)
+                        continue
+                    return [], 0, "Rate limited — max retries reached"
+
+                # Server error — transient, retry with backoff
+                if response.status_code >= 500:
+                    wait = backoff * (2**attempt)
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            "Server error %s — waiting %ss (attempt %s/%s)...",
+                            response.status_code,
+                            wait,
+                            attempt + 1,
+                            max_retries,
+                        )
+                        time.sleep(wait)
+                        continue
+                    return (
+                        [],
+                        0,
+                        f"Server error {response.status_code} after {max_retries} attempts",
+                    )
+
+                # Client error — permanent, don't retry
+                if 400 <= response.status_code < 500:
+                    return (
+                        [],
+                        0,
+                        f"Client error {response.status_code}: {response.text[:200]}",
+                    )
+
+                # Success
+                data = response.json()
+                return data.get("data", []), data.get("total", 0), None
+
+            except requests.exceptions.Timeout:
+                wait = backoff * (2**attempt)
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        "Timeout — waiting %ss (attempt %s/%s)...",
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    time.sleep(wait)
+                    continue
+                return [], 0, f"Timeout after {max_retries} attempts"
+
+            except requests.exceptions.RequestException as e:
+                wait = backoff * (2**attempt)
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        "Network error: %s — waiting %ss (attempt %s/%s)...",
+                        e,
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    time.sleep(wait)
+                    continue
+                return [], 0, f"Network error: {e}"
+
+            except json.JSONDecodeError as e:
+                return [], 0, f"JSON parse error: {e}"
+
+        return [], 0, "Max retries exhausted"
+

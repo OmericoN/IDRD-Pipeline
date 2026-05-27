@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from idrd.api.routes import router
+from idrd.interfaces.api.router import router
 
 
 def create_app() -> FastAPI:

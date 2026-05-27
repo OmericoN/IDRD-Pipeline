@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from idrd.matching.normalization import jaccard, normalize_identifier, normalize_text
-from idrd.pipeline.schemas import DatasetMention, MatchStatus, UMDatasetRecord, UMMatchDecision
+from idrd.domain.schemas import DatasetMention, MatchStatus, UMDatasetRecord, UMMatchDecision
 
 
 def match_mention_to_um_dataset(

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from idrd.config import EXPORTS_DIR, LOGS_DIR, MARKDOWN_DIR, PDF_DIR, STORAGE_DIR, XML_DIR
-from idrd.storage.repository import PipelineRepository
+from idrd.infrastructure.persistence.repository import PipelineRepository
 
 RESET_CONFIRMATION = "RESET IDRD"
 GENERATED_DIRECTORIES: tuple[Path, ...] = (PDF_DIR, XML_DIR, MARKDOWN_DIR, EXPORTS_DIR, LOGS_DIR)
