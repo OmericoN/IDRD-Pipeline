@@ -104,6 +104,71 @@ def test_active_run_count_reads_running_statuses():
     assert "status IN ('queued', 'running', 'started')" in query
 
 
+def test_create_pipeline_run_records_creation_event():
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [{"id": 9}]
+
+    run_id = repo.create_pipeline_run("dataset reuse", {"limit": 5})
+
+    assert run_id == 9
+    event_query, event_params = cursor.executed[-1]
+    assert "INSERT INTO pipeline_run_events" in event_query
+    assert event_params[:4] == (9, None, "info", 'Pipeline run created for "dataset reuse".')
+    assert conn.commits == 1
+
+
+def test_record_stage_result_records_stage_event():
+    repo, cursor, conn = make_repo()
+
+    repo.record_stage_result(
+        stage="discover",
+        status="successful",
+        metrics={"message": "Discovered 3 publications.", "count": 3},
+        pipeline_run_id=9,
+    )
+
+    assert "INSERT INTO stage_runs" in cursor.executed[0][0]
+    event_query, event_params = cursor.executed[1]
+    assert "INSERT INTO pipeline_run_events" in event_query
+    assert event_params[:4] == (9, "discover", "info", "Discovered 3 publications.")
+    assert conn.commits == 1
+
+
+def test_fail_pipeline_run_records_error_event():
+    repo, cursor, conn = make_repo()
+
+    repo.fail_pipeline_run(9, "No UM datasets are imported.")
+
+    assert "UPDATE pipeline_runs" in cursor.executed[0][0]
+    event_query, event_params = cursor.executed[1]
+    assert "INSERT INTO pipeline_run_events" in event_query
+    assert event_params[:4] == (9, None, "error", "Pipeline run failed.")
+    assert conn.commits == 1
+
+
+def test_list_pipeline_run_events_reads_chronological_events():
+    repo, cursor, _ = make_repo()
+    cursor.fetchall_results = [
+        [
+            {
+                "id": 1,
+                "pipeline_run_id": 9,
+                "stage": "discover",
+                "level": "info",
+                "message": "Discovered 3 publications.",
+                "payload": {},
+            }
+        ]
+    ]
+
+    events = repo.list_pipeline_run_events(9, limit=10)
+
+    assert events[0]["stage"] == "discover"
+    query, params = cursor.executed[-1]
+    assert "FROM pipeline_run_events" in query
+    assert params == (9, 10)
+
+
 def test_reset_database_truncates_pipeline_tables_and_preserves_schema():
     repo, cursor, conn = make_repo()
 
@@ -112,5 +177,6 @@ def test_reset_database_truncates_pipeline_tables_and_preserves_schema():
     query, _ = cursor.executed[-1]
     assert "TRUNCATE" in query
     assert "alembic_version" not in query
+    assert "pipeline_run_events" in tables
     assert "publications" in tables
     assert conn.commits == 1

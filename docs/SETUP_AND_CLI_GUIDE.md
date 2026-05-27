@@ -23,7 +23,7 @@ GROBID:   localhost:8070
 Check the app can see the database and queue:
 
 ```powershell
-docker compose run --rm app uv run src/main.py doctor
+docker compose run --rm app uv run idrd doctor
 ```
 
 For queued execution, start the worker:
@@ -38,6 +38,20 @@ The HTTP API is available at:
 http://localhost:8000/docs
 ```
 
+The browser GUI can be started from a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
 ## 2. Host Development
 
 If you prefer running Python on Windows instead of inside the `app` service:
@@ -45,7 +59,7 @@ If you prefer running Python on Windows instead of inside the `app` service:
 ```powershell
 uv sync
 uv run alembic upgrade head
-uv run src/main.py doctor
+uv run idrd doctor
 ```
 
 Use this `.env` shape for host runs:
@@ -97,13 +111,13 @@ um-1,Maastricht Health Survey,MHS;Health Survey,Jane Doe;John Doe,2024
 Import:
 
 ```powershell
-uv run src/main.py import-um-datasets --path data/um_datasets.csv
+uv run idrd import-um-datasets --path data/um_datasets.csv
 ```
 
 Or through Compose:
 
 ```powershell
-docker compose run --rm app uv run src/main.py import-um-datasets --path data/um_datasets.csv
+docker compose run --rm app uv run idrd import-um-datasets --path data/um_datasets.csv
 ```
 
 ## 4. Run The Full Pipeline
@@ -111,7 +125,7 @@ docker compose run --rm app uv run src/main.py import-um-datasets --path data/um
 Guided mode checks database, Redis, and worker readiness. If a worker is available, it prompts for queued mode; otherwise it defaults to local mode in non-interactive shells.
 
 ```powershell
-uv run src/main.py run-all `
+uv run idrd run-all `
   --query "Maastricht dataset reuse" `
   --limit 25 `
   --um-datasets data/um_datasets.csv `
@@ -121,7 +135,7 @@ uv run src/main.py run-all `
 Force local mode:
 
 ```powershell
-uv run src/main.py run-all `
+uv run idrd run-all `
   --query "Maastricht dataset reuse" `
   --limit 25 `
   --um-datasets data/um_datasets.csv `
@@ -132,7 +146,7 @@ uv run src/main.py run-all `
 Force queue mode:
 
 ```powershell
-uv run src/main.py run-all `
+uv run idrd run-all `
   --query "Maastricht dataset reuse" `
   --limit 25 `
   --um-datasets data/um_datasets.csv `
@@ -143,23 +157,23 @@ uv run src/main.py run-all `
 ## 5. Run Individual Stages
 
 ```powershell
-uv run src/main.py stages
-uv run src/main.py run-local discover --query "Maastricht dataset reuse" --limit 5
-uv run src/main.py run-local download_pdf --limit 5
-uv run src/main.py run-local grobid_convert --limit 5
-uv run src/main.py run-local render_document --limit 5
-uv run src/main.py run-local detect_mentions --limit 5
-uv run src/main.py run-local extract_features --limit 5
-uv run src/main.py run-local match_um_dataset --limit 5
-uv run src/main.py run-local export_insights --output storage/exports/insights.csv
+uv run idrd stages
+uv run idrd run-local discover --query "Maastricht dataset reuse" --limit 5
+uv run idrd run-local download_pdf --limit 5
+uv run idrd run-local grobid_convert --limit 5
+uv run idrd run-local render_document --limit 5
+uv run idrd run-local detect_mentions --limit 5
+uv run idrd run-local extract_features --limit 5
+uv run idrd run-local match_um_dataset --limit 5
+uv run idrd run-local export_insights --output storage/exports/insights.csv
 ```
 
 Queued single-stage examples:
 
 ```powershell
-uv run src/main.py worker-command
-uv run src/main.py enqueue discover --query "Maastricht dataset reuse" --limit 5
-uv run src/main.py enqueue download_pdf --limit 5
+uv run idrd worker-command
+uv run idrd enqueue discover --query "Maastricht dataset reuse" --limit 5
+uv run idrd enqueue download_pdf --limit 5
 ```
 
 ## 6. What Gets Persisted
@@ -172,7 +186,7 @@ The active schema stores:
 - extracted dataset mentions
 - imported UM datasets
 - UM match decisions
-- pipeline and stage run records
+- pipeline, stage run, and structured event records
 
 This durable state is the base for the future GUI and later formality evaluation.
 
@@ -181,4 +195,7 @@ This durable state is the base for the future GUI and later formality evaluation
 ```powershell
 uv run pytest -q
 uv run basedpyright
+cd frontend
+npm run build
+npm run test
 ```

@@ -1,7 +1,7 @@
 [project]
 name = "idrd-pipeline"
 version = "0.1.0"
-description = "Add your description here"
+description = "API-first research data pipeline for detecting and matching implicit dataset references."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -26,8 +26,16 @@ dependencies = [
 requires = ["setuptools>=80.0"]
 build-backend = "setuptools.build_meta"
 
+[project.scripts]
+idrd = "idrd.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
 [tool.basedpyright]
 venvPath = "."
 venv = ".venv"

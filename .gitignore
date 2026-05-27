@@ -1,24 +1,27 @@
-# Byte-compiled / optimized / DLL files
-.github
-copilot-instructions.md
-.github
-docs/*
-!docs/SYSTEM_OVERVIEW.md
-!docs/API_GUIDE.md
-!docs/PROJECT_STRUCTURE.md
-!docs/SETUP_AND_CLI_GUIDE.md
+# Project-local generated artifacts
 /storage/
 /outputs/
-runs/
-metadata/
-pdf/
-xml/
-markdown/
+/logs/
+/runs/
+/metadata/
+/pdf/
+/xml/
+/markdown/
+/src/schema/publications.db
 
-.vscode
-settings.json
-.env
-src/schema/publications.db
+# Frontend build/dependency artifacts
+/node_modules/
+/frontend/dist/
+/frontend/node_modules/
+
+# Local editor and environment files
+/.vscode/
+/settings.json
+/.env
+/.env.*
+!.env.example
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
@@ -36,6 +39,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+!frontend/src/lib/
+!frontend/src/lib/**
 parts/
 sdist/
 var/
@@ -156,7 +161,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .envrc
 .venv
 .venv-broken/

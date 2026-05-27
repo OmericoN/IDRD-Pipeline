@@ -2,6 +2,32 @@
 
 The project is organized so contributors can separate API concerns, pipeline logic, persistence, and generated files.
 
+## Root Layout
+
+```text
+.
+  src/          Python source tree
+  frontend/     Vite React GUI
+  tests/        Python test suite
+  migrations/   Alembic environment and versioned migrations
+  docs/         Human-facing guides and architecture notes
+  data/         Curated source/reference inputs
+  storage/      Generated runtime artifacts, ignored by git
+  outputs/      Ad-hoc generated outputs, ignored by git
+```
+
+Important root files:
+
+```text
+pyproject.toml  Python package metadata, CLI script, test/type-check config
+uv.lock         Locked Python dependencies for reproducible installs
+compose.yaml    Local Postgres, Redis, GROBID, API, worker, and migration stack
+Dockerfile      Backend application image
+.env.example    Safe template for local environment configuration
+```
+
+## Backend Package
+
 ```text
 src/idrd/
   api/          FastAPI app, routes, and HTTP schemas
@@ -14,14 +40,18 @@ src/idrd/
   cli.py        Operator/developer CLI
 ```
 
-Root-level directories:
+The `idrd` console script points to `idrd.cli:main`. `src/main.py` is kept only as a compatibility entry point for older commands and tests.
+
+## Frontend Package
 
 ```text
-data/        Source/reference inputs kept across resets
-storage/     Generated runtime files; safe to wipe through reset
-migrations/  Alembic schema migrations
-tests/       Unit and API tests
-docs/        Contributor and operator documentation
+frontend/
+  src/
+    components/ui/  Small reusable UI primitives
+    lib/            API client, pipeline helpers, and frontend tests
+    test/           Vitest setup
+    App.tsx         Main GUI workflow
+  package.json      Node scripts and dependencies
 ```
 
 ## Data Versus Storage
@@ -44,3 +74,11 @@ The reset service only deletes configured generated storage paths that resolve u
 - Pipeline services own stage behavior and are shared by CLI, Celery, and API.
 - The repository owns SQL and database transactions.
 - Reset logic lives in `idrd.storage.reset` so destructive behavior is isolated and testable.
+
+## Repository Hygiene
+
+- Commit curated inputs under `data/` only when they are stable fixtures or reference datasets.
+- Keep generated files under `storage/` or `outputs/`; both are ignored and can be recreated.
+- Keep secrets in `.env`; commit only `.env.example`.
+- Put schema changes in Alembic migration files under `migrations/versions/`.
+- Prefer adding tests beside the behavior boundary being changed: API tests for route contracts, service tests for orchestration logic, repository tests for SQL behavior, and frontend tests under `frontend/src/lib`.

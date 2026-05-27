@@ -85,6 +85,20 @@ class RunsResponse(BaseModel):
     runs: list[PipelineRunSummary]
 
 
+class PipelineRunEventSummary(BaseModel):
+    id: int
+    pipeline_run_id: int
+    stage: str | None = None
+    level: str = "info"
+    message: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class RunEventsResponse(BaseModel):
+    events: list[PipelineRunEventSummary]
+
+
 class InsightsResponse(BaseModel):
     rows: list[dict[str, Any]]
 

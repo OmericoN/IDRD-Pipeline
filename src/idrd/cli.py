@@ -46,7 +46,7 @@ class IDRDPipeline:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="uv run src/main.py",
+        prog="uv run idrd",
         description="IDRD Pipeline - queue-backed dataset mention pipeline",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)

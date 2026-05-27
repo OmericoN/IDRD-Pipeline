@@ -22,8 +22,25 @@ uv run uvicorn idrd.api.main:app --reload --host 0.0.0.0 --port 8000
 2. Call `POST /api/v1/runs` with the user query and run options.
 3. Store the returned `pipeline_run_id`.
 4. Poll `GET /api/v1/runs/{pipeline_run_id}` every few seconds.
-5. Show stage progress from the `stages` array.
-6. Read preview rows from `GET /api/v1/insights` after matching/export.
+5. Poll `GET /api/v1/runs/{pipeline_run_id}/events` for structured stage messages and errors.
+6. Show stage progress from the `stages` array.
+7. Read preview rows from `GET /api/v1/insights` after matching/export.
+
+## Run The GUI
+
+The GUI lives in `frontend/` and uses Vite's local proxy to reach the API.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
 
 ## Main Endpoints
 
@@ -35,6 +52,7 @@ uv run uvicorn idrd.api.main:app --reload --host 0.0.0.0 --port 8000
 | `POST` | `/api/v1/stages/{stage}/runs` | Enqueue one stage |
 | `GET` | `/api/v1/runs` | List recent pipeline runs |
 | `GET` | `/api/v1/runs/{run_id}` | Get detailed run progress |
+| `GET` | `/api/v1/runs/{run_id}/events` | Get chronological structured run events |
 | `GET` | `/api/v1/insights` | Preview joined insight rows |
 | `POST` | `/api/v1/um-datasets/import` | Import UM dataset CSV/JSON from disk |
 | `POST` | `/api/v1/admin/reset` | Wipe database rows and generated storage |

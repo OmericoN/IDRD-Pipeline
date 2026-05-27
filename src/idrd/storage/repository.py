@@ -54,19 +54,28 @@ class PipelineRepository:
 
     def create_pipeline_run(self, query: str, config: dict[str, Any] | None = None) -> int:
         run_key = f"run-{uuid4()}"
+        run_config = config or {}
         self.cursor.execute(
             """
             INSERT INTO pipeline_runs (run_key, query, status, config)
             VALUES (%s, %s, 'running', %s)
             RETURNING id
             """,
-            (run_key, query, psycopg2.extras.Json(config or {})),
+            (run_key, query, psycopg2.extras.Json(run_config)),
         )
         row = self.cursor.fetchone()
         if not row:
             raise RuntimeError("Failed to create pipeline run")
+        pipeline_run_id = int(row["id"])
+        self._insert_pipeline_run_event(
+            pipeline_run_id=pipeline_run_id,
+            stage=None,
+            level="info",
+            message=f'Pipeline run created for "{query}".',
+            payload={"query": query, "config": run_config, "run_key": run_key},
+        )
         self.conn.commit()
-        return int(row["id"])
+        return pipeline_run_id
 
     def update_pipeline_run_task_id(self, pipeline_run_id: int, task_id: str | None) -> None:
         self.cursor.execute(
@@ -101,6 +110,13 @@ class PipelineRepository:
                 psycopg2.extras.Json(metrics or {}),
             ),
         )
+        self._insert_pipeline_run_event(
+            pipeline_run_id=pipeline_run_id,
+            stage=str(stage),
+            level=_event_level(status),
+            message=_event_message(str(stage), status, metrics, error),
+            payload=metrics or {},
+        )
         self.conn.commit()
 
     def finish_pipeline_run(self, pipeline_run_id: int | None, status: str) -> None:
@@ -109,6 +125,13 @@ class PipelineRepository:
         self.cursor.execute(
             "UPDATE pipeline_runs SET status = %s, finished_at = now(), updated_at = now() WHERE id = %s",
             (status, pipeline_run_id),
+        )
+        self._insert_pipeline_run_event(
+            pipeline_run_id=pipeline_run_id,
+            stage=None,
+            level=_event_level(status),
+            message=f"Pipeline run finished with status: {status}.",
+            payload={"status": status},
         )
         self.conn.commit()
 
@@ -122,6 +145,13 @@ class PipelineRepository:
             WHERE id = %s
             """,
             (error, pipeline_run_id),
+        )
+        self._insert_pipeline_run_event(
+            pipeline_run_id=pipeline_run_id,
+            stage=None,
+            level="error",
+            message="Pipeline run failed.",
+            payload={"error": error},
         )
         self.conn.commit()
 
@@ -199,6 +229,26 @@ class PipelineRepository:
         )
         return [dict(row) for row in self.cursor.fetchall()]
 
+    def list_pipeline_run_events(self, pipeline_run_id: int, limit: int = 200) -> list[dict[str, Any]]:
+        self.cursor.execute(
+            """
+            SELECT
+                id,
+                pipeline_run_id,
+                stage,
+                level,
+                message,
+                payload,
+                created_at
+            FROM pipeline_run_events
+            WHERE pipeline_run_id = %s
+            ORDER BY created_at, id
+            LIMIT %s
+            """,
+            (pipeline_run_id, limit),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
     def active_run_count(self) -> int:
         self.cursor.execute(
             "SELECT COUNT(*) AS count FROM pipeline_runs WHERE status IN ('queued', 'running', 'started')"
@@ -208,6 +258,7 @@ class PipelineRepository:
 
     def reset_database(self) -> list[str]:
         tables = [
+            "pipeline_run_events",
             "stage_runs",
             "um_match_decisions",
             "mention_candidates",
@@ -221,6 +272,22 @@ class PipelineRepository:
         self.cursor.execute(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE")
         self.conn.commit()
         return tables
+
+    def _insert_pipeline_run_event(
+        self,
+        pipeline_run_id: int,
+        stage: str | None,
+        level: str,
+        message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        self.cursor.execute(
+            """
+            INSERT INTO pipeline_run_events (pipeline_run_id, stage, level, message, payload)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (pipeline_run_id, stage, level, message, psycopg2.extras.Json(payload or {})),
+        )
 
     def upsert_publications(self, papers: Iterable[dict[str, Any]], source: str) -> int:
         count = 0
@@ -692,3 +759,20 @@ def _path_size(path: str | Path) -> int | None:
         return Path(path).stat().st_size
     except OSError:
         return None
+
+
+def _event_level(status: str) -> str:
+    if status in {"failed", "error"}:
+        return "error"
+    if status in {"skipped", "warning"}:
+        return "warning"
+    return "info"
+
+
+def _event_message(stage: str, status: str, metrics: dict[str, Any] | None, error: str | None) -> str:
+    if error:
+        return f"{stage} failed: {error}"
+    message = (metrics or {}).get("message")
+    if isinstance(message, str) and message:
+        return message
+    return f"{stage} finished with status: {status}."

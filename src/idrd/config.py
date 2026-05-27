@@ -4,8 +4,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-# Load .env from project root
-env_path = Path(__file__).parent.parent / '.env'
+# Load .env from the repository root.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+env_path = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=env_path)
 load_dotenv()
 
@@ -53,7 +54,6 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 LLM_API_KEY    = os.getenv("LLM_API_KEY",    "")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 STORAGE_DIR = PROJECT_ROOT / "storage"
 

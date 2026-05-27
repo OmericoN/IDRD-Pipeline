@@ -18,10 +18,12 @@ from idrd.api.schemas import (
     ResetResponse,
     RunCreateRequest,
     RunCreateResponse,
+    RunEventsResponse,
     RunsResponse,
     StageInfo,
     StageRunCreateRequest,
     StagesResponse,
+    PipelineRunEventSummary,
 )
 from idrd.config import CELERY_BROKER_URL, GROBID_ALIVE_CHECK_TIMEOUT_SEC, GROBID_BASE_URL
 from idrd.pipeline import orchestrator, services, tasks
@@ -126,6 +128,15 @@ def get_run(run_id: int) -> PipelineRunSummary:
     if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline run not found.")
     return PipelineRunSummary.model_validate(run)
+
+
+@router.get("/runs/{run_id}/events", response_model=RunEventsResponse)
+def get_run_events(run_id: int, limit: int = Query(default=200, ge=1, le=1000)) -> RunEventsResponse:
+    with PipelineRepository() as repo:
+        if not repo.get_pipeline_run(run_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline run not found.")
+        events = repo.list_pipeline_run_events(run_id, limit=limit)
+    return RunEventsResponse(events=[PipelineRunEventSummary.model_validate(event) for event in events])
 
 
 @router.get("/insights", response_model=InsightsResponse)
