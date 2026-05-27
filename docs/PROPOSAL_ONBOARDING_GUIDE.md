@@ -99,7 +99,7 @@ Semantic Scholar API
 
 ### Pipeline orchestration
 
-`src/main.py` runs stages in order and supports `--resume` using DB flags:
+`uv run idrd` runs pipeline commands through the layered CLI interface:
 - `pdf_downloaded`
 - `xml_converted`
 - `sections_extracted`
@@ -111,7 +111,7 @@ Semantic Scholar API
 
 | Path | Responsibility |
 |---|---|
-| `src/main.py` | Pipeline orchestration and CLI entrypoint |
+| `backend/src/idrd/interfaces/cli/main.py` | CLI entrypoint |
 | `src/config.py` | Central configuration and directory setup |
 | `src/db/db.py` | PostgreSQL schema, queries, stage queues |
 | `src/pubfetcher/` | Semantic Scholar retrieval logic |
@@ -160,34 +160,34 @@ LLM_API_KEY=your_key
 ## Full pipeline
 
 ```bash
-uv run src/main.py --query "implicit dataset references" --limit 50
+uv run idrd run-all --query "implicit dataset references" --limit 50 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv
 ```
 
 ## Concurrent stage-internal execution
 
 ```bash
-uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent
+uv run idrd run-all --query "implicit dataset references" --limit 50 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --mode enqueue
 ```
 
 ## Resume from last incomplete stage
 
 ```bash
-uv run src/main.py --resume
+uv run idrd run-all --query "implicit dataset references" --limit 50 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --mode guided
 ```
 
 ## Stage-only commands
 
 ```bash
-uv run src/main.py --fetch-only --query "dataset" --limit 100
-uv run src/main.py --download-only
-uv run src/main.py --convert-only
-uv run src/main.py --extract-only
+uv run idrd run-local discover --query "dataset" --limit 100
+uv run idrd run-local download_pdf
+uv run idrd run-local grobid_convert
+uv run idrd run-local extract_features
 ```
 
 ## Status and tests
 
 ```bash
-uv run src/main.py --status
+uv run idrd doctor
 uv run pytest -q
 ```
 

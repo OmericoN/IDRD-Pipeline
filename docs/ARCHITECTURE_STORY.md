@@ -168,11 +168,11 @@ Implements deterministic UM dataset matching. It currently supports exact DOI/UR
 
 Alembic configuration file.
 
-`migrations/env.py`
+`backend/migrations/env.py`
 
 Alembic runtime environment. It loads the project config and uses `POSTGRES_URI`.
 
-`migrations/versions/20260526_0001_open_source_pipeline_schema.py`
+`backend/migrations/versions/20260526_0001_open_source_pipeline_schema.py`
 
 Creates the first canonical schema. It enables `pgvector` and creates the main tables.
 
@@ -633,25 +633,25 @@ The new CLI is intentionally thin.
 Main commands:
 
 ```bash
-uv run src/main.py stages
+uv run idrd stages
 ```
 
 Prints the canonical stage order.
 
 ```bash
-uv run src/main.py worker-command
+uv run idrd worker-command
 ```
 
 Prints the Celery worker command.
 
 ```bash
-uv run src/main.py enqueue discover --query "Maastricht dataset reuse" --limit 100
+uv run idrd enqueue discover --query "Maastricht dataset reuse" --limit 100
 ```
 
 Enqueues a stage for worker execution.
 
 ```bash
-uv run src/main.py run-local detect_mentions --limit 20
+uv run idrd run-local detect_mentions --limit 20
 ```
 
 Runs a stage synchronously in the current process.

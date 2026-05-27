@@ -7,7 +7,7 @@
 /pdf/
 /xml/
 /markdown/
-/src/schema/publications.db
+/backend/src/schema/publications.db
 
 # Frontend build/dependency artifacts
 /node_modules/
@@ -163,6 +163,7 @@ celerybeat.pid
 # Environments
 .envrc
 .venv
+/backend/.venv/
 .venv-broken/
 .uv-cache/
 env/

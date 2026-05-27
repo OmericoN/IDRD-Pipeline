@@ -6,10 +6,8 @@ The project is organized as a small layered system. Interfaces accept user input
 
 ```text
 .
-  src/          Python source tree
+  backend/      FastAPI/uv backend project
   frontend/     Vite React GUI
-  tests/        Python test suite
-  migrations/   Alembic environment and versioned migrations
   docs/         Human-facing guides and architecture notes
   data/         Curated source/reference inputs
   storage/      Generated runtime artifacts, ignored by git
@@ -19,39 +17,35 @@ The project is organized as a small layered system. Interfaces accept user input
 Important root files:
 
 ```text
-pyproject.toml  Python package metadata, CLI script, test/type-check config
-uv.lock         Locked Python dependencies for reproducible installs
 compose.yaml    Local Postgres, Redis, GROBID, API, worker, and migration stack
-Dockerfile      Backend application image
 .env.example    Safe template for local environment configuration
 ```
 
 ## Backend Package
 
 ```text
-src/idrd/
-  domain/        Pure enums, Pydantic domain schemas, and operation result DTOs
-  application/   Pipeline use cases, full-run orchestration, and shared stage registry
-  infrastructure/
-    persistence/ Focused PostgreSQL repository modules composed into PipelineRepository
-    ingestion/   PDF download, GROBID conversion, and markdown rendering adapters
-    pubfetcher/  Publication metadata clients
-    worker/      Celery app and task entrypoints
-    health/      Redis, Celery, and GROBID readiness probes
-  interfaces/
-    api/         FastAPI router assembly and route modules
-    cli/         Operator/developer CLI
-  api/          Compatibility package for existing FastAPI imports and HTTP schemas
-  pipeline/     Compatibility package for older service/task/schema imports
-  storage/      Reset service and repository compatibility import
-  ingestion/    Compatibility imports for ingestion adapters
-  matching/     UM dataset matching and normalization
-  pubfetcher/   Compatibility import for publication clients
-  models/       Compatibility imports for result DTOs
-  cli.py        Compatibility CLI entrypoint
+backend/
+  pyproject.toml  Python package metadata, CLI script, test/type-check config
+  uv.lock         Locked Python dependencies for reproducible installs
+  Dockerfile      Backend application image
+  migrations/     Alembic environment and versioned migrations
+  tests/          Python test suite
+  src/idrd/
+    domain/        Pure enums, Pydantic domain schemas, and operation result DTOs
+    application/   Pipeline use cases, full-run orchestration, and shared stage registry
+    infrastructure/
+      persistence/ Focused PostgreSQL repository modules composed into PipelineRepository
+      ingestion/   PDF download, GROBID conversion, and markdown rendering adapters
+      pubfetcher/  Publication metadata clients
+      worker/      Celery app and task entrypoints
+      health/      Redis, Celery, and GROBID readiness probes
+    interfaces/
+      api/         FastAPI router assembly and route modules
+      cli/         Operator/developer CLI
+    matching/     UM dataset matching and normalization
 ```
 
-The `idrd` console script still points to `idrd.cli:main`, which delegates to `idrd.interfaces.cli.main`. `src/main.py` remains a compatibility entry point for older commands and tests.
+The `idrd` console script points directly to `idrd.interfaces.cli.main:main`.
 
 ## Frontend Package
 
@@ -64,8 +58,8 @@ frontend/
     shared/lib/     Cross-feature utilities
     shared/ui/      Small reusable UI primitives
     test/           Vitest setup
-    App.tsx         Compatibility export for the app shell
-  package.json      Node scripts and dependencies
+  package.json      Bun scripts and dependencies
+  bun.lock          Locked frontend dependencies
 ```
 
 ## Data Versus Storage
@@ -89,12 +83,12 @@ The reset service only deletes configured generated storage paths that resolve u
 - The stage registry is the single source for stage order, descriptions, required arguments, keyword mapping, and Celery task lookup.
 - Infrastructure adapters own SQL, HTTP clients, queues, generated files, and health probes.
 - Domain modules do not import interface or infrastructure code.
-- Reset logic lives in `idrd.storage.reset` so destructive behavior is isolated and testable.
+- Reset logic lives in `idrd.application.reset` so destructive behavior is isolated and testable.
 
 ## Repository Hygiene
 
 - Commit curated inputs under `data/` only when they are stable fixtures or reference datasets.
 - Keep generated files under `storage/` or `outputs/`; both are ignored and can be recreated.
 - Keep secrets in `.env`; commit only `.env.example`.
-- Put schema changes in Alembic migration files under `migrations/versions/`.
+- Put schema changes in Alembic migration files under `backend/migrations/versions/`.
 - Prefer adding tests beside the behavior boundary being changed: API tests for route contracts, application tests for orchestration logic, repository tests for SQL behavior, and frontend tests under their feature or shared package.

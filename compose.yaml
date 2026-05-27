@@ -36,8 +36,10 @@ services:
       retries: 30
 
   app:
-    build: .
-    working_dir: /app
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /app/backend
     command: ["sleep", "infinity"]
     environment: &app_env
       POSTGRES_HOST: postgres
@@ -68,8 +70,10 @@ services:
         condition: service_started
 
   migrate:
-    build: .
-    working_dir: /app
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /app/backend
     command: ["uv", "run", "alembic", "upgrade", "head"]
     environment: *app_env
     volumes:
@@ -81,9 +85,11 @@ services:
         condition: service_healthy
 
   api:
-    build: .
-    working_dir: /app
-    command: ["uv", "run", "uvicorn", "idrd.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /app/backend
+    command: ["uv", "run", "uvicorn", "idrd.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment: *app_env
     ports:
       - "8000:8000"
@@ -102,9 +108,11 @@ services:
         condition: service_completed_successfully
 
   worker:
-    build: .
-    working_dir: /app
-    command: ["uv", "run", "celery", "-A", "idrd.pipeline.celery_app:celery_app", "worker", "--loglevel=INFO", "--pool=solo"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /app/backend
+    command: ["uv", "run", "celery", "-A", "idrd.infrastructure.worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--pool=solo"]
     environment: *app_env
     volumes:
       - .:/app

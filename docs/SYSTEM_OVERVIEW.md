@@ -16,7 +16,7 @@
 2. [System Architecture](#2-system-architecture)
 3. [Technology Stack](#3-technology-stack)
 4. [Configuration Layer — `src/config.py`](#4-configuration-layer)
-5. [Pipeline Orchestrator — `src/main.py`](#5-pipeline-orchestrator)
+5. [Pipeline Orchestrator — `idrd.application.orchestrator`](#5-pipeline-orchestrator)
 6. [Database Layer — `src/db/`](#6-database-layer)
 7. [Publication Fetcher — `src/pubfetcher/`](#7-publication-fetcher)
 8. [PDF Downloader — `src/ingestion/downloader.py`](#8-pdf-downloader)
@@ -170,7 +170,7 @@ Credentials (API keys, database connection details) are loaded from a `.env` fil
 
 ## 5. Pipeline Orchestrator
 
-**File:** `src/main.py` | **Class:** `IDRDPipeline`
+**Active files:** `backend/src/idrd/application/orchestrator.py` and `backend/src/idrd/interfaces/cli/main.py`
 
 `main.py` is the top-level entry point for the system. It owns the `IDRDPipeline` class, which coordinates all five pipeline stages, and exposes a fully featured CLI via `argparse`.
 

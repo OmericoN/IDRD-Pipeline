@@ -13,9 +13,9 @@ GUI / CLI / Celery
   -> PostgreSQL, Redis, GROBID, Semantic Scholar, storage/
 ```
 
-The FastAPI app starts in `idrd.api.main`, which includes the router assembled by `idrd.interfaces.api.router`. Each route module handles one HTTP concern: health, stages, runs, insights, imports, or admin reset.
+The FastAPI app starts in `idrd.interfaces.api.main`, which includes the router assembled by `idrd.interfaces.api.router`. Each route module handles one HTTP concern: health, stages, runs, insights, imports, or admin reset.
 
-The CLI starts at `idrd.cli:main`, then delegates to `idrd.interfaces.cli.main`. It shares the same application services as the API instead of maintaining a second pipeline implementation.
+The CLI starts at `idrd.interfaces.cli.main:main`. It shares the same application services as the API instead of maintaining a second pipeline implementation.
 
 ## Stage Flow
 
@@ -40,6 +40,6 @@ Infrastructure code owns side effects:
 
 `PipelineRepository` remains the public repository class, but its methods are composed from focused persistence modules so contributors can find run tracking, publication/artifact persistence, mention records, UM matching, and exports separately.
 
-## Compatibility
+## Import Rule
 
-Older imports under `idrd.pipeline`, `idrd.storage.repository`, `idrd.ingestion`, `idrd.pubfetcher`, `idrd.models.results`, and `idrd.cli` remain as shims for one transition pass. New code should import from `domain`, `application`, `infrastructure`, or `interfaces` directly.
+New code should import from `domain`, `application`, `infrastructure`, or `interfaces` directly. The old compatibility packages were removed so stale layer boundaries fail fast.

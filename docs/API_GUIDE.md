@@ -13,7 +13,8 @@ docker compose up api worker
 Host development:
 
 ```powershell
-uv run uvicorn idrd.api.main:app --reload --host 0.0.0.0 --port 8000
+cd backend
+uv run uvicorn idrd.interfaces.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## GUI Polling Flow
@@ -32,8 +33,8 @@ The GUI lives in `frontend/` and uses Vite's local proxy to reach the API.
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open:

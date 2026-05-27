@@ -42,8 +42,8 @@ The browser GUI can be started from a second terminal:
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open:
@@ -57,6 +57,7 @@ http://localhost:5173
 If you prefer running Python on Windows instead of inside the `app` service:
 
 ```powershell
+cd backend
 uv sync
 uv run alembic upgrade head
 uv run idrd doctor
@@ -196,6 +197,6 @@ This durable state is the base for the future GUI and later formality evaluation
 uv run pytest -q
 uv run basedpyright
 cd frontend
-npm run build
-npm run test
+bun run build
+bun run test
 ```

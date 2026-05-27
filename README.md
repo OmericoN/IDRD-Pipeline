@@ -5,16 +5,14 @@ IDRD finds hidden dataset references in scholarly publications and matches them 
 ## Repository Map
 
 ```text
-src/idrd/     Python backend package: domain, application, infrastructure, and interfaces
+backend/     Python backend uv project: src, tests, Alembic migrations, and Dockerfile
 frontend/     Vite React GUI organized into app, feature, shared API, and shared UI packages
-migrations/   Alembic migrations for the PostgreSQL/pgvector schema
-tests/        Python tests for API, services, storage, CLI, and matching behavior
 docs/         Operator, API, architecture, and repository structure guides
 data/         Curated source/reference inputs that should survive resets
 storage/      Generated runtime files, ignored by git and safe to reset
 ```
 
-The main backend command is exposed as `idrd` through `pyproject.toml`. `src/main.py` remains as a compatibility entry point for existing scripts.
+The main backend command is exposed as `idrd` through `backend/pyproject.toml`.
 
 ## What The Backend Does
 
@@ -53,8 +51,8 @@ Start the GUI in a second terminal:
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open the GUI:
@@ -118,6 +116,7 @@ If active runs exist, `force=true` is required.
 The CLI is still available for operators and development:
 
 ```powershell
+cd backend
 uv run idrd stages
 uv run idrd doctor
 uv run idrd import-um-datasets --path data/um_datasets.csv
@@ -129,6 +128,7 @@ uv run idrd run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets 
 Install dependencies and run checks:
 
 ```powershell
+cd backend
 uv sync
 uv run alembic upgrade head
 uv run pytest -q
