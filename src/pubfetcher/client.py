@@ -1,17 +1,12 @@
 import os
-import sys
 import json
 import time
 import logging
 import requests
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
 
-sys.path.append(str(Path(__file__).parent.parent))
-
 from config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
-from utils.dict_parser import PaperDictParser
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +25,7 @@ class SemanticScholarClient:
     # Semantic Scholar free tier: 1 req/s  |  with key: 10 req/s
     _REQUEST_DELAY = 0.15
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or SEMANTIC_SCHOLAR_API_KEY
         self.base_url = SEMANTIC_SCHOLAR_API_URL
         self.headers = {}
@@ -50,8 +45,8 @@ class SemanticScholarClient:
         query: str,
         limit: int = 100,
         offset: int = 0,
-        fields: List[str] = None,
-        fields_of_study: str = None,
+        fields: List[str] | None = None,
+        fields_of_study: str | None = None,
         open_access_pdf: bool = False,
     ) -> List[Dict]:
         """
@@ -158,7 +153,7 @@ class SemanticScholarClient:
         limit: int,
         offset: int,
         fields: List[str],
-        fields_of_study: str = None,
+        fields_of_study: str | None = None,
         open_access_pdf: bool = False,
         max_retries: int = 10,
     ) -> Tuple[List[Dict], int, Optional[str]]:
@@ -274,27 +269,3 @@ class SemanticScholarClient:
 
         return [], 0, "Max retries exhausted"
 
-
-# ── Standalone usage ───────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    from db.db import IDRDDatabase
-
-    client = SemanticScholarClient()
-    papers = client.search_papers(query="Transformers", open_access_pdf=True, limit=10)
-
-    parser = PaperDictParser()
-    parser.parse_papers(papers)
-
-    out = (
-        Path(__file__).parent.parent.parent
-        / "outputs"
-        / "metadata"
-        / "retrieved_results.json"
-    )
-    out.parent.mkdir(parents=True, exist_ok=True)
-    parser.to_json(str(out))
-
-    db = IDRDDatabase()
-    count = db.insert_publications(papers)
-    logger.info("Saved %s papers to database", count)
-    db.close()

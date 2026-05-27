@@ -1,5 +1,7 @@
 # IDRD Pipeline — System Overview
 
+> Historical note: this overview describes the earlier prototype architecture. For the current active pipeline, use `README.md` and `docs/SETUP_AND_CLI_GUIDE.md`.
+
 > **Document purpose:** A detailed technical reference for each package and module in the IDRD Pipeline. Intended for progress reporting, internal documentation, and onboarding.
 >
 > **Last updated:** 2026-03-24

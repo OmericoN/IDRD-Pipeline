@@ -5,26 +5,39 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "docker>=7.1.0",
-    "dotenv>=0.9.9",
-    "fqdn>=1.5.1",
-    "groq>=1.1.1",
-    "ipykernel>=7.2.0",
-    "jupyter>=1.1.1",
-    "langextract>=1.2.0",
+    "alembic>=1.17.2",
+    "celery>=5.6.0",
     "lxml>=6.0.2",
-    "numpy>=2.4.3",
-    "openai>=2.29.0",
-    "pandas>=3.0.1",
+    "pgvector>=0.4.1",
     "psycopg2-binary>=2.9.11",
-    "pytest>=9.0.3",
+    "pydantic>=2.12.4",
+    "python-dotenv>=1.2.1",
+    "redis>=7.1.0",
     "requests>=2.32.5",
     "rich>=15.0.0",
+    "sqlalchemy>=2.0.44",
+    "tqdm>=4.67.1",
 ]
+
+[build-system]
+requires = ["setuptools>=80.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 [tool.basedpyright]
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
+extraPaths = ["src"]
+include = [
+    "src",
+    "tests",
+]
+exclude = [
+    "data",
+    "logs",
+]
 
 [dependency-groups]
 dev = [

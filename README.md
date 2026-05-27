@@ -1,270 +1,130 @@
 # IDRD Pipeline
 
-A multi-stage pipeline for fetching academic publications, downloading their PDFs,
-converting them to structured XML, extracting Markdown sections, and (in future phases)
-extracting features for a RAG system.
+IDRD finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. The point is to recover dataset impact that normal publication citation metadata misses, especially informal narrative mentions in full text.
 
----
+The active pipeline is:
 
-## Requirements
-- uv ( [installation guide](https://docs.astral.sh/uv/getting-started/installation/) )
-#### uv quick-start guide
+```text
+discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> export_insights
+```
+
+## Stack
+
+| Concern | Technology |
+|---|---|
+| Language | Python 3.12 |
+| Database | PostgreSQL + pgvector |
+| Queue | Celery + Redis |
+| PDF parsing | GROBID |
+| Migrations | Alembic |
+| Validation | Pydantic |
+| Setup | Docker Compose + uv |
+
+The canonical backend is `PipelineRepository` over the Alembic schema. Legacy local database code and experimental extraction scripts have been removed from the active package.
+
+## Fast Setup
+
+Start the local stack:
+
+```bash
+docker compose up -d postgres redis grobid
+docker compose run --rm migrate
+```
+
+Check readiness:
+
+```bash
+docker compose run --rm app uv run src/main.py doctor
+```
+
+Start a worker for queued runs:
+
+```bash
+docker compose up worker
+```
+
+For host-based development, install dependencies with:
+
 ```bash
 uv sync
-```
-```bash
-uv add <package_name>
-```
-```bash
-uv run main.py -args
+uv run alembic upgrade head
 ```
 
-## Getting Started
-```bash
-git clone https://github.com/OmericoN/IDRD-Pipeline.git
-```
+Host `.env` defaults should point to local services:
 
-
-Create a `.env` file in the project root:
-
-```
-SEMANTIC_SCHOLAR_API_KEY=your_key
+```env
 POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+POSTGRES_PORT=5433
 POSTGRES_DB=idrd_pipeline
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_password
-LLM_API_KEY=your_key
+POSTGRES_PASSWORD=postgres
+
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+GROBID_BASE_URL=http://localhost:8070
 ```
 
-Make sure **PostgreSQL** is running and the database exists:
+## CLI
+
+List stages:
 
 ```bash
-psql -U postgres -c "CREATE DATABASE idrd_pipeline;"
+uv run src/main.py stages
 ```
 
-The schema is created automatically on first run.
-
----
-
-## Running the Pipeline
-
-All commands are run from the **project root**.
-
-### Full Pipeline (recommended starting point)
-Fetch → Download → Convert → Extract Markdown in one command.
-
-##### Sequential Mode (default)
-Each stage (component) must finish before proceeding to the next.
-Each components handles the data points one by one.
-(Example)
-```bash
-uv run src/main.py --query "implicit dataset references" --limit 50
-```
-
-##### Concurrent Mode
-Run the full pipeline with concurrent stage execution (download/convert/render).
-Applies threading on each component to parallelize its execution.
-```bash
-uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent
-```
-
-`--mode` applies to full pipeline runs only. `--resume` and single-step modes remain sequential.
-
-**Note**: Actual stages are still sequential; one stage must complete before proceeding to the other
-
-#### Pretty Monitoring
-Live runtime monitor controls (full pipeline runs):
-```bash
-uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent --monitor live
-uv run src/main.py --query "implicit dataset references" --limit 50 --mode concurrent --monitor off
-```
-
----
-
-### Resume Pipeline
-Automatically detects the last incomplete stage and continues from there.
-No need to specify which step to run - the pipeline reads the database state.
+Import UM dataset metadata from JSON or CSV:
 
 ```bash
-uv run src/main.py --resume
+uv run src/main.py import-um-datasets --path data/um_datasets.csv
 ```
 
-If no papers exist in the database yet, provide a query so Step 1 can run:
-```bash
-uv run src/main.py --resume --query "implicit dataset references" --limit 50
-```
-
-| DB State | Resumes at |
-|---|---|
-| No papers in DB | Step 1 — Fetch (requires `--query`) |
-| Papers exist, no PDFs | Step 2 — Download |
-| PDFs downloaded, no XML | Step 3 — Convert |
-| XML converted, no Markdown | Step 4 — Extract |
-| All stages complete | Prints "nothing to resume" |
-
----
-
-### Individual Steps
-
-#### Step 1 — Fetch papers only
-Store papers in the database without downloading anything.
+Run the full pipeline with guidance:
 
 ```bash
-uv run src/main.py --query "Transformers NLP" --limit 100 --fetch-only
+uv run src/main.py run-all ^
+  --query "Maastricht dataset reuse" ^
+  --limit 25 ^
+  --um-datasets data/um_datasets.csv ^
+  --output outputs/insights.csv
 ```
 
-Filter by field of study:
-```bash
-uv run src/main.py --query "dataset" --limit 200 --fetch-only --fields-of-study "Computer Science"
-```
-
-Include non-open-access papers (no PDF URL required):
-```bash
-uv run src/main.py --query "dataset" --limit 200 --fetch-only --all-access
-```
-
----
-
-#### Step 2 — Download PDFs only
-Download PDFs for papers already in the database.
+Use explicit local or queued mode:
 
 ```bash
-uv run src/main.py --download-only
+uv run src/main.py run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output outputs/insights.csv --mode local
+uv run src/main.py run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output outputs/insights.csv --mode enqueue
 ```
 
-Limit how many to download, set delay, or force re-download:
-```bash
-uv run src/main.py --download-only --dl-limit 20 --dl-delay 1.0 --dl-overwrite
-```
-
----
-
-#### Step 3 — Convert PDFs to XML only
-Requires **Docker** running. Starts a GROBID container automatically.
+Run one stage locally:
 
 ```bash
-uv run src/main.py --convert-only
+uv run src/main.py run-local detect_mentions --limit 20
 ```
 
-Delete PDFs after successful conversion (saves disk space):
-```bash
-uv run src/main.py --convert-only --delete-pdfs
-```
-
-Re-convert already converted files:
-```bash
-uv run src/main.py --convert-only --cv-overwrite
-```
-
----
-
-#### Step 4 — Extract Markdown only
-Extract structured Markdown from TEI XML files already in `data/xml/`.
+Enqueue one stage:
 
 ```bash
-uv run src/main.py --extract-only
+uv run src/main.py enqueue download_pdf --limit 20
 ```
 
-Re-extract, overwriting existing `.md` files:
+## Data Flow
+
+- `discover` stores publication metadata in `publications`.
+- `download_pdf`, `grobid_convert`, and `render_document` store file artifacts in `artifacts`.
+- `detect_mentions` stores high-recall mention windows in `mention_candidates`.
+- `extract_features` promotes unprocessed candidates into validated `dataset_mentions`.
+- `import-um-datasets` stores UM metadata in `um_datasets`.
+- `match_um_dataset` stores deterministic match decisions in `um_match_decisions`.
+- `export_insights` writes a CSV joined across publications, mentions, UM datasets, and match decisions.
+
+The v1 extraction path is intentionally rule-based and auditable. LLM extraction and formality evaluation remain future layers on top of the persisted mention/evidence model.
+
+## Tests
+
 ```bash
-uv run src/main.py --extract-only --ex-overwrite
+uv run pytest -q
+uv run basedpyright
 ```
 
-Limit how many to extract:
-```bash
-uv run src/main.py --extract-only --ex-limit 20
-```
-
----
-
-### Check Status
-See how many papers are at each pipeline stage.
-
-```bash
-uv run src/main.py --status
-```
-
-Example output:
-```
-══════════════════════════════════════════════════════════════════════
-PIPELINE STATUS
-══════════════════════════════════════════════════════════════════════
-  Total papers          : 150
-  PDFs downloaded       : 120
-  Converted to XML      : 98
-  Sections extracted    : 87
-  Features extracted    : 0
-  Download errors       : 5
-  Conversion errors     : 2
-══════════════════════════════════════════════════════════════════════
-```
-
----
-
-### Reset
-
-Reset pipeline tracking flags (keeps all papers, allows re-running steps):
-```bash
-uv run src/main.py --reset status
-```
-
-Full database wipe — **deletes everything** (requires double confirmation):
-```bash
-uv run src/main.py --reset full
-```
-
----
-
-
-## All CLI Options
-
-| Flag | Description | Default |
-|---|---|---|
-| `--query TEXT` | Semantic Scholar search query | required for fetch |
-| `--limit N` | Max papers to fetch | 100 |
-| `--mode {sequential\|concurrent}` | Full pipeline execution strategy (full run only) | sequential |
-| `--monitor {auto\|live\|off}` | Runtime monitor mode for full pipeline runs | auto |
-| `--monitor-refresh N` | Live monitor refresh interval in seconds | 0.3 |
-| `--fetch-only` | Only fetch papers (Step 1) | off |
-| `--download-only` | Only download PDFs (Step 2) | off |
-| `--convert-only` | Only convert PDFs to XML (Step 3) | off |
-| `--extract-only` | Only extract Markdown from XMLs (Step 4) | off |
-| `--resume` | Resume from last incomplete pipeline stage | off |
-| `--no-xml` | Skip Step 3 in full pipeline | off |
-| `--no-extract` | Skip Step 4 in full pipeline | off |
-| `--all-access` | Include non-open-access papers | off |
-| `--fields-of-study TEXT` | Filter by field e.g. `"Computer Science"` | none |
-| `--dl-limit N` | Max PDFs to download | all |
-| `--dl-overwrite` | Re-download existing PDFs | off |
-| `--dl-delay N` | Seconds between downloads | 0.5 |
-| `--cv-limit N` | Max PDFs to convert | all |
-| `--cv-overwrite` | Re-convert existing XMLs | off |
-| `--cv-delay N` | Seconds between conversions | 0.1 |
-| `--delete-pdfs` | Delete PDFs after conversion | off |
-| `--ex-limit N` | Max XMLs to extract | all |
-| `--ex-overwrite` | Re-extract existing `.md` files | off |
-| `--status` | Show pipeline status and exit | — |
-| `--reset {status\|full}` | Reset pipeline tracking or full DB | — |
-
-Runtime monitor events are saved to `logs/runs/<timestamp>/metadata/runtime_events.jsonl`.
-
----
-
-## Pipeline Stages
-
-| # | Stage | Module | Status |
-|---|---|---|---|
-| 1 | Fetch papers | `src/pubfetcher/client.py` | ✅ Done |
-| 2 | Download PDFs | `src/ingestion/downloader.py` | ✅ Done |
-| 3 | Convert PDF → XML | `src/ingestion/converter.py` | ✅ Done |
-| 4 | Extract Markdown | `src/ingestion/extractor.py` | ✅ Done |
-| 5 | LLM feature extraction | `src/extraction/` | 🔲 Phase 3 |
-| 6 | RAG / Vector search | `src/evaluation/` | 🔲 Phase 4 |
-| 7 | Formality Evaluation | `` | 🔲 Phase 4 |
-
----
-
-## License
-
-See [LICENSE](LICENSE) file for details.
+The current suite covers CLI parsing, mention detection, UM matching, UM metadata loading, and repository SQL behavior.

@@ -1,4 +1,4 @@
-""""
+"""
 TEI XML → Markdown extractor.
 
 Extracts:
@@ -13,19 +13,12 @@ Output: a single Markdown string (or saved .md file).
 from __future__ import annotations
 
 import re
-import sys
 import logging
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
-from lxml import etree
+import lxml.etree as etree
 
-sys.path.append(str(Path(__file__).parent.parent))
-
-try:
-    from models.results import RenderResult
-except ImportError:
-    # Allow standalone usage without models
-    RenderResult = None
+from models.results import RenderResult
 
 # TEI namespace
 TEI = "http://www.tei-c.org/ns/1.0"
@@ -416,7 +409,7 @@ def extract_markdown(xml_path: str | Path) -> str:
     return md
 
 
-def extract_markdown_to_file(xml_path: str | Path, output_path: str | Path = None) -> Path:
+def extract_markdown_to_file(xml_path: str | Path, output_path: str | Path | None = None) -> Path:
     xml_path = Path(xml_path)
 
     if output_path is None:
@@ -439,8 +432,8 @@ def extract_markdown_to_file(xml_path: str | Path, output_path: str | Path = Non
 
 def render_to_markdown(
     xml_path: Path,
-    output_path: Path = None,
-    paper_id: str = None,
+    output_path: Path | None = None,
+    paper_id: str | None = None,
     overwrite: bool = False
 ) -> 'RenderResult':
     """
@@ -455,9 +448,6 @@ def render_to_markdown(
     Returns:
         RenderResult with success status, paths, error info, etc.
     """
-    if RenderResult is None:
-        raise ImportError("RenderResult not available - install models package")
-    
     xml_path = Path(xml_path)
     paper_id = paper_id or xml_path.stem.replace(".tei", "")
     
@@ -538,9 +528,6 @@ def render_papers(
         >>> results = render_papers(papers)
         >>> successful = [r for r in results if r.success]
     """
-    if RenderResult is None:
-        raise ImportError("RenderResult not available - install models package")
-    
     if not papers:
         logger.info("No papers to render")
         return []
@@ -583,21 +570,3 @@ def render_papers(
     return results
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Standalone
-# ──────────────────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        xml = Path(__file__).parent.parent.parent / "data" / "xml"
-        files = list(xml.glob("*.tei.xml"))
-        if not files:
-            logger.error("No .tei.xml files found in data/xml/")
-            sys.exit(1)
-        target = files[0]
-    else:
-        target = Path(sys.argv[1])
-
-    out = extract_markdown_to_file(target)
-    logger.info("Preview (first 2000 chars):\n%s", "=" * 60)
-    logger.info("%s", out.read_text(encoding="utf-8")[:2000])
