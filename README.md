@@ -1,130 +1,111 @@
 # IDRD Pipeline
 
-IDRD finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. The point is to recover dataset impact that normal publication citation metadata misses, especially informal narrative mentions in full text.
+IDRD finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. It is now organized as an API-first backend so a GUI can run, monitor, and reset the pipeline without requiring users to understand the CLI.
 
-The active pipeline is:
+## What The Backend Does
 
 ```text
 discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> export_insights
 ```
 
-## Stack
-
 | Concern | Technology |
 |---|---|
-| Language | Python 3.12 |
+| API | FastAPI |
+| Background work | Celery + Redis |
 | Database | PostgreSQL + pgvector |
-| Queue | Celery + Redis |
 | PDF parsing | GROBID |
 | Migrations | Alembic |
 | Validation | Pydantic |
 | Setup | Docker Compose + uv |
 
-The canonical backend is `PipelineRepository` over the Alembic schema. Legacy local database code and experimental extraction scripts have been removed from the active package.
+## Quick Start
 
-## Fast Setup
+Start the backend stack:
 
-Start the local stack:
-
-```bash
+```powershell
 docker compose up -d postgres redis grobid
 docker compose run --rm migrate
+docker compose up api worker
+```
+
+Open the API docs:
+
+```text
+http://localhost:8000/docs
 ```
 
 Check readiness:
 
-```bash
-docker compose run --rm app uv run src/main.py doctor
+```powershell
+curl http://localhost:8000/api/v1/health
 ```
 
-Start a worker for queued runs:
+Start a full queued run:
 
-```bash
-docker compose up worker
+```powershell
+curl -X POST http://localhost:8000/api/v1/runs `
+  -H "Content-Type: application/json" `
+  -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"um_datasets_path\":\"data/um_datasets.csv\"}"
 ```
 
-For host-based development, install dependencies with:
+Poll run status:
 
-```bash
-uv sync
-uv run alembic upgrade head
+```powershell
+curl http://localhost:8000/api/v1/runs/1
 ```
 
-Host `.env` defaults should point to local services:
+## Storage Layout
 
-```env
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5433
-POSTGRES_DB=idrd_pipeline
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
+Source/reference data stays in `data/`.
 
-REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
-GROBID_BASE_URL=http://localhost:8070
+Generated runtime files are written to `storage/`:
+
+```text
+storage/pdf
+storage/xml
+storage/markdown
+storage/exports
+storage/logs
 ```
+
+The reset endpoint deletes database rows and generated `storage/` files, but it does not delete source code, migrations, `.env`, Docker volumes, or seed/reference files in `data/`.
+
+## Reset
+
+The reset endpoint is intentionally guarded:
+
+```powershell
+curl -X POST http://localhost:8000/api/v1/admin/reset `
+  -H "Content-Type: application/json" `
+  -d "{\"confirm\":\"RESET IDRD\",\"force\":true}"
+```
+
+If active runs exist, `force=true` is required.
 
 ## CLI
 
-List stages:
+The CLI is still available for operators and development:
 
-```bash
+```powershell
 uv run src/main.py stages
-```
-
-Import UM dataset metadata from JSON or CSV:
-
-```bash
+uv run src/main.py doctor
 uv run src/main.py import-um-datasets --path data/um_datasets.csv
+uv run src/main.py run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --mode enqueue
 ```
 
-Run the full pipeline with guidance:
+## Development
 
-```bash
-uv run src/main.py run-all ^
-  --query "Maastricht dataset reuse" ^
-  --limit 25 ^
-  --um-datasets data/um_datasets.csv ^
-  --output outputs/insights.csv
-```
+Install dependencies and run checks:
 
-Use explicit local or queued mode:
-
-```bash
-uv run src/main.py run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output outputs/insights.csv --mode local
-uv run src/main.py run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output outputs/insights.csv --mode enqueue
-```
-
-Run one stage locally:
-
-```bash
-uv run src/main.py run-local detect_mentions --limit 20
-```
-
-Enqueue one stage:
-
-```bash
-uv run src/main.py enqueue download_pdf --limit 20
-```
-
-## Data Flow
-
-- `discover` stores publication metadata in `publications`.
-- `download_pdf`, `grobid_convert`, and `render_document` store file artifacts in `artifacts`.
-- `detect_mentions` stores high-recall mention windows in `mention_candidates`.
-- `extract_features` promotes unprocessed candidates into validated `dataset_mentions`.
-- `import-um-datasets` stores UM metadata in `um_datasets`.
-- `match_um_dataset` stores deterministic match decisions in `um_match_decisions`.
-- `export_insights` writes a CSV joined across publications, mentions, UM datasets, and match decisions.
-
-The v1 extraction path is intentionally rule-based and auditable. LLM extraction and formality evaluation remain future layers on top of the persisted mention/evidence model.
-
-## Tests
-
-```bash
+```powershell
+uv sync
+uv run alembic upgrade head
 uv run pytest -q
 uv run basedpyright
 ```
 
-The current suite covers CLI parsing, mention detection, UM matching, UM metadata loading, and repository SQL behavior.
+More detail:
+
+- [API Guide](docs/API_GUIDE.md)
+- [Project Structure](docs/PROJECT_STRUCTURE.md)
+- [Setup And CLI Guide](docs/SETUP_AND_CLI_GUIDE.md)

@@ -4,7 +4,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from pipeline.candidate_detection import detect_dataset_candidates, standardize_section
+from idrd.pipeline.candidate_detection import detect_dataset_candidates, standardize_section
 
 
 def test_detect_named_dataset_candidate_in_methodology():

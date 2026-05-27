@@ -4,8 +4,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from matching.um_matcher import match_mention_to_um_dataset
-from pipeline.schemas import DatasetMention, DatasetMetadata, MentionEvidence, MatchStatus, UMDatasetRecord
+from idrd.matching.um_matcher import match_mention_to_um_dataset
+from idrd.pipeline.schemas import DatasetMention, DatasetMetadata, MentionEvidence, MatchStatus, UMDatasetRecord
 
 
 def test_match_exact_doi():

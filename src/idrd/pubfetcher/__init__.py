@@ -18,7 +18,7 @@ Usage:
 __version__ = "0.1.0"
 
 
-from config import (
+from idrd.config import (
     SEMANTIC_SCHOLAR_API_KEY,
     SEMANTIC_SCHOLAR_API_URL
 )

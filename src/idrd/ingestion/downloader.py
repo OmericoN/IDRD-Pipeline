@@ -9,8 +9,8 @@ from pathlib import Path
 
 import requests
 
-from config import DOWNLOAD_CHUNK_SIZE_BYTES, DOWNLOAD_DELAY_SEC, DOWNLOAD_TIMEOUT_SEC, PDF_DIR
-from models.results import DownloadResult
+from idrd.config import DOWNLOAD_CHUNK_SIZE_BYTES, DOWNLOAD_DELAY_SEC, DOWNLOAD_TIMEOUT_SEC, PDF_DIR
+from idrd.models.results import DownloadResult
 
 logger = logging.getLogger(__name__)
 

@@ -6,9 +6,9 @@ from typing import Any
 
 from celery import chain
 
-from pipeline import services
-from pipeline.celery_app import celery_app
-from pipeline.repository import PipelineRepository
+from idrd.pipeline import services
+from idrd.pipeline.celery_app import celery_app
+from idrd.storage.repository import PipelineRepository
 
 
 def create_run(query: str, config: dict[str, Any]) -> int:
@@ -86,7 +86,7 @@ def enqueue_run_all(
     if um_datasets_path:
         services.import_um_datasets(um_datasets_path)
 
-    from pipeline import tasks
+    from idrd.pipeline import tasks
 
     workflow = chain(
         tasks.discover_publications.si(query, limit, open_access_only, fields_of_study, pipeline_run_id),
@@ -100,7 +100,10 @@ def enqueue_run_all(
         tasks.finish_pipeline_run.si(pipeline_run_id, "successful"),
     )
     async_result = workflow.apply_async()
-    return {"pipeline_run_id": pipeline_run_id, "task_id": getattr(async_result, "id", None), "status": "queued"}
+    task_id = getattr(async_result, "id", None)
+    with PipelineRepository() as repo:
+        repo.update_pipeline_run_task_id(pipeline_run_id, task_id)
+    return {"pipeline_run_id": pipeline_run_id, "task_id": task_id, "status": "queued"}
 
 
 def celery_worker_available(timeout: float = 1.0) -> bool:

@@ -53,18 +53,17 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 LLM_API_KEY    = os.getenv("LLM_API_KEY",    "")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).parent.parent
-BASE_DIR = PROJECT_ROOT / "data"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
+STORAGE_DIR = PROJECT_ROOT / "storage"
 
-# Pipeline DATA — produced and consumed by pipeline steps
-DATA_DIR     = BASE_DIR
-PDF_DIR      = DATA_DIR / "pdf"
-XML_DIR      = DATA_DIR / "xml"
-MARKDOWN_DIR = DATA_DIR / "markdown"
-
-# Pipeline LOGS — observational only, never read by the pipeline
-LOGS_DIR = PROJECT_ROOT / "logs"
-RUNS_DIR = LOGS_DIR / "runs"
+# Source/reference inputs live in data/. Generated runtime files live in storage/.
+PDF_DIR      = STORAGE_DIR / "pdf"
+XML_DIR      = STORAGE_DIR / "xml"
+MARKDOWN_DIR = STORAGE_DIR / "markdown"
+EXPORTS_DIR  = STORAGE_DIR / "exports"
+LOGS_DIR     = STORAGE_DIR / "logs"
+RUNS_DIR     = LOGS_DIR / "runs"
 
 # ── Pipeline Settings ──────────────────────────────────────────────────────────
 
@@ -85,6 +84,6 @@ CONVERSION_DELAY_SEC = 0.1         # Delay between conversions
 # Renderer
 RENDER_TIMEOUT_SEC = 30            # Timeout for markdown rendering operations
 
-# Create directories on import
-for _dir in (PDF_DIR, XML_DIR, MARKDOWN_DIR, RUNS_DIR):
+# Create generated runtime directories on import
+for _dir in (PDF_DIR, XML_DIR, MARKDOWN_DIR, EXPORTS_DIR, RUNS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

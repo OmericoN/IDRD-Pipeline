@@ -8,7 +8,7 @@ from pathlib import Path
 
 import requests
 
-from config import (
+from idrd.config import (
     CONVERSION_DELAY_SEC,
     GROBID_ALIVE_CHECK_TIMEOUT_SEC,
     GROBID_BASE_URL,
@@ -17,7 +17,7 @@ from config import (
     PDF_DIR,
     XML_DIR,
 )
-from models.results import ConversionResult
+from idrd.models.results import ConversionResult
 
 logger = logging.getLogger(__name__)
 

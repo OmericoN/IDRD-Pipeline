@@ -6,7 +6,7 @@ import requests
 from typing import Dict, List, Optional, Tuple
 from tqdm import tqdm
 
-from config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
+from idrd.config import SEMANTIC_SCHOLAR_API_KEY, SEMANTIC_SCHOLAR_API_URL
 
 logger = logging.getLogger(__name__)
 

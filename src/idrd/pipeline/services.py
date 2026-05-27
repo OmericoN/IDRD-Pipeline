@@ -7,16 +7,16 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
-from ingestion.converter import GrobidConverter
-from ingestion.downloader import PDFDownloader
-from ingestion.renderer import render_papers
-from matching.um_matcher import match_mention_to_um_dataset
-from pipeline.candidate_detection import detect_dataset_candidates
-from pipeline.repository import PipelineRepository
-from pipeline.schemas import DatasetMention, ExtractionProvenance, MentionEvidence, StageResult, UMDatasetRecord
-from pipeline.stages import PipelineStage
-from pubfetcher.client import SemanticScholarClient
-from config import MARKDOWN_DIR, PDF_DIR, XML_DIR
+from idrd.config import MARKDOWN_DIR, PDF_DIR, XML_DIR
+from idrd.ingestion.converter import GrobidConverter
+from idrd.ingestion.downloader import PDFDownloader
+from idrd.ingestion.renderer import render_papers
+from idrd.matching.um_matcher import match_mention_to_um_dataset
+from idrd.pipeline.candidate_detection import detect_dataset_candidates
+from idrd.pipeline.schemas import DatasetMention, ExtractionProvenance, MentionEvidence, StageResult, UMDatasetRecord
+from idrd.pipeline.stages import PipelineStage
+from idrd.pubfetcher.client import SemanticScholarClient
+from idrd.storage.repository import PipelineRepository
 
 
 def discover_publications(

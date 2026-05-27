@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
 import lxml.etree as etree
 
-from models.results import RenderResult
+from idrd.models.results import RenderResult
 
 # TEI namespace
 TEI = "http://www.tei-c.org/ns/1.0"

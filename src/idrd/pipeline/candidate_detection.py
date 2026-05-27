@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from pipeline.schemas import MentionCandidate
+from idrd.pipeline.schemas import MentionCandidate
 
 
 DATASET_PATTERNS = [

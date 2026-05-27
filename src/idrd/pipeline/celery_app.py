@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from celery import Celery
 
-from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_TASK_ALWAYS_EAGER
+from idrd.config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_TASK_ALWAYS_EAGER
 
 
 celery_app = Celery(
     "idrd_pipeline",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["pipeline.tasks"],
+    include=["idrd.pipeline.tasks"],
 )
 
 celery_app.conf.update(

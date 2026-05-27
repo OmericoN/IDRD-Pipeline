@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from pipeline import services
-from pipeline.celery_app import celery_app
-from pipeline.repository import PipelineRepository
+from celery.signals import task_failure
+
+from idrd.pipeline import services
+from idrd.pipeline.celery_app import celery_app
+from idrd.storage.repository import PipelineRepository
 
 
 @celery_app.task(name="idrd.discover_publications", bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
@@ -99,3 +101,31 @@ def finish_pipeline_run(self, pipeline_run_id: int, status: str) -> dict[str, An
     with PipelineRepository() as repo:
         repo.finish_pipeline_run(pipeline_run_id, status)
     return {"pipeline_run_id": pipeline_run_id, "status": status}
+
+
+@task_failure.connect
+def mark_pipeline_run_failed(
+    sender=None,
+    task_id: str | None = None,
+    exception: BaseException | None = None,
+    args: tuple[Any, ...] | None = None,
+    kwargs: dict[str, Any] | None = None,
+    **_: Any,
+) -> None:
+    if sender is None or not str(getattr(sender, "name", "")).startswith("idrd."):
+        return
+    pipeline_run_id = _extract_pipeline_run_id(args or (), kwargs or {})
+    if pipeline_run_id is None:
+        return
+    error = str(exception) if exception else f"Task failed: {task_id}"
+    with PipelineRepository() as repo:
+        repo.fail_pipeline_run(pipeline_run_id, error)
+
+
+def _extract_pipeline_run_id(args: tuple[Any, ...], kwargs: dict[str, Any]) -> int | None:
+    value = kwargs.get("pipeline_run_id")
+    if isinstance(value, int):
+        return value
+    if args and isinstance(args[-1], int):
+        return args[-1]
+    return None

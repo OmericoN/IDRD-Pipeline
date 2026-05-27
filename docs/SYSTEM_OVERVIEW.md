@@ -74,14 +74,14 @@ The system follows a **linear, resumable pipeline** architecture. Each stage tra
 │                                        ▼                             │
 │                              ┌───────────────────┐                  │
 │                              │  ingestion/        │                  │
-│                              │  downloader.py     │  data/pdf/       │
+│                              │  downloader.py     │  storage/pdf/    │
 │                              │  PDFDownloader     │──────────────►   │
 │                              └───────────────────┘                  │
 │                                        │                             │
 │                                        ▼                             │
 │  ┌─────────────────┐         ┌───────────────────┐                  │
 │  │  GROBID          │  HTTP  │  ingestion/        │                  │
-│  │  Docker          │◄───────│  converter.py      │  data/xml/       │
+│  │  Docker          │◄───────│  converter.py      │  storage/xml/    │
 │  │  Container       │        │  GrobidConverter   │──────────────►   │
 │  │  (port 8070)     │────────►                    │                  │
 │  └─────────────────┘  TEI   └───────────────────┘                  │
@@ -90,7 +90,7 @@ The system follows a **linear, resumable pipeline** architecture. Each stage tra
 │                                        ▼                             │
 │                              ┌───────────────────┐                  │
 │                              │  ingestion/        │                  │
-│                              │  renderer.py       │  data/markdown/  │
+│                              │  renderer.py       │  storage/markdown/ │
 │                              │  extract_markdown  │──────────────►   │
 │                              └───────────────────┘                  │
 │                                        │                             │
@@ -109,10 +109,10 @@ The system follows a **linear, resumable pipeline** architecture. Each stage tra
 | Stage | Input | Output directory |
 |-------|-------|-----------------|
 | Fetch | Semantic Scholar API | PostgreSQL DB |
-| Download | `open_access_pdf_url` from DB | `data/pdf/` |
-| Convert | `data/pdf/*.pdf` | `data/xml/*.tei.xml` |
-| Render | `data/xml/*.tei.xml` | `data/markdown/*.md` |
-| Extract | `data/markdown/*.md` | Structured records (Phase 3) |
+| Download | `open_access_pdf_url` from DB | `storage/pdf/` |
+| Convert | `storage/pdf/*.pdf` | `storage/xml/*.tei.xml` |
+| Render | `storage/xml/*.tei.xml` | `storage/markdown/*.md` |
+| Extract | `storage/markdown/*.md` | Structured records (Phase 3) |
 
 **Per-run logs** are saved to `logs/runs/<timestamp>/metadata/` as JSON files for each stage.
 
@@ -365,7 +365,7 @@ The `open_access_pdf=True` filter sends both `isOpenAccess` and `openAccessPdf` 
 
 **File:** `src/ingestion/downloader.py` | **Class:** `PDFDownloader`
 
-The downloader retrieves open-access PDF files for papers stored in the database and saves them to `data/pdf/`.
+The downloader retrieves open-access PDF files for papers stored in the database and saves them to `storage/pdf/`.
 
 ### Shared Database Pattern
 
@@ -446,7 +446,7 @@ response = requests.post(
 )
 ```
 
-GROBID returns a TEI XML string on success (HTTP 200). The converter saves this to `data/xml/<paper_id>.tei.xml` and updates the database.
+GROBID returns a TEI XML string on success (HTTP 200). The converter saves this to `storage/xml/<paper_id>.tei.xml` and updates the database.
 
 The `delete_pdf=True` option removes source PDFs after successful conversion to reclaim disk space.
 
@@ -678,9 +678,9 @@ The experiment deliberately avoids touching any main pipeline state:
 | Resource | Main Pipeline | GT Experiment |
 |----------|--------------|---------------|
 | Database | PostgreSQL (`idrd_pipeline`) | **None** — no DB connection |
-| PDFs | `data/pdf/` | `data/gt_experiment/pdf/` |
-| XML | `data/xml/` | `data/gt_experiment/xml/` |
-| Markdown | `data/markdown/` | `data/gt_experiment/markdown/` |
+| PDFs | `storage/pdf/` | `data/gt_experiment/pdf/` |
+| XML | `storage/xml/` | `data/gt_experiment/xml/` |
+| Markdown | `storage/markdown/` | `data/gt_experiment/markdown/` |
 
 ### Ground Truth CSV
 

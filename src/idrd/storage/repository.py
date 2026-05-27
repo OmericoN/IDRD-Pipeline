@@ -10,9 +10,9 @@ from uuid import uuid4
 import psycopg2
 import psycopg2.extras
 
-from config import POSTGRES_DSN
-from models.results import ConversionResult, DownloadResult, RenderResult
-from pipeline.schemas import DatasetMention, MentionCandidate, UMDatasetRecord, UMMatchDecision
+from idrd.config import POSTGRES_DSN
+from idrd.models.results import ConversionResult, DownloadResult, RenderResult
+from idrd.pipeline.schemas import DatasetMention, MentionCandidate, UMDatasetRecord, UMMatchDecision
 
 
 class PipelineRepository:
@@ -68,6 +68,13 @@ class PipelineRepository:
         self.conn.commit()
         return int(row["id"])
 
+    def update_pipeline_run_task_id(self, pipeline_run_id: int, task_id: str | None) -> None:
+        self.cursor.execute(
+            "UPDATE pipeline_runs SET celery_task_id = %s, updated_at = now() WHERE id = %s",
+            (task_id, pipeline_run_id),
+        )
+        self.conn.commit()
+
     def record_stage_result(
         self,
         stage: str,
@@ -100,10 +107,120 @@ class PipelineRepository:
         if pipeline_run_id is None:
             return
         self.cursor.execute(
-            "UPDATE pipeline_runs SET status = %s, updated_at = now() WHERE id = %s",
+            "UPDATE pipeline_runs SET status = %s, finished_at = now(), updated_at = now() WHERE id = %s",
             (status, pipeline_run_id),
         )
         self.conn.commit()
+
+    def fail_pipeline_run(self, pipeline_run_id: int | None, error: str) -> None:
+        if pipeline_run_id is None:
+            return
+        self.cursor.execute(
+            """
+            UPDATE pipeline_runs
+            SET status = 'failed', error = %s, finished_at = now(), updated_at = now()
+            WHERE id = %s
+            """,
+            (error, pipeline_run_id),
+        )
+        self.conn.commit()
+
+    def list_pipeline_runs(self, limit: int = 25) -> list[dict[str, Any]]:
+        self.cursor.execute(
+            """
+            SELECT
+                pr.id,
+                pr.run_key,
+                pr.query,
+                pr.status,
+                pr.config,
+                pr.celery_task_id,
+                pr.error,
+                pr.created_at,
+                pr.updated_at,
+                pr.finished_at
+            FROM pipeline_runs pr
+            ORDER BY pr.created_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        runs = [dict(row) for row in self.cursor.fetchall()]
+        for run in runs:
+            run["stages"] = self.list_stage_runs(int(run["id"]))
+        return runs
+
+    def get_pipeline_run(self, pipeline_run_id: int) -> dict[str, Any] | None:
+        self.cursor.execute(
+            """
+            SELECT
+                id,
+                run_key,
+                query,
+                status,
+                config,
+                celery_task_id,
+                error,
+                created_at,
+                updated_at,
+                finished_at
+            FROM pipeline_runs
+            WHERE id = %s
+            """,
+            (pipeline_run_id,),
+        )
+        row = self.cursor.fetchone()
+        if not row:
+            return None
+        run = dict(row)
+        run["stages"] = self.list_stage_runs(pipeline_run_id)
+        return run
+
+    def list_stage_runs(self, pipeline_run_id: int) -> list[dict[str, Any]]:
+        self.cursor.execute(
+            """
+            SELECT
+                id,
+                stage,
+                status,
+                attempt_count,
+                task_id,
+                error,
+                metrics,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+            FROM stage_runs
+            WHERE pipeline_run_id = %s
+            ORDER BY id
+            """,
+            (pipeline_run_id,),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def active_run_count(self) -> int:
+        self.cursor.execute(
+            "SELECT COUNT(*) AS count FROM pipeline_runs WHERE status IN ('queued', 'running', 'started')"
+        )
+        row = self.cursor.fetchone() or {}
+        return int(row.get("count") or 0)
+
+    def reset_database(self) -> list[str]:
+        tables = [
+            "stage_runs",
+            "um_match_decisions",
+            "mention_candidates",
+            "dataset_mentions",
+            "document_sections",
+            "artifacts",
+            "um_datasets",
+            "publications",
+            "pipeline_runs",
+        ]
+        self.cursor.execute(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE")
+        self.conn.commit()
+        return tables
 
     def upsert_publications(self, papers: Iterable[dict[str, Any]], source: str) -> int:
         count = 0

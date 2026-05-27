@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from main import IDRDPipeline
-from models.results import DownloadResult, ConversionResult
+from idrd.models.results import DownloadResult, ConversionResult
 
 
 def test_download_result_status_classification():

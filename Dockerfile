@@ -21,4 +21,4 @@ COPY migrations ./migrations
 
 RUN uv sync --frozen
 
-CMD ["uv", "run", "src/main.py", "stages"]
+CMD ["uv", "run", "uvicorn", "idrd.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from main import build_parser
-from pipeline.stages import PipelineStage, stage_values
+from idrd.pipeline.stages import PipelineStage, stage_values
 
 
 def test_stage_values_are_canonical_order():
@@ -50,10 +50,11 @@ def test_cli_parses_guided_run_all():
             "--um-datasets",
             "um.csv",
             "--output",
-            "outputs/insights.csv",
+            "storage/exports/insights.csv",
         ]
     )
     assert args.command == "run-all"
     assert args.mode == "guided"
     assert args.limit == 5
     assert args.um_datasets == "um.csv"
+    assert args.output == "storage/exports/insights.csv"

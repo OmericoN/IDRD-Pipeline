@@ -4,8 +4,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from pipeline.repository import PipelineRepository
-from pipeline.schemas import UMDatasetRecord
+from idrd.pipeline.schemas import UMDatasetRecord
+from idrd.storage.repository import PipelineRepository
 
 
 class FakeCursor:
@@ -93,3 +93,24 @@ def test_healthcheck_reports_candidate_table_readiness():
     assert health["ready"] is True
     assert health["mention_candidates_table"] is True
     assert health["vector_search_ready"] is True
+
+
+def test_active_run_count_reads_running_statuses():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"count": 2}]
+
+    assert repo.active_run_count() == 2
+    query, _ = cursor.executed[-1]
+    assert "status IN ('queued', 'running', 'started')" in query
+
+
+def test_reset_database_truncates_pipeline_tables_and_preserves_schema():
+    repo, cursor, conn = make_repo()
+
+    tables = repo.reset_database()
+
+    query, _ = cursor.executed[-1]
+    assert "TRUNCATE" in query
+    assert "alembic_version" not in query
+    assert "publications" in tables
+    assert conn.commits == 1
