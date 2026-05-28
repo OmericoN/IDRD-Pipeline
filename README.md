@@ -11,7 +11,7 @@
   </a>
 </div>
 
-# DataSight
+<br>
 
 DataSight finds dataset references that are easy to miss in scholarly publications. It discovers open-access papers, downloads PDFs, converts them into structured text, detects dataset mentions, and matches those mentions against Maastricht University dataset metadata.
 
