@@ -16,7 +16,7 @@
 DataSight finds dataset references that are easy to miss in scholarly publications. It discovers open-access papers, downloads PDFs, converts them into structured text, detects dataset mentions, and matches those mentions against Maastricht University dataset metadata.
 
 ```text
-discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> export_insights
+discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> analyze_formality_and_fairness
 ```
 
 ## Why It Exists
