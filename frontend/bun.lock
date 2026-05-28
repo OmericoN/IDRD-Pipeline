@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "idrd-pipeline-gui",
+      "name": "datasight-pipeline-gui",
       "dependencies": {
         "@tanstack/react-query": "^5.100.14",
         "class-variance-authority": "^0.7.1",

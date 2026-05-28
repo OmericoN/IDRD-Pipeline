@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from idrd.application.stage_registry import (
+from datasight.application.stage_registry import (
     MissingStageArgument,
     PipelineStage,
     StageRunOptions,

@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    UV_PROJECT_ENVIRONMENT=/opt/idrd-venv
+    UV_PROJECT_ENVIRONMENT=/opt/datasight-venv
 
 WORKDIR /app/backend
 
@@ -21,4 +21,4 @@ COPY backend/migrations ./migrations
 
 RUN uv sync --frozen
 
-CMD ["uv", "run", "uvicorn", "idrd.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "datasight.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

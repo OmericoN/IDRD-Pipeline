@@ -43,7 +43,7 @@ import { formatStageName, mergeStages, stageProgress, statusTone, type VisualSta
 
 const DEFAULT_OUTPUT = "storage/exports/insights.csv";
 const DEFAULT_UM_DATASETS = "data/um_datasets.csv";
-const RESET_CONFIRMATION = "RESET IDRD";
+const RESET_CONFIRMATION = "RESET DATASIGHT";
 
 function Dashboard() {
   const queryClient = useQueryClient();
@@ -189,7 +189,7 @@ function Dashboard() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                IDRD Pipeline
+                DataSight
               </p>
               <h1 className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
                 Dataset mention workflow

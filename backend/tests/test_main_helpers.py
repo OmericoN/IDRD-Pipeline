@@ -4,8 +4,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from idrd.domain.results import DownloadResult, ConversionResult
-from idrd.interfaces.cli.main import IDRDPipeline
+from datasight.domain.results import DownloadResult, ConversionResult
+from datasight.interfaces.cli.main import DataSightPipeline
 
 
 def test_download_result_status_classification():
@@ -13,9 +13,9 @@ def test_download_result_status_classification():
     skipped = DownloadResult(paper_id="p2", success=True, message="Already exists: p2.pdf")
     failed = DownloadResult(paper_id="p3", success=False, message="Request error", error="Request error")
 
-    assert IDRDPipeline._download_result_status(ok) == "successful"
-    assert IDRDPipeline._download_result_status(skipped) == "skipped"
-    assert IDRDPipeline._download_result_status(failed) == "failed"
+    assert DataSightPipeline._download_result_status(ok) == "successful"
+    assert DataSightPipeline._download_result_status(skipped) == "skipped"
+    assert DataSightPipeline._download_result_status(failed) == "failed"
 
 
 def test_convert_result_status_classification():
@@ -23,12 +23,12 @@ def test_convert_result_status_classification():
     skipped = ConversionResult(paper_id="p2", success=True, message="Already converted: p2.tei.xml")
     failed = ConversionResult(paper_id="p3", success=False, message="GROBID error", error="boom")
 
-    assert IDRDPipeline._convert_result_status(ok) == "successful"
-    assert IDRDPipeline._convert_result_status(skipped) == "skipped"
-    assert IDRDPipeline._convert_result_status(failed) == "failed"
+    assert DataSightPipeline._convert_result_status(ok) == "successful"
+    assert DataSightPipeline._convert_result_status(skipped) == "skipped"
+    assert DataSightPipeline._convert_result_status(failed) == "failed"
 
 
 def test_render_result_status_classification():
-    assert IDRDPipeline._render_result_status(True, "Rendered: p1.md") == "successful"
-    assert IDRDPipeline._render_result_status(True, "Already exists: p2.md") == "skipped"
-    assert IDRDPipeline._render_result_status(False, "Error") == "failed"
+    assert DataSightPipeline._render_result_status(True, "Rendered: p1.md") == "successful"
+    assert DataSightPipeline._render_result_status(True, "Already exists: p2.md") == "skipped"
+    assert DataSightPipeline._render_result_status(False, "Error") == "failed"

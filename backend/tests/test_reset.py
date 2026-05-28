@@ -4,7 +4,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from idrd.application import reset as reset_module
+from datasight.application import reset as reset_module
 
 
 def test_generated_storage_reset_only_allows_storage_paths(tmp_path, monkeypatch):

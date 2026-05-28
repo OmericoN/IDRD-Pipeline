@@ -69,14 +69,14 @@ describe("api client", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const response = await api.reset({ confirm: "RESET IDRD", force: true });
+    const response = await api.reset({ confirm: "RESET DATASIGHT", force: true });
 
     expect(response.status).toBe("successful");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/admin/reset",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ confirm: "RESET IDRD", force: true }),
+        body: JSON.stringify({ confirm: "RESET DATASIGHT", force: true }),
       }),
     );
   });
@@ -90,7 +90,7 @@ describe("api client", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(api.reset({ confirm: "RESET IDRD", force: false })).rejects.toMatchObject({
+    await expect(api.reset({ confirm: "RESET DATASIGHT", force: false })).rejects.toMatchObject({
       status: 409,
       detail: "1 pipeline run(s) are still active.",
     });

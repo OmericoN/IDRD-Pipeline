@@ -81,10 +81,10 @@ describe("App reset dialog", () => {
     const resetButton = screen.getByRole("button", { name: "Reset everything" });
     expect(resetButton).toBeDisabled();
 
-    fireEvent.change(screen.getByPlaceholderText("RESET IDRD"), { target: { value: "RESET" } });
+    fireEvent.change(screen.getByPlaceholderText("RESET DATASIGHT"), { target: { value: "RESET" } });
     expect(resetButton).toBeDisabled();
 
-    fireEvent.change(screen.getByPlaceholderText("RESET IDRD"), { target: { value: "RESET IDRD" } });
+    fireEvent.change(screen.getByPlaceholderText("RESET DATASIGHT"), { target: { value: "RESET DATASIGHT" } });
     fireEvent.click(screen.getByLabelText("I understand this action cannot be undone from the app."));
     expect(resetButton).toBeEnabled();
   });
@@ -95,7 +95,7 @@ describe("App reset dialog", () => {
 
     fireEvent.click(screen.getByLabelText("Admin settings"));
     fireEvent.click(screen.getByText("Danger zone"));
-    fireEvent.change(screen.getByPlaceholderText("RESET IDRD"), { target: { value: "RESET IDRD" } });
+    fireEvent.change(screen.getByPlaceholderText("RESET DATASIGHT"), { target: { value: "RESET DATASIGHT" } });
     fireEvent.click(screen.getByLabelText("I understand this action cannot be undone from the app."));
     fireEvent.click(screen.getByLabelText("Force reset active runs"));
     fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
@@ -105,7 +105,7 @@ describe("App reset dialog", () => {
         "/api/v1/admin/reset",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ confirm: "RESET IDRD", force: true }),
+          body: JSON.stringify({ confirm: "RESET DATASIGHT", force: true }),
         }),
       );
     });
@@ -120,7 +120,7 @@ describe("App reset dialog", () => {
 
     fireEvent.click(screen.getByLabelText("Admin settings"));
     fireEvent.click(screen.getByText("Danger zone"));
-    fireEvent.change(screen.getByPlaceholderText("RESET IDRD"), { target: { value: "RESET IDRD" } });
+    fireEvent.change(screen.getByPlaceholderText("RESET DATASIGHT"), { target: { value: "RESET DATASIGHT" } });
     fireEvent.click(screen.getByLabelText("I understand this action cannot be undone from the app."));
     fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
 

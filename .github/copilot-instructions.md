@@ -1,34 +1,36 @@
-# Copilot Instructions for IDRD-Pipeline
+# Copilot Instructions for DataSight
 
 ## Build, test, and lint commands
 
 - Install/sync backend dependencies from `backend/`: `uv sync`
-- Run the backend test suite from `backend/`: `uv run pytest -q`
-- Run a single backend test file from `backend/`: `uv run pytest -q tests/test_repository.py`
-- Run a single backend test case from `backend/`: `uv run pytest -q tests/test_stage_registry.py::test_stage_registry_builds_discover_arguments`
+- Run backend tests from `backend/`: `uv run pytest -q`
+- Run type checking from `backend/`: `uv run basedpyright`
+- Run migrations from `backend/`: `uv run alembic upgrade head`
 - Install frontend dependencies from `frontend/`: `bun install`
-- Run frontend checks from `frontend/`: `bun run build` and `bun run test`
+- Run frontend checks from `frontend/`: `bun run test` and `bun run build`
+- Validate Compose changes from the repository root: `docker compose config`
 
-There is no dedicated lint/format command configured in this repo (`ruff`, `flake8`, `black`, etc. are not configured).
+There is no dedicated formatter configured in this repo.
 
-## High-level architecture
+## Architecture
 
-- The project is a resumable, stage-based pipeline orchestrated through `idrd.application.orchestrator` and exposed by `idrd.interfaces.cli.main`:
-  1. Fetch paper metadata from Semantic Scholar
-  2. Download PDFs
-  3. Convert PDFs to TEI XML with GROBID (Docker-managed)
-  4. Render TEI XML to Markdown
-  5. LLM feature extraction (placeholder/not wired into pipeline run)
-- Pipeline state is persisted in PostgreSQL through `idrd.infrastructure.persistence.PipelineRepository`.
-- Run orchestration records pipeline runs, stage runs, and structured events in PostgreSQL.
-- Core paths and operational settings come from `idrd.config`; generated storage directories are created automatically on import.
+- The active Python package is `datasight`.
+- The CLI command is `uv run datasight`.
+- The FastAPI app is `datasight.interfaces.api.main:app`.
+- The Celery app is `datasight.infrastructure.worker.celery_app:celery_app`.
+- Pipeline state is persisted through `datasight.infrastructure.persistence.PipelineRepository`.
 
-## Key repository-specific conventions
+Canonical stage order:
 
-- **Results-first components:** ingestion components are designed to return typed result objects (`DownloadResult`, `ConversionResult`, `RenderResult` in `idrd.domain.results`) rather than writing DB state directly.
-- **Persistence separated from execution:** application use cases persist stage outcomes through repository methods after batch execution.
-- **Shared DB queue contract:** each stage pulls work from DB queue methods (`get_papers_needing_*`) instead of scanning files directly, then updates stage flags in `publications`.
-- **`paper_id` is canonical internally:** keep API payload conversion and SQL mappings consistent with the current Alembic schema.
-- **Queue mode is orchestration-level only:** full runs can execute locally or through Celery, but stage order remains discover → download → convert → render → detect → extract → match → export.
-- **Download/convert robustness patterns are intentional:** downloader validates MIME type and `%PDF` magic bytes; converter manages GROBID container lifecycle (`start_grobid`/`stop_grobid`) and checks `/api/isalive`.
-- **Renderer output assumptions feed extraction:** markdown rendering preserves citation markers and writes only cited references, which downstream extraction logic depends on.
+```text
+discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> export_insights
+```
+
+## Conventions
+
+- Interfaces validate input and call application use cases.
+- Application services coordinate stage behavior and persist outcomes through repositories.
+- Infrastructure owns SQL, queues, external HTTP clients, GROBID, health checks, and generated files.
+- Domain modules hold shared schemas, stage names, and result objects.
+- Generated artifacts belong under `storage/`; curated source/reference inputs belong under `data/`.
+- Do not add compatibility imports or docs for old package names.

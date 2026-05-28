@@ -1,4 +1,4 @@
-"""Alembic environment for the IDRD pipeline."""
+"""Alembic environment for DataSight."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from idrd.config import POSTGRES_URI  # noqa: E402
+from datasight.config import POSTGRES_URI  # noqa: E402
 
 config = context.config
 config.set_main_option("sqlalchemy.url", POSTGRES_URI)

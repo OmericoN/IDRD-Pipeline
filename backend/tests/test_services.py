@@ -4,7 +4,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from idrd.application.pipeline_services import load_um_dataset_records
+from datasight.application.pipeline_services import load_um_dataset_records
 
 
 def test_load_um_dataset_records_from_csv(tmp_path):

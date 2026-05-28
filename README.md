@@ -1,52 +1,37 @@
 <div align="center">
-  <img src="assets/banner.png" width="600" />
+  <img src="assets/banner.png" width="600" alt="DataSight" />
 </div>
 
 <div align="center">
   <a href="https://opensource.org/licenses/MIT" target="_blank">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License">
   </a>
-
   <a href="https://library.maastrichtuniversity.nl/" target="_blank">
     <img src="https://img.shields.io/badge/Maastricht%20University-Library-002D72?logo=readthedocs&logoColor=white" alt="Maastricht University Library">
   </a>
 </div>
 
-<br>
+# DataSight
 
-DataSight finds hidden dataset references in scholarly publications and matches them against Maastricht University dataset metadata. It is now organized as an API-first backend so a GUI can run, monitor, and reset the pipeline without requiring users to understand the CLI.
-
-## Repository Map
-
-```text
-backend/     Python backend uv project: src, tests, Alembic migrations, and Dockerfile
-frontend/     Vite React GUI organized into app, feature, shared API, and shared UI packages
-docs/         Operator, API, architecture, and repository structure guides
-data/         Curated source/reference inputs that should survive resets
-storage/      Generated runtime files, ignored by git and safe to reset
-```
-
-The main backend command is exposed as `idrd` through `backend/pyproject.toml`.
-
-## What The Backend Does
+DataSight finds dataset references that are easy to miss in scholarly publications. It discovers open-access papers, downloads PDFs, converts them into structured text, detects dataset mentions, and matches those mentions against Maastricht University dataset metadata.
 
 ```text
 discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> export_insights
 ```
 
-| Concern | Technology |
-|---|---|
-| API | FastAPI |
-| Background work | Celery + Redis |
-| Database | PostgreSQL + pgvector |
-| PDF parsing | GROBID |
-| Migrations | Alembic |
-| Validation | Pydantic |
-| Setup | Docker Compose + uv |
-| GUI | Vite + React + TypeScript + Tailwind CSS |
+## Why It Exists
+
+Dataset reuse is often described in prose instead of cited cleanly in a bibliography. DataSight turns full-text papers into traceable, structured evidence so research support teams can inspect where datasets are used, how they are mentioned, and whether they connect to known institutional datasets.
+
+## Requirements
+
+- Docker
+- uv
+- Bun
 
 ## Quick Start
 
+### GUI
 Start the backend stack:
 
 ```powershell
@@ -75,83 +60,29 @@ Open the GUI:
 http://localhost:5173
 ```
 
-The Vite dev server proxies `/api/v1` requests to `http://localhost:8000`, so no FastAPI CORS setup is needed for local development.
-
 Check readiness:
 
 ```powershell
 curl http://localhost:8000/api/v1/health
 ```
 
-Start a full queued run:
 
-```powershell
-curl -X POST http://localhost:8000/api/v1/runs `
-  -H "Content-Type: application/json" `
-  -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"um_datasets_path\":\"data/um_datasets.csv\"}"
-```
+### CLI
 
-Poll run status:
-
-```powershell
-curl http://localhost:8000/api/v1/runs/1
-```
-
-## Storage Layout
-
-Source/reference data stays in `data/`.
-
-Generated runtime files are written to `storage/`:
-
-```text
-storage/pdf
-storage/xml
-storage/markdown
-storage/exports
-storage/logs
-```
-
-The reset endpoint deletes database rows and generated `storage/` files, but it does not delete source code, migrations, `.env`, Docker volumes, or seed/reference files in `data/`.
-
-## Reset
-
-The reset endpoint is intentionally guarded:
-
-```powershell
-curl -X POST http://localhost:8000/api/v1/admin/reset `
-  -H "Content-Type: application/json" `
-  -d "{\"confirm\":\"RESET IDRD\",\"force\":true}"
-```
-
-If active runs exist, `force=true` is required.
-
-## CLI
-
-The CLI is still available for operators and development:
+The backend exposes a `datasight` command for operators and development:
 
 ```powershell
 cd backend
-uv run idrd stages
-uv run idrd doctor
-uv run idrd import-um-datasets --path data/um_datasets.csv
-uv run idrd run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --mode enqueue
+uv run datasight stages
+uv run datasight doctor
+uv run datasight import-um-datasets --path data/um_datasets.csv
+uv run datasight run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --mode enqueue
 ```
 
-## Development
 
-Install dependencies and run checks:
+## Documentation
 
-```powershell
-cd backend
-uv sync
-uv run alembic upgrade head
-uv run pytest -q
-uv run basedpyright
-```
-
-More detail:
-
-- [API Guide](docs/API_GUIDE.md)
-- [Project Structure](docs/PROJECT_STRUCTURE.md)
-- [Architecture Walkthrough](docs/ARCHITECTURE_WALKTHROUGH.md)
-- [Setup And CLI Guide](docs/SETUP_AND_CLI_GUIDE.md)
+- [API Usage](docs/API_USAGE.md)
+- [Why DataSight](docs/WHY_DATASIGHT.md)
+- [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md)
+- [Contributing](CONTRIBUTING.md)

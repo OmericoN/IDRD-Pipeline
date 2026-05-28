@@ -4,8 +4,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from idrd.domain.schemas import UMDatasetRecord
-from idrd.infrastructure.persistence.repository import PipelineRepository
+from datasight.domain.schemas import UMDatasetRecord
+from datasight.infrastructure.persistence.repository import PipelineRepository
 
 
 class FakeCursor:
@@ -80,7 +80,7 @@ def test_upsert_um_datasets_uses_canonical_table():
 def test_healthcheck_reports_candidate_table_readiness():
     repo, cursor, _ = make_repo()
     cursor.fetchone_results = [
-        {"database": "idrd_pipeline", "user": "postgres"},
+        {"database": "datasight_pipeline", "user": "postgres"},
         {"relation": "publications"},
         {"relation": "mention_candidates"},
         {"relation": "alembic_version"},

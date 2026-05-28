@@ -4,8 +4,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from idrd.domain.stages import PipelineStage, stage_values
-from idrd.interfaces.cli.main import build_parser
+from datasight.domain.stages import PipelineStage, stage_values
+from datasight.interfaces.cli.main import build_parser
 
 
 def test_stage_values_are_canonical_order():

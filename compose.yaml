@@ -1,16 +1,18 @@
+name: datasight
+
 services:
   postgres:
     image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: idrd_pipeline
+      POSTGRES_DB: datasight_pipeline
     ports:
       - "5433:5432"
     volumes:
-      - idrd_pgvector_data:/var/lib/postgresql
+      - datasight_pgvector_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d idrd_pipeline"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d datasight_pipeline"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -44,7 +46,7 @@ services:
     environment: &app_env
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_DB: idrd_pipeline
+      POSTGRES_DB: datasight_pipeline
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       REDIS_URL: redis://redis:6379/0
@@ -56,11 +58,11 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       VECTOR_DIMENSIONS: "1536"
-      UV_PROJECT_ENVIRONMENT: /opt/idrd-venv
+      UV_PROJECT_ENVIRONMENT: /opt/datasight-venv
     volumes:
       - .:/app
-      - idrd_uv_cache:/root/.cache/uv
-      - idrd_venv:/opt/idrd-venv
+      - datasight_uv_cache:/root/.cache/uv
+      - datasight_venv:/opt/datasight-venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,8 +80,8 @@ services:
     environment: *app_env
     volumes:
       - .:/app
-      - idrd_uv_cache:/root/.cache/uv
-      - idrd_venv:/opt/idrd-venv
+      - datasight_uv_cache:/root/.cache/uv
+      - datasight_venv:/opt/datasight-venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,14 +91,14 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     working_dir: /app/backend
-    command: ["uv", "run", "uvicorn", "idrd.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uv", "run", "uvicorn", "datasight.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment: *app_env
     ports:
       - "8000:8000"
     volumes:
       - .:/app
-      - idrd_uv_cache:/root/.cache/uv
-      - idrd_venv:/opt/idrd-venv
+      - datasight_uv_cache:/root/.cache/uv
+      - datasight_venv:/opt/datasight-venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,12 +114,12 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     working_dir: /app/backend
-    command: ["uv", "run", "celery", "-A", "idrd.infrastructure.worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--pool=solo"]
+    command: ["uv", "run", "celery", "-A", "datasight.infrastructure.worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--pool=solo"]
     environment: *app_env
     volumes:
       - .:/app
-      - idrd_uv_cache:/root/.cache/uv
-      - idrd_venv:/opt/idrd-venv
+      - datasight_uv_cache:/root/.cache/uv
+      - datasight_venv:/opt/datasight-venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,6 +131,9 @@ services:
         condition: service_completed_successfully
 
 volumes:
-  idrd_pgvector_data:
-  idrd_uv_cache:
-  idrd_venv:
+  datasight_pgvector_data:
+    name: datasight_pgvector_data
+  datasight_uv_cache:
+    name: datasight_uv_cache
+  datasight_venv:
+    name: datasight_venv
