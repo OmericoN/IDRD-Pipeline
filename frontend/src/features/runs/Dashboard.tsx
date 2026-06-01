@@ -1,62 +1,484 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  ChevronDown,
-  Circle,
-  Clock3,
-  Copy,
-  Database,
-  FileText,
-  Loader2,
-  Play,
-  RefreshCw,
-  Server,
-  Settings,
-  ShieldAlert,
-  TerminalSquare,
-  Trash2,
-  X,
-  XCircle,
-} from "lucide-react";
-import { useMemo, useState, type FormEvent, type ReactNode, type SetStateAction } from "react";
+  RiAdminLine,
+  RiArrowRightLine,
+  RiCheckLine,
+  RiClipboardLine,
+  RiDatabase2Line,
+  RiDeleteBinLine,
+  RiErrorWarningLine,
+  RiFileList3Line,
+  RiFileTextLine,
+  RiGitBranchLine,
+  RiListCheck,
+  RiMoonLine,
+  RiNodeTree,
+  RiPlayLine,
+  RiPulseLine,
+  RiRefreshLine,
+  RiRouteLine,
+  RiSearchLine,
+  RiServerLine,
+  RiSettings3Line,
+  RiShieldLine,
+  RiSunLine,
+  RiTimeLine,
+  type RemixiconComponentType,
+} from "@remixicon/react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useOutletContext,
+  useParams,
+} from "react-router";
 
-import { Badge } from "../../shared/ui/badge";
-import { Button } from "../../shared/ui/button";
-import { Input } from "../../shared/ui/input";
-import { Label } from "../../shared/ui/label";
-import { Progress } from "../../shared/ui/progress";
-import { Switch } from "../../shared/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../shared/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../shared/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSeparator,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import maastrichtBanner from "@/assets/maastricht-university-seeklogo.png";
+import { cn } from "@/lib/utils";
 import {
   ApiError,
   api,
   isActiveRun,
+  type HealthResponse,
   type PipelineRunEvent,
   type PipelineRunSummary,
   type ResetResponse,
-} from "../../shared/api/client";
-import { cn } from "../../shared/lib/utils";
-import { formatStageName, mergeStages, stageProgress, statusTone, type VisualStage } from "./pipeline";
+} from "@/shared/api/client";
+
+import {
+  formatStageName,
+  isTerminalStatus,
+  isWorkingStatus,
+  mergeStages,
+  stageProgress,
+  statusBadgeVariant,
+  statusTone,
+  type VisualStage,
+} from "./pipeline";
 
 const DEFAULT_OUTPUT = "storage/exports/insights.csv";
 const DEFAULT_UM_DATASETS = "data/um_datasets.csv";
 const RESET_CONFIRMATION = "RESET DATASIGHT";
 
+type RunFormState = {
+  query: string;
+  limit: number;
+  umDatasetsPath: string;
+  outputPath: string;
+  openAccessOnly: boolean;
+  overwrite: boolean;
+};
+
+type OutletContext = {
+  health: HealthResponse | undefined;
+  healthLoading: boolean;
+  runs: PipelineRunSummary[];
+  runsLoading: boolean;
+  latestRun: PipelineRunSummary | undefined;
+  refreshAll: () => void;
+};
+
+type GraphNode = {
+  stage: VisualStage;
+  x: number;
+  y: number;
+};
+
+type PipelinePort = "left" | "right" | "top" | "bottom";
+
+type PipelineEdgeDefinition = {
+  from: string;
+  to: string;
+  fromPort: PipelinePort;
+  toPort: PipelinePort;
+};
+
+const NAV_ITEMS: Array<{
+  label: string;
+  to: string;
+  icon: RemixiconComponentType;
+  workspace?: boolean;
+}> = [
+  { label: "Launch", to: "/launch", icon: RiPlayLine },
+  { label: "Runs", to: "/runs", icon: RiListCheck },
+  { label: "Workspace", to: "/workspace", icon: RiRouteLine, workspace: true },
+  { label: "Insights", to: "/insights", icon: RiFileList3Line },
+  { label: "Admin", to: "/admin", icon: RiAdminLine },
+];
+
+const PIPELINE_CANVAS = {
+  width: 2240,
+  height: 600,
+  nodeWidth: 224,
+  nodeHeight: 88,
+} as const;
+
+const STAGE_POSITIONS: Record<string, { x: number; y: number }> = {
+  discover: { x: 180, y: 300 },
+  download_pdf: { x: 560, y: 300 },
+  grobid_convert: { x: 940, y: 165 },
+  render_document: { x: 940, y: 435 },
+  detect_mentions: { x: 1320, y: 300 },
+  extract_features: { x: 1700, y: 165 },
+  match_um_dataset: { x: 1700, y: 435 },
+  export_insights: { x: 2080, y: 300 },
+};
+
+const PIPELINE_EDGES: PipelineEdgeDefinition[] = [
+  { from: "discover", to: "download_pdf", fromPort: "right", toPort: "left" },
+  {
+    from: "download_pdf",
+    to: "grobid_convert",
+    fromPort: "right",
+    toPort: "left",
+  },
+  {
+    from: "grobid_convert",
+    to: "render_document",
+    fromPort: "bottom",
+    toPort: "top",
+  },
+  {
+    from: "render_document",
+    to: "detect_mentions",
+    fromPort: "right",
+    toPort: "left",
+  },
+  {
+    from: "detect_mentions",
+    to: "extract_features",
+    fromPort: "right",
+    toPort: "left",
+  },
+  {
+    from: "extract_features",
+    to: "match_um_dataset",
+    fromPort: "bottom",
+    toPort: "top",
+  },
+  {
+    from: "match_um_dataset",
+    to: "export_insights",
+    fromPort: "right",
+    toPort: "left",
+  },
+];
+
+const STAGE_ICONS: Record<string, RemixiconComponentType> = {
+  discover: RiSearchLine,
+  download_pdf: RiFileTextLine,
+  grobid_convert: RiSettings3Line,
+  render_document: RiFileList3Line,
+  detect_mentions: RiPulseLine,
+  extract_features: RiNodeTree,
+  match_um_dataset: RiDatabase2Line,
+  export_insights: RiArrowRightLine,
+};
+
 function Dashboard() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<PipelineShell />}>
+          <Route index element={<Navigate replace to="/launch" />} />
+          <Route path="launch" element={<LaunchPage />} />
+          <Route path="runs" element={<RunsPage />} />
+          <Route path="workspace" element={<WorkspaceRedirect />} />
+          <Route path="runs/:runId" element={<WorkspacePage />} />
+          <Route path="insights" element={<InsightsPage />} />
+          <Route path="admin" element={<AdminPage />} />
+          <Route path="*" element={<Navigate replace to="/launch" />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function PipelineShell() {
   const queryClient = useQueryClient();
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-  const [eventStage, setEventStage] = useState("all");
-  const [tab, setTab] = useState("logs");
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [dangerOpen, setDangerOpen] = useState(false);
-  const [resetConfirm, setResetConfirm] = useState("");
-  const [resetAcknowledged, setResetAcknowledged] = useState(false);
-  const [resetForce, setResetForce] = useState(false);
-  const [resetResult, setResetResult] = useState<ResetResponse | null>(null);
-  const [form, setForm] = useState({
+  const location = useLocation();
+  const [theme, setTheme] = useTheme();
+
+  const healthQuery = useQuery({
+    queryKey: ["health"],
+    queryFn: api.health,
+    refetchInterval: 5000,
+  });
+  const runsQuery = useQuery({
+    queryKey: ["runs"],
+    queryFn: () => api.runs(25),
+    refetchInterval: 5000,
+  });
+
+  const runs = runsQuery.data ?? [];
+  const latestRun = runs[0];
+  const workspacePath = latestRun ? `/runs/${latestRun.id}` : "/runs";
+  const title = routeTitle(location.pathname);
+
+  function refreshAll() {
+    void queryClient.invalidateQueries({ queryKey: ["health"] });
+    void queryClient.invalidateQueries({ queryKey: ["stages"] });
+    void queryClient.invalidateQueries({ queryKey: ["runs"] });
+    void queryClient.invalidateQueries({ queryKey: ["run"] });
+    void queryClient.invalidateQueries({ queryKey: ["run-events"] });
+    void queryClient.invalidateQueries({ queryKey: ["insights"] });
+  }
+
+  return (
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="h-14 justify-center p-2">
+          <div className="flex h-10 w-full items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:hidden">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="brand-mark">
+                <img
+                  src={maastrichtBanner}
+                  alt=""
+                  className="size-full object-contain"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="font-heading text-sm font-medium">DataSight</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  Dataset mention workflow
+                </p>
+              </div>
+            </div>
+            <SidebarTrigger
+              aria-label="Collapse sidebar"
+              className="shrink-0"
+            />
+          </div>
+          <SidebarTrigger
+            aria-label="Open sidebar"
+            className="brand-sidebar-trigger hidden group-data-[collapsible=icon]:inline-flex"
+          >
+            <img
+              src={maastrichtBanner}
+              alt=""
+              className="size-full object-contain"
+            />
+          </SidebarTrigger>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workflow</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {NAV_ITEMS.map((item) => {
+                  const isWorkspace =
+                    location.pathname.startsWith("/runs/") ||
+                    location.pathname === "/workspace";
+                  const isActive = item.workspace
+                    ? isWorkspace
+                    : location.pathname.startsWith(item.to);
+                  const to = item.workspace ? workspacePath : item.to;
+                  const Icon = item.icon;
+                  return (
+                    <SidebarMenuItem key={item.label}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.label}
+                        className="brand-nav-link"
+                      >
+                        <Link to={to}>
+                          <Icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      {item.label === "Runs" && runs.length ? (
+                        <SidebarMenuBadge>{runs.length}</SidebarMenuBadge>
+                      ) : null}
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarSeparator />
+          <SidebarGroup>
+            <SidebarGroupLabel>System</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <HealthList
+                health={healthQuery.data}
+                isLoading={healthQuery.isLoading}
+                compact
+              />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="justify-start group-data-[collapsible=icon]:px-2"
+          >
+            <Link to="/launch">
+              <RiPlayLine data-icon="inline-start" />
+              <span className="group-data-[collapsible=icon]:hidden">
+                Start run
+              </span>
+            </Link>
+          </Button>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+
+      <SidebarInset>
+        <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-5">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-heading text-base font-medium">
+              {title}
+            </h1>
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              {latestRun
+                ? `${latestRun.query || `Run ${latestRun.id}`} · Run #${latestRun.id}`
+                : "No run selected"}
+            </p>
+          </div>
+          <HealthPills
+            health={healthQuery.data}
+            isLoading={healthQuery.isLoading}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Refresh"
+            onClick={refreshAll}
+          >
+            <RiRefreshLine />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Toggle theme"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <RiSunLine /> : <RiMoonLine />}
+          </Button>
+          <Button
+            asChild
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Admin settings"
+          >
+            <Link to="/admin">
+              <RiSettings3Line />
+            </Link>
+          </Button>
+        </header>
+        <div className="min-h-[calc(100svh-3.5rem)] p-3 sm:p-5">
+          <Outlet
+            context={
+              {
+                health: healthQuery.data,
+                healthLoading: healthQuery.isLoading,
+                runs,
+                runsLoading: runsQuery.isLoading,
+                latestRun,
+                refreshAll,
+              } satisfies OutletContext
+            }
+          />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+function LaunchPage() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [form, setForm] = useState<RunFormState>({
     query: "Maastricht dataset reuse",
     limit: 25,
     umDatasetsPath: DEFAULT_UM_DATASETS,
@@ -65,98 +487,21 @@ function Dashboard() {
     overwrite: false,
   });
 
-  const healthQuery = useQuery({
-    queryKey: ["health"],
-    queryFn: api.health,
-    refetchInterval: 5000,
-  });
-  const stagesQuery = useQuery({ queryKey: ["stages"], queryFn: api.stages });
-  const runsQuery = useQuery({
-    queryKey: ["runs"],
-    queryFn: () => api.runs(25),
-    refetchInterval: 5000,
-  });
-  const selectedRunQuery = useQuery({
-    queryKey: ["run", selectedRunId],
-    queryFn: () => api.run(selectedRunId!),
-    enabled: selectedRunId !== null,
-    refetchInterval: (query) => (isActiveRun(query.state.data?.status) ? 2500 : false),
-  });
-  const eventsQuery = useQuery({
-    queryKey: ["run-events", selectedRunId],
-    queryFn: () => api.runEvents(selectedRunId!, 200),
-    enabled: selectedRunId !== null,
-    refetchInterval: () => {
-      const run = queryClient.getQueryData<PipelineRunSummary>(["run", selectedRunId]);
-      return isActiveRun(run?.status) ? 2500 : false;
-    },
-  });
-  const insightsQuery = useQuery({
-    queryKey: ["insights"],
-    queryFn: () => api.insights(100),
-    refetchInterval: selectedRunQuery.data && isActiveRun(selectedRunQuery.data.status) ? 10000 : false,
-  });
-
   const createRunMutation = useMutation({
     mutationFn: api.createRun,
     onSuccess: async (created) => {
-      setSelectedRunId(created.pipeline_run_id);
-      setEventStage("all");
-      setTab("logs");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["runs"] }),
-        queryClient.invalidateQueries({ queryKey: ["run", created.pipeline_run_id] }),
-        queryClient.invalidateQueries({ queryKey: ["run-events", created.pipeline_run_id] }),
+        queryClient.invalidateQueries({
+          queryKey: ["run", created.pipeline_run_id],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["run-events", created.pipeline_run_id],
+        }),
       ]);
+      navigate(`/runs/${created.pipeline_run_id}`);
     },
   });
-
-  const resetMutation = useMutation({
-    mutationFn: api.reset,
-    onSuccess: async (result) => {
-      setResetResult(result);
-      setSelectedRunId(null);
-      setEventStage("all");
-      setTab("logs");
-      setResetConfirm("");
-      setResetAcknowledged(false);
-      setResetForce(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["health"] }),
-        queryClient.invalidateQueries({ queryKey: ["runs"] }),
-        queryClient.invalidateQueries({ queryKey: ["run"] }),
-        queryClient.invalidateQueries({ queryKey: ["run-events"] }),
-        queryClient.invalidateQueries({ queryKey: ["insights"] }),
-      ]);
-    },
-  });
-
-  const runs = runsQuery.data ?? [];
-  const selectedRun = selectedRunQuery.data ?? runs.find((run) => run.id === selectedRunId);
-  const visualStages = useMemo(
-    () => mergeStages(stagesQuery.data ?? [], selectedRun),
-    [stagesQuery.data, selectedRun],
-  );
-  const filteredEvents = useMemo(() => {
-    const events = eventsQuery.data ?? [];
-    if (eventStage === "all") {
-      return events;
-    }
-    return events.filter((event) => event.stage === eventStage);
-  }, [eventStage, eventsQuery.data]);
-  const stageFilters = useMemo(
-    () => [
-      "all",
-      ...Array.from(
-        new Set(
-          (eventsQuery.data ?? [])
-            .map((event) => event.stage)
-            .filter((stage): stage is string => Boolean(stage)),
-        ),
-      ),
-    ],
-    [eventsQuery.data],
-  );
 
   function submitRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,387 +515,1007 @@ function Dashboard() {
     });
   }
 
-  function refreshAll() {
-    void healthQuery.refetch();
-    void runsQuery.refetch();
-    void insightsQuery.refetch();
-    if (selectedRunId) {
-      void selectedRunQuery.refetch();
-      void eventsQuery.refetch();
-    }
-  }
-
-  const canReset = resetConfirm === RESET_CONFIRMATION && resetAcknowledged;
-
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[rgba(250,250,248,0.94)] backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                DataSight
-              </p>
-              <h1 className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
-                Dataset mention workflow
-              </h1>
+    <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <Card>
+        <CardHeader>
+          <CardTitle>Start a dataset mention run</CardTitle>
+          <CardDescription>
+            Queue the full publication-to-insight pipeline with explicit inputs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="flex flex-col gap-6" onSubmit={submitRun}>
+            <FieldSet>
+              <FieldLegend>Run inputs</FieldLegend>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="query">Search query</FieldLabel>
+                  <Input
+                    id="query"
+                    value={form.query}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        query: event.target.value,
+                      }))
+                    }
+                    placeholder="Maastricht dataset reuse"
+                    required
+                  />
+                  <FieldDescription>
+                    Used by discovery to find candidate publication metadata.
+                  </FieldDescription>
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]">
+                  <Field>
+                    <FieldLabel htmlFor="limit">Limit</FieldLabel>
+                    <Input
+                      id="limit"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={form.limit}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          limit: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="outputPath">Output CSV</FieldLabel>
+                    <Input
+                      id="outputPath"
+                      value={form.outputPath}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          outputPath: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="umDatasetsPath">
+                    UM dataset metadata
+                  </FieldLabel>
+                  <Input
+                    id="umDatasetsPath"
+                    value={form.umDatasetsPath}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        umDatasetsPath: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+
+            <FieldGroup className="grid gap-4 sm:grid-cols-2">
+              <Field orientation="horizontal" className="rounded-lg border p-3">
+                <Switch
+                  id="openAccessOnly"
+                  checked={form.openAccessOnly}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      openAccessOnly: checked,
+                    }))
+                  }
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="openAccessOnly">
+                    Open access only
+                  </FieldLabel>
+                  <FieldDescription>
+                    Prefer publications with available PDF links.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
+              <Field orientation="horizontal" className="rounded-lg border p-3">
+                <Switch
+                  id="overwrite"
+                  checked={form.overwrite}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({ ...current, overwrite: checked }))
+                  }
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="overwrite">
+                    Overwrite artifacts
+                  </FieldLabel>
+                  <FieldDescription>
+                    Replace existing generated files for matching records.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
+            </FieldGroup>
+
+            {createRunMutation.error ? (
+              <Alert variant="destructive">
+                <RiErrorWarningLine />
+                <AlertTitle>Run was not queued</AlertTitle>
+                <AlertDescription>
+                  {createRunMutation.error.message}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                disabled={createRunMutation.isPending || !form.query.trim()}
+              >
+                <RiPlayLine data-icon="inline-start" />
+                {createRunMutation.isPending ? "Starting" : "Start run"}
+              </Button>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <HealthStrip health={healthQuery.data} isLoading={healthQuery.isLoading} />
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" onClick={refreshAll}>
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Admin settings"
-                  title="Admin settings"
-                  onClick={() => setAdminOpen(true)}
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Pipeline shape</CardTitle>
+          <CardDescription>
+            Every run follows the same eight backend stages.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3">
+            {[
+              "Discover",
+              "Download PDF",
+              "GROBID",
+              "Render",
+              "Detect mentions",
+              "Extract",
+              "Match UM",
+              "Export insights",
+            ].map((label, index) => (
+              <div key={label} className="flex items-center gap-3">
+                <span className="flex size-6 items-center justify-center rounded-md border text-xs tabular-nums text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="text-sm">{label}</span>
               </div>
-            </div>
+            ))}
           </div>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:px-8">
-        <aside className="space-y-4 lg:sticky lg:top-[112px] lg:self-start">
-          <RunLauncher
-            form={form}
-            isPending={createRunMutation.isPending}
-            error={createRunMutation.error}
-            onSubmit={submitRun}
-            onChange={setForm}
-          />
-          <RecentRuns
-            runs={runs}
-            selectedRunId={selectedRunId}
-            isLoading={runsQuery.isLoading}
-            onSelect={(runId) => {
-              setSelectedRunId(runId);
-              setEventStage("all");
-            }}
-          />
-        </aside>
-
-        <section className="min-w-0 space-y-5">
-          <RunOverview run={selectedRun} visualStages={visualStages} />
-          <StagePanel stages={visualStages} />
-          <ActivityPanel
-            tab={tab}
-            setTab={setTab}
-            stageFilters={stageFilters}
-            eventStage={eventStage}
-            setEventStage={setEventStage}
-            events={filteredEvents}
-            eventsLoading={eventsQuery.isLoading && selectedRunId !== null}
-            hasRun={selectedRunId !== null}
-            insightRows={insightsQuery.data?.rows ?? []}
-            insightsLoading={insightsQuery.isLoading}
-          />
-        </section>
-      </div>
-
-      {adminOpen ? (
-        <AdminDialog
-          canReset={canReset}
-          dangerOpen={dangerOpen}
-          resetAcknowledged={resetAcknowledged}
-          resetConfirm={resetConfirm}
-          resetError={resetMutation.error}
-          resetForce={resetForce}
-          resetPending={resetMutation.isPending}
-          resetResult={resetResult}
-          onClose={() => setAdminOpen(false)}
-          onDangerOpenChange={setDangerOpen}
-          onReset={() => resetMutation.mutate({ confirm: resetConfirm, force: resetForce })}
-          onResetAcknowledgedChange={setResetAcknowledged}
-          onResetConfirmChange={(value) => {
-            setResetConfirm(value);
-            setResetResult(null);
-            resetMutation.reset();
-          }}
-          onResetForceChange={setResetForce}
-        />
-      ) : null}
-    </main>
-  );
-}
-
-function HealthStrip({
-  health,
-  isLoading,
-}: {
-  health: Awaited<ReturnType<typeof api.health>> | undefined;
-  isLoading: boolean;
-}) {
-  const checks = [
-    { label: "Database", ready: health?.database_ready, icon: Database },
-    { label: "Redis", ready: health?.redis_ready, icon: Activity },
-    { label: "Worker", ready: health?.worker_ready, icon: Server },
-    { label: "GROBID", ready: health?.grobid_ready, icon: FileText },
-  ];
-
-  return (
-    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-      {checks.map((check) => {
-        const Icon = check.icon;
-        const ready = Boolean(check.ready);
-        return (
-          <div
-            key={check.label}
-            className="flex min-w-[128px] items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-subtle)]"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <Icon className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-              <span className="truncate text-sm font-medium text-[var(--foreground)]">{check.label}</span>
-            </div>
-            <Badge variant={isLoading ? "muted" : ready ? "success" : "error"}>
-              {isLoading ? "checking" : ready ? "ready" : "offline"}
-            </Badge>
-          </div>
-        );
-      })}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function RunLauncher({
-  form,
-  isPending,
-  error,
-  onSubmit,
-  onChange,
-}: {
-  form: {
-    query: string;
-    limit: number;
-    umDatasetsPath: string;
-    outputPath: string;
-    openAccessOnly: boolean;
-    overwrite: boolean;
-  };
-  isPending: boolean;
-  error: Error | null;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onChange: (updater: SetStateAction<typeof form>) => void;
-}) {
+function RunsPage() {
+  const { runs, runsLoading } = useOutletData();
+  const [search, setSearch] = useState("");
+  const filteredRuns = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return runs;
+    }
+    return runs.filter((run) =>
+      `${run.id} ${run.query ?? ""} ${run.status}`
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [runs, search]);
+
   return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)]">
-      <PanelHeader
-        title="Run pipeline"
-        description="Queue a full workflow through FastAPI."
-        icon={<Play className="h-4 w-4" />}
-      />
-      <form className="mt-4 space-y-4" onSubmit={onSubmit}>
-        <Field label="Search query">
-          <Input
-            value={form.query}
-            onChange={(event) => onChange((current) => ({ ...current, query: event.target.value }))}
-            placeholder="Maastricht dataset reuse"
-            required
-          />
-        </Field>
-        <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
-          <Field label="Limit">
-            <Input
-              type="number"
-              min={1}
-              max={1000}
-              value={form.limit}
-              onChange={(event) => onChange((current) => ({ ...current, limit: Number(event.target.value) }))}
-            />
+    <div className="mx-auto flex max-w-6xl flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Runs</CardTitle>
+          <CardDescription>
+            Open a run to inspect the workspace, events, and stage metrics.
+          </CardDescription>
+          <CardAction>
+            <Button asChild>
+              <Link to="/launch">
+                <RiPlayLine data-icon="inline-start" />
+                start new run
+              </Link>
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor="runSearch" className="sr-only">
+              Search runs
+            </FieldLabel>
+            <div className="relative">
+              <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="runSearch"
+                className="pl-9"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search runs by query, id, or status"
+              />
+            </div>
           </Field>
-          <Field label="Output CSV">
-            <Input
-              value={form.outputPath}
-              onChange={(event) => onChange((current) => ({ ...current, outputPath: event.target.value }))}
+          {runsLoading ? <RunListSkeleton /> : null}
+          {!runsLoading && !filteredRuns.length ? (
+            <EmptyState
+              icon={RiListCheck}
+              title="No runs found"
+              description="Start a new run or adjust the search term."
             />
-          </Field>
-        </div>
-        <Field label="UM dataset metadata">
-          <Input
-            value={form.umDatasetsPath}
-            onChange={(event) => onChange((current) => ({ ...current, umDatasetsPath: event.target.value }))}
-          />
-        </Field>
-        <div className="grid gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] p-3 sm:grid-cols-2">
-          <ToggleRow
-            label="Open access"
-            checked={form.openAccessOnly}
-            onChange={(checked) => onChange((current) => ({ ...current, openAccessOnly: checked }))}
-          />
-          <ToggleRow
-            label="Overwrite"
-            checked={form.overwrite}
-            onChange={(checked) => onChange((current) => ({ ...current, overwrite: checked }))}
-          />
-        </div>
-        {error ? <Alert tone="error">{error.message}</Alert> : null}
-        <Button className="w-full" type="submit" disabled={isPending || !form.query.trim()}>
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          {isPending ? "Starting" : "Start run"}
-        </Button>
-      </form>
-    </section>
+          ) : null}
+          <div className="grid gap-3">
+            {filteredRuns.map((run) => (
+              <Link
+                key={run.id}
+                to={`/runs/${run.id}`}
+                className="group grid gap-3 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="truncate font-heading text-base font-medium">
+                      {run.query || `Run ${run.id}`}
+                    </h2>
+                    <StatusBadge status={run.status} />
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Run #{run.id} · {formatDate(run.created_at)} ·{" "}
+                    {run.stages.length} recorded stages
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" tabIndex={-1}>
+                  Open
+                  <RiArrowRightLine data-icon="inline-end" />
+                </Button>
+              </Link>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function RecentRuns({
-  runs,
-  selectedRunId,
-  isLoading,
-  onSelect,
-}: {
-  runs: PipelineRunSummary[];
-  selectedRunId: number | null;
-  isLoading: boolean;
-  onSelect: (runId: number) => void;
-}) {
+function WorkspaceRedirect() {
+  const { latestRun, runsLoading } = useOutletData();
+  if (runsLoading) {
+    return <WorkspaceLoading />;
+  }
+  if (!latestRun) {
+    return <Navigate replace to="/runs" />;
+  }
+  return <Navigate replace to={`/runs/${latestRun.id}`} />;
+}
+
+function WorkspacePage() {
+  const { runId } = useParams();
+  const numericRunId = Number(runId);
+  const queryClient = useQueryClient();
+  const [eventStage, setEventStage] = useState("all");
+  const [tab, setTab] = useState("events");
+  const [selectedStageName, setSelectedStageName] = useState<string | null>(
+    null,
+  );
+
+  const stagesQuery = useQuery({ queryKey: ["stages"], queryFn: api.stages });
+  const selectedRunQuery = useQuery({
+    queryKey: ["run", numericRunId],
+    queryFn: () => api.run(numericRunId),
+    enabled: Number.isFinite(numericRunId),
+    refetchInterval: (query) =>
+      isActiveRun(query.state.data?.status) ? 2500 : false,
+  });
+  const eventsQuery = useQuery({
+    queryKey: ["run-events", numericRunId],
+    queryFn: () => api.runEvents(numericRunId, 200),
+    enabled: Number.isFinite(numericRunId),
+    refetchInterval: () => {
+      const run = queryClient.getQueryData<PipelineRunSummary>([
+        "run",
+        numericRunId,
+      ]);
+      return isActiveRun(run?.status) ? 2500 : false;
+    },
+  });
+
+  const selectedRun = selectedRunQuery.data;
+  const visualStages = useMemo(
+    () => mergeStages(stagesQuery.data ?? [], selectedRun),
+    [stagesQuery.data, selectedRun],
+  );
+  const selectedStage = useMemo(() => {
+    const requested = visualStages.find(
+      (stage) => stage.name === selectedStageName,
+    );
+    if (requested) {
+      return requested;
+    }
+    return (
+      visualStages.find((stage) => isWorkingStatus(stage.status)) ??
+      visualStages[0]
+    );
+  }, [selectedStageName, visualStages]);
+  const filteredEvents = useMemo(() => {
+    const events = eventsQuery.data ?? [];
+    if (eventStage === "all") {
+      return events;
+    }
+    return events.filter((event) => event.stage === eventStage);
+  }, [eventStage, eventsQuery.data]);
+  const stageFilters = useMemo(() => {
+    const eventStages = (eventsQuery.data ?? [])
+      .map((event) => event.stage)
+      .filter((stage): stage is string => Boolean(stage));
+    return [
+      "all",
+      ...Array.from(
+        new Set([...visualStages.map((stage) => stage.name), ...eventStages]),
+      ),
+    ];
+  }, [eventsQuery.data, visualStages]);
+
+  function inspectStage(stageName: string) {
+    setSelectedStageName(stageName);
+    setEventStage(stageName);
+    setTab("events");
+  }
+
+  if (!Number.isFinite(numericRunId)) {
+    return <Navigate replace to="/runs" />;
+  }
+
+  if (selectedRunQuery.isLoading || stagesQuery.isLoading) {
+    return <WorkspaceLoading />;
+  }
+
+  if (selectedRunQuery.error) {
+    return (
+      <EmptyState
+        icon={RiErrorWarningLine}
+        title="Run unavailable"
+        description={selectedRunQuery.error.message}
+      />
+    );
+  }
+
   return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)]">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-[var(--foreground)]">Recent runs</h2>
-        <Badge variant="muted">{runs.length}</Badge>
+    <div className="flex min-h-[calc(100svh-6rem)] flex-col gap-4">
+      <WorkspaceHeader run={selectedRun} stages={visualStages} />
+      <div className="grid min-h-[620px] min-w-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,460px)]">
+        <PipelineGraph
+          stages={visualStages}
+          selectedStageName={selectedStage?.name ?? null}
+          onSelectStage={inspectStage}
+        />
+        <WorkspaceInspector
+          run={selectedRun}
+          selectedStage={selectedStage}
+          tab={tab}
+          setTab={setTab}
+          stageFilters={stageFilters}
+          eventStage={eventStage}
+          setEventStage={setEventStage}
+          events={filteredEvents}
+          eventsLoading={eventsQuery.isLoading}
+        />
       </div>
-      <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
-        {isLoading ? <EmptyState text="Loading runs..." /> : null}
-        {!isLoading && !runs.length ? <EmptyState text="No pipeline runs yet." /> : null}
-        {runs.map((run) => (
-          <button
-            key={run.id}
-            type="button"
-            className={cn(
-              "w-full rounded-md border p-3 text-left transition-colors hover:bg-[var(--surface-hover)]",
-              selectedRunId === run.id
-                ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                : "border-[var(--border)] bg-[var(--surface)]",
-            )}
-            onClick={() => onSelect(run.id)}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm font-semibold text-[var(--foreground)]">
-                {run.query || `Run ${run.id}`}
-              </span>
-              <Badge variant={statusTone(run.status)}>{run.status}</Badge>
+    </div>
+  );
+}
+
+function InsightsPage() {
+  const [selectedInsightIndex, setSelectedInsightIndex] = useState<
+    number | null
+  >(null);
+  const insightsQuery = useQuery({
+    queryKey: ["insights"],
+    queryFn: () => api.insights(100),
+    refetchInterval: 10000,
+  });
+  const rows = insightsQuery.data?.rows ?? [];
+  const columns = useMemo(
+    () => Array.from(new Set(rows.flatMap((row) => Object.keys(row)))),
+    [rows],
+  );
+  const selectedInsight =
+    selectedInsightIndex === null ? null : rows[selectedInsightIndex];
+
+  return (
+    <div className="mx-auto flex max-w-7xl flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Insights</CardTitle>
+          <CardDescription>
+            Preview the latest exported joined insight rows.
+          </CardDescription>
+          <CardAction>
+            <StatusBadge
+              status={insightsQuery.isFetching ? "running" : "ready"}
+            />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {insightsQuery.isLoading ? <TableSkeleton /> : null}
+          {!insightsQuery.isLoading && !rows.length ? (
+            <EmptyState
+              icon={RiFileList3Line}
+              title="No insights yet"
+              description="Run the pipeline to export joined insight rows."
+            />
+          ) : null}
+          {rows.length ? (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {columns.map((column) => (
+                      <TableHead key={column}>
+                        {titleCase(formatStageName(column))}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.slice(0, 25).map((row, index) => (
+                    <TableRow key={index}>
+                      {columns.map((column) => (
+                        <TableCell key={column} className="max-w-[300px]">
+                          <button
+                            type="button"
+                            className="block w-full truncate rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            title={formatCell(row[column])}
+                            onClick={() => setSelectedInsightIndex(index)}
+                          >
+                            {formatCell(row[column])}
+                          </button>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Select any cell to inspect the full insight row.
+              </p>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
+      <Sheet
+        open={Boolean(selectedInsight)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedInsightIndex(null);
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="min-h-0 w-[92vw] max-w-[calc(100vw-2rem)] overflow-hidden sm:max-w-3xl"
+        >
+          <SheetHeader className="shrink-0">
+            <SheetTitle>
+              Insight row{" "}
+              {selectedInsightIndex === null ? "" : selectedInsightIndex + 1}
+            </SheetTitle>
+            <SheetDescription>
+              Complete field values for the selected exported insight.
+            </SheetDescription>
+          </SheetHeader>
+          <ScrollArea className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
+            <div className="grid min-w-0 gap-3 pb-4">
+              {selectedInsight
+                ? Object.entries(selectedInsight).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="min-w-0 rounded-lg border bg-background p-3"
+                    >
+                      <p className="mb-1 text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                        {titleCase(formatStageName(key))}
+                      </p>
+                      <p className="max-h-72 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
+                        {formatCell(value)}
+                      </p>
+                    </div>
+                  ))
+                : null}
             </div>
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-              #{run.id} · {formatDate(run.created_at)}
-            </p>
-          </button>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function AdminPage() {
+  const queryClient = useQueryClient();
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetAcknowledged, setResetAcknowledged] = useState(false);
+  const [resetForce, setResetForce] = useState(false);
+  const [resetResult, setResetResult] = useState<ResetResponse | null>(null);
+
+  const resetMutation = useMutation({
+    mutationFn: api.reset,
+    onSuccess: async (result) => {
+      setResetResult(result);
+      setResetConfirm("");
+      setResetAcknowledged(false);
+      setResetForce(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["health"] }),
+        queryClient.invalidateQueries({ queryKey: ["runs"] }),
+        queryClient.invalidateQueries({ queryKey: ["run"] }),
+        queryClient.invalidateQueries({ queryKey: ["run-events"] }),
+        queryClient.invalidateQueries({ queryKey: ["insights"] }),
+      ]);
+    },
+  });
+  const canReset = resetConfirm === RESET_CONFIRMATION && resetAcknowledged;
+  const resetErrorText =
+    resetMutation.error instanceof ApiError &&
+    resetMutation.error.status === 409
+      ? `${String(resetMutation.error.detail)} Retry only if you are sure by enabling force reset.`
+      : resetMutation.error?.message;
+
+  return (
+    <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <Card>
+        <CardHeader>
+          <CardTitle>Admin</CardTitle>
+          <CardDescription>
+            Operational controls for local pipeline data and generated runtime
+            storage.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6">
+          <Alert variant="destructive">
+            <RiShieldLine />
+            <AlertTitle>Danger zone</AlertTitle>
+            <AlertDescription>
+              Reset wipes pipeline runs, stage records, events, extracted
+              results, and generated files under storage. Source data under data
+              is not deleted by the backend reset service.
+            </AlertDescription>
+          </Alert>
+
+          <FieldSet>
+            <FieldLegend>Reset confirmation</FieldLegend>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="resetConfirm">
+                  Type {RESET_CONFIRMATION} to confirm
+                </FieldLabel>
+                <Input
+                  id="resetConfirm"
+                  value={resetConfirm}
+                  onChange={(event) => {
+                    setResetConfirm(event.target.value);
+                    setResetResult(null);
+                    resetMutation.reset();
+                  }}
+                  placeholder={RESET_CONFIRMATION}
+                  autoComplete="off"
+                />
+              </Field>
+              <Field orientation="horizontal" className="rounded-lg border p-3">
+                <Switch
+                  id="resetAcknowledged"
+                  checked={resetAcknowledged}
+                  onCheckedChange={setResetAcknowledged}
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="resetAcknowledged">
+                    I understand this action cannot be undone from the app.
+                  </FieldLabel>
+                </FieldContent>
+              </Field>
+              <Field orientation="horizontal" className="rounded-lg border p-3">
+                <Switch
+                  id="resetForce"
+                  checked={resetForce}
+                  onCheckedChange={setResetForce}
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="resetForce">
+                    Force reset active runs
+                  </FieldLabel>
+                  <FieldDescription>
+                    Use only after checking whether active workers can be
+                    interrupted.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
+            </FieldGroup>
+          </FieldSet>
+
+          {resetErrorText ? (
+            <Alert variant="destructive">
+              <RiErrorWarningLine />
+              <AlertTitle>Reset failed</AlertTitle>
+              <AlertDescription>{resetErrorText}</AlertDescription>
+            </Alert>
+          ) : null}
+          {resetResult ? (
+            <Alert>
+              <RiCheckLine />
+              <AlertTitle>Reset complete</AlertTitle>
+              <AlertDescription>
+                Truncated {resetResult.truncated_tables.length} tables and
+                recreated {resetResult.recreated_directories.length} storage
+                directories.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="flex justify-end">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={!canReset || resetMutation.isPending}
+                >
+                  <RiDeleteBinLine data-icon="inline-start" />
+                  Review reset
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogMedia>
+                    <RiShieldLine />
+                  </AlertDialogMedia>
+                  <AlertDialogTitle>Reset DataSight storage?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove stored pipeline records and generated
+                    runtime files. The confirmation phrase has been entered
+                    correctly.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    onClick={() =>
+                      resetMutation.mutate({
+                        confirm: resetConfirm,
+                        force: resetForce,
+                      })
+                    }
+                  >
+                    Reset everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Reset scope</CardTitle>
+          <CardDescription>
+            The backend reset service controls exactly what is removed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+          <p>
+            Pipeline runs, stages, events, publications, mentions, and insight
+            records are truncated.
+          </p>
+          <p>Runtime storage directories are recreated after deletion.</p>
+          <p>
+            Source datasets in the repository data directory remain untouched.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function WorkspaceHeader({
+  run,
+  stages,
+}: {
+  run: PipelineRunSummary | undefined;
+  stages: VisualStage[];
+}) {
+  const progress = stageProgress(stages);
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>
+          {run ? run.query || `Run ${run.id}` : "Run workspace"}
+        </CardTitle>
+        <CardDescription>
+          {run
+            ? `Run #${run.id} · started ${formatDate(run.created_at)}`
+            : "Select a run to inspect progress."}
+        </CardDescription>
+        <CardAction>
+          {run ? <StatusBadge status={run.status} /> : null}
+        </CardAction>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="flex flex-wrap gap-2">
+          <MetricPill
+            label="Done"
+            value={
+              stages.filter((stage) => stage.status === "successful").length
+            }
+          />
+          <MetricPill
+            label="Skipped"
+            value={stages.filter((stage) => stage.status === "skipped").length}
+          />
+          <MetricPill
+            label="Errors"
+            value={stages.filter((stage) => stage.status === "failed").length}
+          />
+          <MetricPill label="Stages" value={stages.length} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Stage progress</span>
+            <span>{progress}%</span>
+          </div>
+          <Progress value={progress} />
+        </div>
+        {run?.error ? (
+          <Alert variant="destructive" className="md:col-span-2">
+            <RiErrorWarningLine />
+            <AlertTitle>Run error</AlertTitle>
+            <AlertDescription>{run.error}</AlertDescription>
+          </Alert>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function pipelinePortPoint(node: GraphNode, port: PipelinePort) {
+  const halfWidth = PIPELINE_CANVAS.nodeWidth / 2;
+  const halfHeight = PIPELINE_CANVAS.nodeHeight / 2;
+
+  switch (port) {
+    case "left":
+      return { x: node.x - halfWidth, y: node.y };
+    case "right":
+      return { x: node.x + halfWidth, y: node.y };
+    case "top":
+      return { x: node.x, y: node.y - halfHeight };
+    case "bottom":
+      return { x: node.x, y: node.y + halfHeight };
+  }
+}
+
+function pipelineEdgePath(
+  edge: PipelineEdgeDefinition,
+  fromNode: GraphNode,
+  toNode: GraphNode,
+) {
+  const start = pipelinePortPoint(fromNode, edge.fromPort);
+  const end = pipelinePortPoint(toNode, edge.toPort);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+
+  if (Math.abs(dy) < 1) {
+    return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+  }
+
+  if (
+    (edge.fromPort === "left" || edge.fromPort === "right") &&
+    (edge.toPort === "left" || edge.toPort === "right")
+  ) {
+    const handle = Math.max(88, Math.min(180, Math.abs(dx) * 0.48));
+    const direction = dx >= 0 ? 1 : -1;
+    const c1 = { x: start.x + handle * direction, y: start.y };
+    const c2 = { x: end.x - handle * direction, y: end.y };
+    return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
+  }
+
+  const handle = Math.max(72, Math.min(150, Math.abs(dy) * 0.55));
+  const direction = dy >= 0 ? 1 : -1;
+  const c1 = { x: start.x, y: start.y + handle * direction };
+  const c2 = { x: end.x, y: end.y - handle * direction };
+  return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
+}
+
+function inferPipelineEdge(from: GraphNode, to: GraphNode): PipelineEdgeDefinition {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return {
+      from: from.stage.name,
+      to: to.stage.name,
+      fromPort: dx >= 0 ? "right" : "left",
+      toPort: dx >= 0 ? "left" : "right",
+    };
+  }
+
+  return {
+    from: from.stage.name,
+    to: to.stage.name,
+    fromPort: dy >= 0 ? "bottom" : "top",
+    toPort: dy >= 0 ? "top" : "bottom",
+  };
+}
+
+function pipelineEdgesForNodes(nodes: GraphNode[]) {
+  const definedEdges = new Map(
+    PIPELINE_EDGES.map((edge) => [`${edge.from}-${edge.to}`, edge]),
+  );
+
+  return nodes.slice(0, -1).map((node, index) => {
+    const next = nodes[index + 1]!;
+    return (
+      definedEdges.get(`${node.stage.name}-${next.stage.name}`) ??
+      inferPipelineEdge(node, next)
+    );
+  });
+}
+
+function PipelineGraph({
+  stages,
+  selectedStageName,
+  onSelectStage,
+}: {
+  stages: VisualStage[];
+  selectedStageName: string | null;
+  onSelectStage: (stageName: string) => void;
+}) {
+  if (!stages.length) {
+    return (
+      <EmptyState
+        icon={RiRouteLine}
+        title="Stage metadata unavailable"
+        description="The backend stage catalog has not loaded yet."
+      />
+    );
+  }
+
+  const nodes = stages.map((stage, index) => ({
+    stage,
+    ...(STAGE_POSITIONS[stage.name] ?? { x: 160 + index * 180, y: 280 }),
+  }));
+  const nodesByName = new Map(nodes.map((node) => [node.stage.name, node]));
+  const edges = pipelineEdgesForNodes(nodes);
+
+  return (
+    <section className="pipeline-canvas min-h-[560px] min-w-0 overflow-auto rounded-xl border bg-card">
+      <div
+        className="relative"
+        style={{
+          minHeight: PIPELINE_CANVAS.height,
+          minWidth: PIPELINE_CANVAS.width,
+        }}
+      >
+        <div className="absolute left-4 top-4 flex items-center gap-2 rounded-lg border bg-background/80 px-3 py-2 text-xs text-muted-foreground shadow-xs backdrop-blur">
+          <RiGitBranchLine />
+          <span>Run graph</span>
+          <Badge variant="secondary">{stages.length} stages</Badge>
+        </div>
+        <svg
+          className="pointer-events-none absolute inset-0 size-full"
+          viewBox={`0 0 ${PIPELINE_CANVAS.width} ${PIPELINE_CANVAS.height}`}
+          aria-hidden="true"
+        >
+          <defs>
+            <filter
+              id="pipelineGlow"
+              x="-16"
+              y="-16"
+              width={PIPELINE_CANVAS.width + 32}
+              height={PIPELINE_CANVAS.height + 32}
+              filterUnits="userSpaceOnUse"
+            >
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {edges.map((edge) => {
+            const from = nodesByName.get(edge.from);
+            const to = nodesByName.get(edge.to);
+
+            if (!from || !to) {
+              return null;
+            }
+
+            const active =
+              isTerminalStatus(from.stage.status) ||
+              isWorkingStatus(from.stage.status) ||
+              isWorkingStatus(to.stage.status);
+            const start = pipelinePortPoint(from, edge.fromPort);
+            const end = pipelinePortPoint(to, edge.toPort);
+
+            return (
+              <g key={`${edge.from}-${edge.to}`}>
+                <path
+                  d={pipelineEdgePath(edge, from, to)}
+                  data-active={active}
+                  data-edge={`${edge.from}-${edge.to}`}
+                  className="pipeline-edge"
+                  filter={active ? "url(#pipelineGlow)" : undefined}
+                />
+                <circle
+                  cx={start.x}
+                  cy={start.y}
+                  r="4.25"
+                  data-active={active}
+                  className="pipeline-port-dot"
+                />
+                <circle
+                  cx={end.x}
+                  cy={end.y}
+                  r="4.25"
+                  data-active={active}
+                  className="pipeline-port-dot"
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {nodes.map((node) => (
+          <PipelineNode
+            key={node.stage.name}
+            node={node}
+            selected={selectedStageName === node.stage.name}
+            onSelect={() => onSelectStage(node.stage.name)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function RunOverview({
-  run,
-  visualStages,
+function PipelineNode({
+  node,
+  selected,
+  onSelect,
 }: {
-  run: PipelineRunSummary | undefined;
-  visualStages: VisualStage[];
+  node: GraphNode;
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  const progress = stageProgress(visualStages);
+  const Icon = STAGE_ICONS[node.stage.name] ?? RiNodeTree;
+  const tone = statusTone(node.stage.status);
 
   return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)]">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-center">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-xl font-semibold text-[var(--foreground)]">
-              {run ? run.query || `Run ${run.id}` : "No run selected"}
-            </h2>
-            {run ? <Badge variant={statusTone(run.status)}>{run.status}</Badge> : null}
-          </div>
-          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-            {run
-              ? `Run #${run.id} · started ${formatDate(run.created_at)}`
-              : "Start a run or choose one from the sidebar to inspect progress."}
-          </p>
-          {run?.error ? <Alert tone="error">{run.error}</Alert> : null}
-        </div>
-        <div className="grid gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-[var(--muted-foreground)]">Stage progress</span>
-            <span className="text-xs font-semibold text-[var(--foreground)]">{progress}%</span>
-          </div>
-          <Progress value={progress} />
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <Metric label="Done" value={visualStages.filter((stage) => stage.status === "successful").length} />
-            <Metric label="Skipped" value={visualStages.filter((stage) => stage.status === "skipped").length} />
-            <Metric label="Errors" value={visualStages.filter((stage) => stage.status === "failed").length} />
-          </div>
-        </div>
-      </div>
-    </section>
+    <button
+      type="button"
+      className={cn("pipeline-node", selected && "pipeline-node-selected")}
+      style={{ left: node.x, top: node.y }}
+      data-status-tone={tone}
+      aria-label={`Inspect ${titleCase(formatStageName(node.stage.name))} status and filter events`}
+      onClick={onSelect}
+    >
+      <span className="pipeline-node-icon">
+        <Icon />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10px] font-medium uppercase tracking-normal text-muted-foreground">
+          {node.stage.status}
+        </span>
+        <span className="block font-heading text-sm font-medium leading-snug">
+          {titleCase(formatStageName(node.stage.name))}
+        </span>
+      </span>
+    </button>
   );
 }
 
-function StagePanel({ stages }: { stages: VisualStage[] }) {
-  return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)]">
-      <PanelHeader
-        title="Pipeline stages"
-        description="Canonical backend order with live run state."
-        icon={<Activity className="h-4 w-4" />}
-      />
-      <div className="mt-4">
-        <StageTimeline stages={stages} />
-      </div>
-    </section>
-  );
-}
-
-function StageTimeline({ stages }: { stages: VisualStage[] }) {
-  if (!stages.length) {
-    return <EmptyState text="Stage metadata is not available yet." />;
-  }
-
-  return (
-    <div className="divide-y divide-[var(--border)] overflow-hidden rounded-md border border-[var(--border)]">
-      {stages.map((stage) => (
-        <div
-          key={stage.name}
-          className={cn(
-            "grid gap-3 bg-[var(--surface)] px-3 py-3 md:grid-cols-[220px_minmax(0,1fr)_auto]",
-            stage.status === "running" && "bg-[var(--accent-soft)]",
-            stage.status === "failed" && "bg-red-50",
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <StatusIcon status={stage.status} />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold capitalize text-[var(--foreground)]">
-                {formatStageName(stage.name)}
-              </p>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                {stage.run ? formatDate(stage.run.updated_at) : "waiting"}
-              </p>
-            </div>
-          </div>
-          <p className="text-sm leading-6 text-[var(--muted-foreground)]">{stage.description}</p>
-          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            <Badge variant={statusTone(stage.status)}>{stage.status}</Badge>
-            {stage.run?.metrics ? <MetricBadge metrics={stage.run.metrics} /> : null}
-          </div>
-          {stage.run?.error ? (
-            <div className="md:col-span-3">
-              <Alert tone="error">{stage.run.error}</Alert>
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ActivityPanel({
+function WorkspaceInspector({
+  run,
+  selectedStage,
   tab,
   setTab,
   stageFilters,
@@ -558,10 +1523,9 @@ function ActivityPanel({
   setEventStage,
   events,
   eventsLoading,
-  hasRun,
-  insightRows,
-  insightsLoading,
 }: {
+  run: PipelineRunSummary | undefined;
+  selectedStage: VisualStage | undefined;
   tab: string;
   setTab: (value: string) => void;
   stageFilters: string[];
@@ -569,381 +1533,394 @@ function ActivityPanel({
   setEventStage: (value: string) => void;
   events: PipelineRunEvent[];
   eventsLoading: boolean;
-  hasRun: boolean;
-  insightRows: Record<string, unknown>[];
-  insightsLoading: boolean;
 }) {
   return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)]">
-      <Tabs value={tab} onValueChange={setTab}>
-        <div className="flex flex-col justify-between gap-3 xl:flex-row xl:items-center">
-          <TabsList>
-            <TabsTrigger value="logs">
-              <TerminalSquare className="mr-2 h-3.5 w-3.5" />
-              Logs
-            </TabsTrigger>
-            <TabsTrigger value="insights">
-              <FileText className="mr-2 h-3.5 w-3.5" />
-              Insights
-            </TabsTrigger>
+    <Card
+      className="flex min-h-[620px] min-w-0 flex-col overflow-hidden"
+      size="sm"
+      data-datasight-inspector
+    >
+      <CardHeader>
+        <CardTitle>
+          {selectedStage
+            ? titleCase(formatStageName(selectedStage.name))
+            : "Inspector"}
+        </CardTitle>
+        <CardDescription>
+          {selectedStage?.description ??
+            "Select a stage node to inspect metrics and structured events."}
+        </CardDescription>
+        <CardAction>
+          {selectedStage ? <StatusBadge status={selectedStage.status} /> : null}
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="grid grid-cols-2 gap-2">
+          <MetricPill label="Run" value={run ? `#${run.id}` : "-"} />
+          <MetricPill
+            label="Attempts"
+            value={selectedStage?.run?.attempt_count ?? 0}
+          />
+        </div>
+        {selectedStage?.run?.error ? (
+          <Alert variant="destructive">
+            <RiErrorWarningLine />
+            <AlertTitle>Stage error</AlertTitle>
+            <AlertDescription>{selectedStage.run.error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Tabs
+          value={tab}
+          onValueChange={setTab}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <TabsList variant="line">
+            <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="metrics">Metrics</TabsTrigger>
           </TabsList>
-          {tab === "logs" ? (
-            <div className="flex min-w-0 flex-wrap gap-2">
+          <TabsContent value="events" className="min-h-0 flex-1">
+            <div className="mb-3 flex max-h-28 flex-wrap gap-2 overflow-auto pr-1">
               {stageFilters.map((stage) => (
                 <Button
                   key={stage}
                   type="button"
                   variant={eventStage === stage ? "default" : "outline"}
-                  size="sm"
+                  size="xs"
                   onClick={() => setEventStage(stage)}
                 >
-                  {stage === "all" ? "All" : formatStageName(stage)}
+                  {stage === "all" ? "All" : titleCase(formatStageName(stage))}
                 </Button>
               ))}
             </div>
-          ) : null}
-        </div>
-        <TabsContent value="logs">
-          <EventLog events={events} isLoading={eventsLoading} hasRun={hasRun} />
-        </TabsContent>
-        <TabsContent value="insights">
-          <InsightsTable rows={insightRows} isLoading={insightsLoading} />
-        </TabsContent>
-      </Tabs>
-    </section>
+            <EventLog events={events} isLoading={eventsLoading} />
+          </TabsContent>
+          <TabsContent value="metrics" className="min-h-0 flex-1">
+            <MetricsPanel metrics={selectedStage?.run?.metrics ?? {}} />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }
 
 function EventLog({
   events,
   isLoading,
-  hasRun,
 }: {
   events: PipelineRunEvent[];
   isLoading: boolean;
-  hasRun: boolean;
 }) {
-  if (!hasRun) {
-    return <EmptyState text="Select a run to see structured events." />;
-  }
   if (isLoading) {
-    return <EmptyState text="Loading events..." />;
+    return <EventSkeleton />;
   }
   if (!events.length) {
-    return <EmptyState text="No events recorded for this filter." />;
+    return (
+      <EmptyState
+        icon={RiTimeLine}
+        title="No events"
+        description="No structured events match this filter."
+        compact
+      />
+    );
   }
 
   return (
-    <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
-      {events.map((event) => (
-        <article
-          key={event.id}
-          className={cn(
-            "rounded-md border px-3 py-3",
-            event.level === "error"
-              ? "border-red-200 bg-red-50"
-              : event.level === "warning"
-                ? "border-amber-200 bg-amber-50"
-                : "border-[var(--border)] bg-[var(--muted)]",
-          )}
-        >
-          <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={statusTone(event.level)}>{event.level}</Badge>
-                {event.stage ? <Badge variant="muted">{formatStageName(event.stage)}</Badge> : null}
-                <span className="text-xs text-[var(--muted-foreground)]">{formatDate(event.created_at)}</span>
+    <ScrollArea className="h-[52svh] min-h-[340px] max-h-[520px] pr-3">
+      <div className="flex flex-col gap-2">
+        {events.map((event) => (
+          <article
+            key={event.id}
+            className="min-w-0 rounded-lg border bg-background p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={event.level} />
+                  {event.stage ? (
+                    <Badge variant="secondary">
+                      {titleCase(formatStageName(event.stage))}
+                    </Badge>
+                  ) : null}
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(event.created_at)}
+                  </span>
+                </div>
+                <p className="mt-2 break-words text-sm font-medium">
+                  {event.message}
+                </p>
               </div>
-              <p className="mt-2 text-sm font-medium text-[var(--foreground)]">{event.message}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Copy event payload"
+                onClick={() => copyPayload(event)}
+              >
+                <RiClipboardLine />
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              title="Copy event payload"
-              onClick={() => void navigator.clipboard.writeText(JSON.stringify(event, null, 2))}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
-          {Object.keys(event.payload).length ? (
-            <details className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface)]">
-              <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[var(--muted-foreground)]">
-                Payload
-              </summary>
-              <pre className="max-h-56 overflow-auto border-t border-[var(--border)] p-3 text-xs text-[var(--muted-foreground)]">
+            {Object.keys(event.payload).length ? (
+              <pre className="mt-3 max-h-36 overflow-auto rounded-md bg-muted p-3 text-xs text-muted-foreground">
                 {JSON.stringify(event.payload, null, 2)}
               </pre>
-            </details>
-          ) : null}
-        </article>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+function MetricsPanel({ metrics }: { metrics: Record<string, unknown> }) {
+  const entries = Object.entries(metrics);
+  if (!entries.length) {
+    return (
+      <EmptyState
+        icon={RiPulseLine}
+        title="No metrics"
+        description="This stage has not recorded metrics yet."
+        compact
+      />
+    );
+  }
+  return (
+    <div className="grid gap-2">
+      {entries.map(([key, value]) => (
+        <div
+          key={key}
+          className="flex items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 text-sm"
+        >
+          <span className="text-muted-foreground">
+            {titleCase(formatStageName(key))}
+          </span>
+          <span className="max-w-[180px] truncate font-medium">
+            {formatCell(value)}
+          </span>
+        </div>
       ))}
     </div>
   );
 }
 
-function InsightsTable({ rows, isLoading }: { rows: Record<string, unknown>[]; isLoading: boolean }) {
-  if (isLoading) {
-    return <EmptyState text="Loading insights..." />;
-  }
-  if (!rows.length) {
-    return <EmptyState text="No insight rows available yet." />;
-  }
-
-  const columns = Object.keys(rows[0] ?? {}).slice(0, 8);
-  return (
-    <Table className="min-w-[860px]">
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead key={column}>{formatStageName(column)}</TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.slice(0, 25).map((row, index) => (
-          <TableRow key={index}>
-            {columns.map((column) => (
-              <TableCell key={column} className="max-w-[260px] truncate">
-                {formatCell(row[column])}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-function AdminDialog({
-  canReset,
-  dangerOpen,
-  resetAcknowledged,
-  resetConfirm,
-  resetError,
-  resetForce,
-  resetPending,
-  resetResult,
-  onClose,
-  onDangerOpenChange,
-  onReset,
-  onResetAcknowledgedChange,
-  onResetConfirmChange,
-  onResetForceChange,
+function HealthList({
+  health,
+  isLoading,
+  compact = false,
 }: {
-  canReset: boolean;
-  dangerOpen: boolean;
-  resetAcknowledged: boolean;
-  resetConfirm: string;
-  resetError: Error | null;
-  resetForce: boolean;
-  resetPending: boolean;
-  resetResult: ResetResponse | null;
-  onClose: () => void;
-  onDangerOpenChange: (open: boolean) => void;
-  onReset: () => void;
-  onResetAcknowledgedChange: (checked: boolean) => void;
-  onResetConfirmChange: (value: string) => void;
-  onResetForceChange: (checked: boolean) => void;
+  health: HealthResponse | undefined;
+  isLoading: boolean;
+  compact?: boolean;
 }) {
-  const resetErrorText =
-    resetError instanceof ApiError && resetError.status === 409
-      ? `${String(resetError.detail)} Retry only if you are sure by enabling force reset.`
-      : resetError?.message;
-
+  const checks = healthChecks(health);
   return (
     <div
-      className="fixed inset-0 z-30 flex items-start justify-center bg-black/30 px-4 py-8 backdrop-blur-sm sm:items-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="admin-settings-title"
-    >
-      <section className="max-h-[calc(100vh-4rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-              Admin
-            </p>
-            <h2 id="admin-settings-title" className="mt-1 text-lg font-semibold text-[var(--foreground)]">
-              Settings
-            </h2>
-          </div>
-          <Button type="button" variant="ghost" size="icon" aria-label="Close admin settings" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="mt-5 rounded-md border border-[var(--border)] bg-[var(--muted)] p-4">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 text-left"
-            aria-expanded={dangerOpen}
-            onClick={() => onDangerOpenChange(!dangerOpen)}
-          >
-            <span className="flex min-w-0 items-center gap-3">
-              <ShieldAlert className="h-5 w-5 shrink-0 text-red-700" />
-              <span>
-                <span className="block text-sm font-semibold text-[var(--foreground)]">Danger zone</span>
-                <span className="block text-xs text-[var(--muted-foreground)]">
-                  Reset database records and generated runtime storage.
-                </span>
-              </span>
-            </span>
-            <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", dangerOpen && "rotate-180")} />
-          </button>
-
-          {dangerOpen ? (
-            <div className="mt-4 space-y-4 border-t border-[var(--border)] pt-4">
-              <Alert tone="error">
-                Reset wipes pipeline runs, stage records, events, extracted results, and generated files under
-                storage. Source data under data is not deleted by the backend reset service.
-              </Alert>
-              <Field label={`Type ${RESET_CONFIRMATION} to confirm`}>
-                <Input
-                  value={resetConfirm}
-                  onChange={(event) => onResetConfirmChange(event.target.value)}
-                  placeholder={RESET_CONFIRMATION}
-                  autoComplete="off"
-                />
-              </Field>
-              <label className="flex items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 accent-red-700"
-                  checked={resetAcknowledged}
-                  onChange={(event) => onResetAcknowledgedChange(event.target.checked)}
-                />
-                <span className="text-[var(--muted-foreground)]">
-                  I understand this action cannot be undone from the app.
-                </span>
-              </label>
-              <ToggleRow
-                label="Force reset active runs"
-                checked={resetForce}
-                onChange={onResetForceChange}
-              />
-              {resetErrorText ? <Alert tone="error">{resetErrorText}</Alert> : null}
-              {resetResult ? (
-                <Alert tone="success">
-                  Reset complete. Truncated {resetResult.truncated_tables.length} tables and recreated{" "}
-                  {resetResult.recreated_directories.length} storage directories.
-                </Alert>
-              ) : null}
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={!canReset || resetPending}
-                  onClick={onReset}
-                >
-                  {resetPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Reset everything
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function PanelHeader({ title, description, icon }: { title: string; description: string; icon: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
-        <p className="mt-1 text-xs text-[var(--muted-foreground)]">{description}</p>
-      </div>
-      <div className="rounded-md border border-[var(--border)] bg-[var(--muted)] p-2 text-[var(--muted-foreground)]">
-        {icon}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="min-w-0 font-medium text-[var(--foreground)]">{label}</span>
-      <Switch aria-label={label} checked={checked} onChange={(event) => onChange(event.target.checked)} />
-    </div>
-  );
-}
-
-function StatusIcon({ status }: { status: string }) {
-  const className = "h-5 w-5 shrink-0";
-  if (status === "successful") {
-    return <CheckCircle2 className={cn(className, "text-emerald-600")} />;
-  }
-  if (status === "failed") {
-    return <XCircle className={cn(className, "text-red-600")} />;
-  }
-  if (status === "skipped") {
-    return <AlertTriangle className={cn(className, "text-amber-600")} />;
-  }
-  if (status === "running" || status === "queued" || status === "started") {
-    return <Loader2 className={cn(className, "animate-spin text-[var(--accent)]")} />;
-  }
-  return <Circle className={cn(className, "text-[var(--muted-foreground)]")} />;
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2">
-      <p className="text-lg font-semibold text-[var(--foreground)]">{value}</p>
-      <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
-    </div>
-  );
-}
-
-function MetricBadge({ metrics }: { metrics: Record<string, unknown> }) {
-  const count = metrics.count ?? metrics.successful ?? metrics.candidates ?? metrics.mentions ?? metrics.decisions;
-  if (count === undefined) {
-    return null;
-  }
-  return <Badge variant="muted">{String(count)}</Badge>;
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] bg-[var(--muted)] px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">
-      <Clock3 className="mr-2 h-4 w-4" />
-      {text}
-    </div>
-  );
-}
-
-function Alert({ tone, children }: { tone: "error" | "success"; children: ReactNode }) {
-  return (
-    <p
       className={cn(
-        "mt-3 rounded-md border px-3 py-2 text-sm",
-        tone === "error"
-          ? "border-red-200 bg-red-50 text-red-800"
-          : "border-emerald-200 bg-emerald-50 text-emerald-800",
+        "grid gap-1.5",
+        compact ? "group-data-[collapsible=icon]:hidden" : "sm:grid-cols-2",
       )}
     >
-      {children}
-    </p>
+      {checks.map((check) => {
+        const Icon = check.icon;
+        return (
+          <div
+            key={check.label}
+            className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Icon />
+              <span className="truncate">{check.label}</span>
+            </span>
+            <StatusBadge
+              status={
+                isLoading ? "checking" : check.ready ? "ready" : "offline"
+              }
+              passive
+            />
+          </div>
+        );
+      })}
+    </div>
   );
+}
+
+function HealthPills({
+  health,
+  isLoading,
+}: {
+  health: HealthResponse | undefined;
+  isLoading: boolean;
+}) {
+  const checks = healthChecks(health);
+  const ready = checks.filter((check) => check.ready).length;
+  return (
+    <div className="hidden items-center gap-2 lg:flex">
+      <Badge
+        variant="outline"
+        className="system-status-badge pointer-events-none"
+      >
+        {isLoading ? "Checking" : `${ready}/${checks.length} ready`}
+      </Badge>
+    </div>
+  );
+}
+
+function StatusBadge({
+  status,
+  passive = false,
+}: {
+  status: string;
+  passive?: boolean;
+}) {
+  return (
+    <Badge
+      variant={passive ? "outline" : statusBadgeVariant(status)}
+      data-status-tone={statusTone(status)}
+      data-passive-status={passive}
+      className={cn(passive && "system-status-badge pointer-events-none")}
+    >
+      {status}
+    </Badge>
+  );
+}
+
+function MetricPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border bg-background px-3 py-2">
+      <p className="truncate font-heading text-sm font-medium">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  compact = false,
+}: {
+  icon: RemixiconComponentType;
+  title: string;
+  description: string;
+  compact?: boolean;
+}) {
+  return (
+    <Empty className={compact ? "p-6" : "min-h-72"}>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Icon />
+        </EmptyMedia>
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{description}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function WorkspaceLoading() {
+  return (
+    <div className="flex min-h-[620px] flex-col gap-4">
+      <Skeleton className="h-32 w-full rounded-xl" />
+      <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Skeleton className="min-h-[560px] rounded-xl" />
+        <Skeleton className="min-h-[560px] rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+function RunListSkeleton() {
+  return (
+    <div className="grid gap-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Skeleton key={index} className="h-24 rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
+function EventSkeleton() {
+  return (
+    <div className="flex flex-col gap-2">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <Skeleton key={index} className="h-24 rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="flex flex-col gap-2">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <Skeleton key={index} className="h-10 rounded-md" />
+      ))}
+    </div>
+  );
+}
+
+function useOutletData() {
+  return useOutletContext<OutletContext>();
+}
+
+function useTheme() {
+  const [theme, setThemeState] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") {
+      return "light";
+    }
+    return window.localStorage.getItem("datasight-theme") === "dark"
+      ? "dark"
+      : "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    window.localStorage.setItem("datasight-theme", theme);
+  }, [theme]);
+
+  return [theme, setThemeState] as const;
+}
+
+function healthChecks(health: HealthResponse | undefined) {
+  return [
+    {
+      label: "Database",
+      ready: Boolean(health?.database_ready),
+      icon: RiDatabase2Line,
+    },
+    { label: "Redis", ready: Boolean(health?.redis_ready), icon: RiPulseLine },
+    {
+      label: "Worker",
+      ready: Boolean(health?.worker_ready),
+      icon: RiServerLine,
+    },
+    {
+      label: "GROBID",
+      ready: Boolean(health?.grobid_ready),
+      icon: RiFileTextLine,
+    },
+  ];
+}
+
+function routeTitle(pathname: string) {
+  if (pathname.startsWith("/runs/")) {
+    return "Run workspace";
+  }
+  if (pathname.startsWith("/runs")) {
+    return "Runs";
+  }
+  if (pathname.startsWith("/insights")) {
+    return "Insights";
+  }
+  if (pathname.startsWith("/admin")) {
+    return "Admin";
+  }
+  return "Launch";
 }
 
 function formatDate(value: string | null | undefined) {
@@ -964,6 +1941,16 @@ function formatCell(value: unknown) {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+function titleCase(value: string) {
+  return value.replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function copyPayload(event: PipelineRunEvent) {
+  if (navigator.clipboard) {
+    void navigator.clipboard.writeText(JSON.stringify(event, null, 2));
+  }
 }
 
 export default Dashboard;

@@ -7,6 +7,7 @@ export type VisualStage = StageInfo & {
 };
 
 const COMPLETE_STATUSES = new Set(["successful", "failed", "skipped"]);
+const ACTIVE_STATUSES = new Set(["queued", "running", "started"]);
 
 export function mergeStages(stages: StageInfo[], run: PipelineRunSummary | undefined): VisualStage[] {
   const active = isActiveRun(run?.status);
@@ -37,7 +38,17 @@ export function formatStageName(value: string) {
   return value.replaceAll("_", " ");
 }
 
-export function statusTone(status: string): "default" | "success" | "warning" | "error" | "muted" {
+export type StatusTone = "default" | "success" | "warning" | "error" | "muted";
+
+export function isTerminalStatus(status: string) {
+  return COMPLETE_STATUSES.has(status);
+}
+
+export function isWorkingStatus(status: string) {
+  return ACTIVE_STATUSES.has(status);
+}
+
+export function statusTone(status: string): StatusTone {
   if (status === "successful") {
     return "success";
   }
@@ -49,6 +60,20 @@ export function statusTone(status: string): "default" | "success" | "warning" | 
   }
   if (status === "pending") {
     return "muted";
+  }
+  return "default";
+}
+
+export function statusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  const tone = statusTone(status);
+  if (tone === "error") {
+    return "destructive";
+  }
+  if (tone === "muted") {
+    return "secondary";
+  }
+  if (tone === "warning" || tone === "success") {
+    return "outline";
   }
   return "default";
 }
