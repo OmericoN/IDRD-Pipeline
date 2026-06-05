@@ -41,6 +41,7 @@ def test_create_run_enqueues_pipeline(monkeypatch):
     def fake_enqueue_run_all(**kwargs):
         assert kwargs["query"] == "Maastricht dataset reuse"
         assert kwargs["limit"] == 5
+        assert kwargs["strategy"] == "standard"
         return {"pipeline_run_id": 7, "task_id": "task-1", "status": "queued"}
 
     monkeypatch.setattr("datasight.interfaces.api.routes.runs.orchestrator.enqueue_run_all", fake_enqueue_run_all)
@@ -52,6 +53,31 @@ def test_create_run_enqueues_pipeline(monkeypatch):
 
     assert response.status_code == 202
     assert response.json() == {"pipeline_run_id": 7, "task_id": "task-1", "status": "queued"}
+
+
+def test_create_run_accepts_high_throughput_strategy(monkeypatch):
+    def fake_enqueue_run_all(**kwargs):
+        assert kwargs["strategy"] == "high_throughput"
+        return {"pipeline_run_id": 8, "task_id": "task-2", "status": "queued"}
+
+    monkeypatch.setattr("datasight.interfaces.api.routes.runs.orchestrator.enqueue_run_all", fake_enqueue_run_all)
+
+    response = client.post(
+        "/api/v1/runs",
+        json={"query": "Maastricht dataset reuse", "limit": 5, "strategy": "high_throughput"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["pipeline_run_id"] == 8
+
+
+def test_create_run_rejects_invalid_strategy():
+    response = client.post(
+        "/api/v1/runs",
+        json={"query": "Maastricht dataset reuse", "limit": 5, "strategy": "fast"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_get_run_returns_stage_progress(monkeypatch):

@@ -73,7 +73,7 @@ function defaultFetchMock(resetResponse = response({
             run_key: "run-39",
             query: "Maastricht dataset reuse",
             status: "running",
-            config: {},
+            config: { strategy: "high_throughput" },
             celery_task_id: null,
             error: null,
             created_at: "2026-05-31T19:00:00Z",
@@ -93,6 +93,32 @@ function defaultFetchMock(resetResponse = response({
                 created_at: null,
                 updated_at: null,
               },
+              {
+                id: 2,
+                stage: "download_pdf",
+                status: "running",
+                attempt_count: 1,
+                task_id: null,
+                error: null,
+                metrics: { active: 2 },
+                started_at: null,
+                finished_at: null,
+                created_at: null,
+                updated_at: null,
+              },
+              {
+                id: 3,
+                stage: "grobid_convert",
+                status: "running",
+                attempt_count: 1,
+                task_id: null,
+                error: null,
+                metrics: { active: 1 },
+                started_at: null,
+                finished_at: null,
+                created_at: null,
+                updated_at: null,
+              },
             ],
           },
         ],
@@ -104,7 +130,7 @@ function defaultFetchMock(resetResponse = response({
         run_key: "run-39",
         query: "Maastricht dataset reuse",
         status: "running",
-        config: {},
+        config: { strategy: "high_throughput" },
         celery_task_id: null,
         error: null,
         created_at: "2026-05-31T19:00:00Z",
@@ -119,6 +145,32 @@ function defaultFetchMock(resetResponse = response({
             task_id: null,
             error: null,
             metrics: { count: 12 },
+            started_at: null,
+            finished_at: null,
+            created_at: null,
+            updated_at: null,
+          },
+          {
+            id: 2,
+            stage: "download_pdf",
+            status: "running",
+            attempt_count: 1,
+            task_id: null,
+            error: null,
+            metrics: { active: 2 },
+            started_at: null,
+            finished_at: null,
+            created_at: null,
+            updated_at: null,
+          },
+          {
+            id: 3,
+            stage: "grobid_convert",
+            status: "running",
+            attempt_count: 1,
+            task_id: null,
+            error: null,
+            metrics: { active: 1 },
             started_at: null,
             finished_at: null,
             created_at: null,
@@ -147,6 +199,9 @@ function defaultFetchMock(resetResponse = response({
     }
     if (path === "/api/v1/admin/reset" && init?.method === "POST") {
       return resetResponse;
+    }
+    if (path === "/api/v1/runs" && init?.method === "POST") {
+      return response({ pipeline_run_id: 40, task_id: "task-40", status: "queued" }, true, 202);
     }
     return response({}, false, 404, "Not Found");
   });
@@ -225,12 +280,33 @@ describe("App routed workflow", () => {
 
     expect(await screen.findByText("Open a run to inspect the workspace, events, and stage metrics.")).toBeInTheDocument();
     expect(screen.getByText("Maastricht dataset reuse")).toBeInTheDocument();
+    expect(screen.getByText("High-throughput")).toBeInTheDocument();
+  });
+
+  it("submits high-throughput launch strategy from the toggle", async () => {
+    const fetchMock = defaultFetchMock();
+    renderApp(fetchMock, "/launch");
+
+    fireEvent.click(await screen.findByLabelText("High-throughput mode"));
+    fireEvent.click(screen.getByRole("button", { name: /Start run/ }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/runs",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"strategy":"high_throughput"'),
+        }),
+      );
+    });
   });
 
   it("renders the workspace graph and selected stage inspector", async () => {
     const { container } = renderApp(defaultFetchMock(), "/runs/39");
 
     expect(await screen.findByText("Run graph")).toBeInTheDocument();
+    expect(screen.getAllByText("High-throughput").length).toBeGreaterThan(0);
+    expect(screen.getByText("Parallel: 2 stages active")).toBeInTheDocument();
     expect(container.querySelector('[data-edge="discover-download_pdf"]')).toBeInTheDocument();
     expect(container.querySelector("#pipelineGlow")).toHaveAttribute(
       "filterUnits",

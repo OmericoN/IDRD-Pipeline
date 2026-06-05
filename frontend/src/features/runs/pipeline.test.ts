@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { PipelineRunSummary, StageInfo } from "../../shared/api/client";
-import { mergeStages, stageProgress } from "./pipeline";
+import {
+  activeParallelStages,
+  edgeToneFromSourceStatus,
+  mergeStages,
+  runStrategyLabel,
+  stageProgress,
+  statusTone,
+} from "./pipeline";
 
 const stages: StageInfo[] = [
   { name: "discover", description: "Find publication metadata." },
@@ -46,11 +53,121 @@ describe("pipeline view helpers", () => {
 
   it("computes completion from terminal stage states", () => {
     const visual = [
-      { ...stages[0]!, status: "successful" },
-      { ...stages[1]!, status: "skipped" },
-      { ...stages[2]!, status: "running" },
+      { ...stages[0]!, status: "successful", working: false },
+      { ...stages[1]!, status: "skipped", working: false },
+      { ...stages[2]!, status: "running", working: true },
     ];
 
     expect(stageProgress(visual)).toBe(67);
+  });
+
+  it("preserves multiple recorded running stages for high-throughput runs", () => {
+    const run: PipelineRunSummary = {
+      id: 1,
+      run_key: "run-1",
+      query: "dataset reuse",
+      status: "running",
+      config: { strategy: "high_throughput" },
+      celery_task_id: null,
+      error: null,
+      created_at: null,
+      updated_at: null,
+      finished_at: null,
+      stages: [
+        {
+          id: 1,
+          stage: "download_pdf",
+          status: "running",
+          attempt_count: 1,
+          task_id: null,
+          error: null,
+          metrics: {},
+          started_at: null,
+          finished_at: null,
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          id: 2,
+          stage: "grobid_convert",
+          status: "running",
+          attempt_count: 1,
+          task_id: null,
+          error: null,
+          metrics: {},
+          started_at: null,
+          finished_at: null,
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    };
+
+    const visual = mergeStages(stages, run);
+
+    expect(visual.map((stage) => stage.working)).toEqual([false, true, false]);
+    expect(visual[1]?.status).toBe("running");
+  });
+
+  it.each([
+    ["failed", "error"],
+    ["error", "error"],
+    ["skipped", "warning"],
+    ["warning", "warning"],
+    ["successful", "success"],
+    ["running", "success"],
+    ["queued", "success"],
+    ["started", "success"],
+    ["pending", "muted"],
+  ] as const)("maps %s source status to %s edge tone", (status, tone) => {
+    expect(edgeToneFromSourceStatus(status)).toBe(tone);
+  });
+
+  it("treats completed_with_errors as a warning status", () => {
+    expect(statusTone("completed_with_errors")).toBe("warning");
+  });
+
+  it("labels run strategy from config", () => {
+    expect(
+      runStrategyLabel({
+        id: 1,
+        run_key: "run-1",
+        query: "dataset reuse",
+        status: "running",
+        config: { strategy: "high_throughput" },
+        celery_task_id: null,
+        error: null,
+        created_at: null,
+        updated_at: null,
+        finished_at: null,
+        stages: [],
+      }),
+    ).toBe("High-throughput");
+  });
+
+  it("returns active parallel stages only for high-throughput runs", () => {
+    const run: PipelineRunSummary = {
+      id: 1,
+      run_key: "run-1",
+      query: "dataset reuse",
+      status: "running",
+      config: { strategy: "high_throughput" },
+      celery_task_id: null,
+      error: null,
+      created_at: null,
+      updated_at: null,
+      finished_at: null,
+      stages: [],
+    };
+    const visual = [
+      { ...stages[0]!, status: "running", working: true },
+      { ...stages[1]!, status: "queued", working: true },
+      { ...stages[2]!, status: "pending", working: false },
+    ];
+
+    expect(activeParallelStages(run, visual).map((stage) => stage.name)).toEqual([
+      "discover",
+      "download_pdf",
+    ]);
   });
 });

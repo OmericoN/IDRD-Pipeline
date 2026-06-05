@@ -38,6 +38,7 @@ def create_run(request: RunCreateRequest) -> RunCreateResponse:
         overwrite=request.overwrite,
         open_access_only=request.open_access_only,
         fields_of_study=request.fields_of_study,
+        strategy=request.strategy,
     )
     return RunCreateResponse.model_validate(result)
 

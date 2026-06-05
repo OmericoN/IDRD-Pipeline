@@ -21,6 +21,7 @@ describe("api client", () => {
       overwrite: false,
       um_datasets_path: "data/um_datasets.csv",
       output_path: "storage/exports/insights.csv",
+      strategy: "high_throughput",
     });
 
     expect(response.pipeline_run_id).toBe(12);
@@ -35,6 +36,7 @@ describe("api client", () => {
           overwrite: false,
           um_datasets_path: "data/um_datasets.csv",
           output_path: "storage/exports/insights.csv",
+          strategy: "high_throughput",
         }),
       }),
     );

@@ -10,7 +10,7 @@ from typing import Any, Literal
 from datasight.config import MARKDOWN_DIR, PDF_DIR, PROJECT_ROOT, XML_DIR
 from datasight.infrastructure.ingestion.converter import GrobidConverter
 from datasight.infrastructure.ingestion.downloader import PDFDownloader
-from datasight.infrastructure.ingestion.renderer import render_papers
+from datasight.infrastructure.ingestion.renderer import render_papers, render_to_markdown
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.pubfetcher.semantic_scholar import SemanticScholarClient
 from datasight.matching.um_matcher import match_mention_to_um_dataset
@@ -40,7 +40,11 @@ def discover_publications(
             "successful" if papers else "skipped",
             inserted,
             f"Discovered {len(papers)} publications.",
-            {"query": query, "fetched": len(papers)},
+            {
+                "query": query,
+                "fetched": len(papers),
+                "paper_ids": [paper.get("paperId") or paper.get("id") for paper in papers if paper.get("paperId") or paper.get("id")],
+            },
         )
         repo.record_stage_result(PipelineStage.DISCOVER, result["status"], result, pipeline_run_id)
         return result
@@ -200,6 +204,231 @@ def match_um_dataset_batch(
         return result
 
 
+def download_pipeline_item(
+    item_id: int,
+    overwrite: bool = False,
+    task_id: str | None = None,
+    claimed: bool = False,
+) -> dict[str, Any]:
+    with PipelineRepository() as repo:
+        if not claimed and not repo.start_item_stage(item_id, PipelineStage.DOWNLOAD_PDF, task_id):
+            return _item_result(PipelineStage.DOWNLOAD_PDF, "skipped", item_id, "Item stage was already terminal.")
+        context = repo.get_pipeline_item_context(item_id)
+        if not context:
+            return _missing_item_result(repo, item_id, PipelineStage.DOWNLOAD_PDF)
+        downloader = PDFDownloader(output_dir=PDF_DIR, delay=0)
+        result = downloader.download_paper(
+            paper_id=context["paper_id"],
+            url=context.get("open_access_url"),
+            title=context.get("title"),
+            overwrite=overwrite,
+        )
+        repo.persist_download_results([result])
+        status = "successful" if result.success else "failed"
+        metrics = _json_safe(vars(result))
+        repo.finish_item_stage(item_id, PipelineStage.DOWNLOAD_PDF, status, metrics, result.error)
+        return _item_result(PipelineStage.DOWNLOAD_PDF, status, item_id, result.message, metrics)
+
+
+def grobid_convert_pipeline_item(
+    item_id: int,
+    overwrite: bool = False,
+    delete_pdf: bool = False,
+    task_id: str | None = None,
+    claimed: bool = False,
+) -> dict[str, Any]:
+    with PipelineRepository() as repo:
+        if not claimed and not repo.start_item_stage(item_id, PipelineStage.GROBID_CONVERT, task_id):
+            return _item_result(PipelineStage.GROBID_CONVERT, "skipped", item_id, "Item stage was already terminal.")
+        context = repo.get_pipeline_item_context(item_id)
+        if not context:
+            return _missing_item_result(repo, item_id, PipelineStage.GROBID_CONVERT)
+        if not context.get("pdf_path"):
+            message = "PDF artifact is missing."
+            repo.finish_item_stage(item_id, PipelineStage.GROBID_CONVERT, "failed", {"message": message}, message)
+            return _item_result(PipelineStage.GROBID_CONVERT, "failed", item_id, message)
+        try:
+            converter = GrobidConverter(output_dir=XML_DIR, delay=0)
+            converter.ensure_available()
+            result = converter.convert_pdf(
+                pdf_path=Path(context["pdf_path"]),
+                paper_id=context["paper_id"],
+                overwrite=overwrite,
+                delete_pdf=delete_pdf,
+            )
+        except Exception as exc:
+            message = f"GROBID conversion error: {exc}"
+            repo.finish_item_stage(item_id, PipelineStage.GROBID_CONVERT, "failed", {"message": message}, str(exc))
+            return _item_result(PipelineStage.GROBID_CONVERT, "failed", item_id, message)
+        repo.persist_conversion_results([result])
+        status = "successful" if result.success else "failed"
+        metrics = _json_safe(vars(result))
+        repo.finish_item_stage(item_id, PipelineStage.GROBID_CONVERT, status, metrics, result.error)
+        return _item_result(PipelineStage.GROBID_CONVERT, status, item_id, result.message, metrics)
+
+
+def render_pipeline_item(
+    item_id: int,
+    overwrite: bool = False,
+    task_id: str | None = None,
+    claimed: bool = False,
+) -> dict[str, Any]:
+    with PipelineRepository() as repo:
+        if not claimed and not repo.start_item_stage(item_id, PipelineStage.RENDER_DOCUMENT, task_id):
+            return _item_result(PipelineStage.RENDER_DOCUMENT, "skipped", item_id, "Item stage was already terminal.")
+        context = repo.get_pipeline_item_context(item_id)
+        if not context:
+            return _missing_item_result(repo, item_id, PipelineStage.RENDER_DOCUMENT)
+        if not context.get("xml_path"):
+            message = "TEI XML artifact is missing."
+            repo.finish_item_stage(item_id, PipelineStage.RENDER_DOCUMENT, "failed", {"message": message}, message)
+            return _item_result(PipelineStage.RENDER_DOCUMENT, "failed", item_id, message)
+        output_path = MARKDOWN_DIR / f"{context['paper_id']}.md"
+        try:
+            result = render_to_markdown(
+                Path(context["xml_path"]),
+                output_path=output_path,
+                paper_id=context["paper_id"],
+                overwrite=overwrite,
+            )
+        except Exception as exc:
+            message = f"Render error: {exc}"
+            repo.finish_item_stage(item_id, PipelineStage.RENDER_DOCUMENT, "failed", {"message": message}, str(exc))
+            return _item_result(PipelineStage.RENDER_DOCUMENT, "failed", item_id, message)
+        repo.persist_render_results([result])
+        status = "successful" if result.success else "failed"
+        metrics = _json_safe(vars(result))
+        repo.finish_item_stage(item_id, PipelineStage.RENDER_DOCUMENT, status, metrics, result.error)
+        return _item_result(PipelineStage.RENDER_DOCUMENT, status, item_id, result.message, metrics)
+
+
+def detect_mentions_pipeline_item(
+    item_id: int,
+    task_id: str | None = None,
+    claimed: bool = False,
+) -> dict[str, Any]:
+    with PipelineRepository() as repo:
+        if not claimed and not repo.start_item_stage(item_id, PipelineStage.DETECT_MENTIONS, task_id):
+            return _item_result(PipelineStage.DETECT_MENTIONS, "skipped", item_id, "Item stage was already terminal.")
+        context = repo.get_pipeline_item_context(item_id)
+        if not context:
+            return _missing_item_result(repo, item_id, PipelineStage.DETECT_MENTIONS)
+        if not context.get("markdown_path"):
+            message = "Markdown artifact is missing."
+            repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "failed", {"message": message}, message)
+            return _item_result(PipelineStage.DETECT_MENTIONS, "failed", item_id, message)
+        try:
+            markdown = Path(context["markdown_path"]).read_text(encoding="utf-8")
+        except OSError as exc:
+            message = f"Markdown read error: {exc}"
+            repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "failed", {"message": message}, str(exc))
+            return _item_result(PipelineStage.DETECT_MENTIONS, "failed", item_id, message)
+        candidates = detect_dataset_candidates(context["paper_id"], markdown)
+        inserted = repo.upsert_mention_candidates(candidates)
+        metrics = {"candidates": inserted, "paper_id": context["paper_id"]}
+        repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "successful", metrics)
+        return _item_result(
+            PipelineStage.DETECT_MENTIONS,
+            "successful",
+            item_id,
+            f"Detected and persisted {inserted} candidate dataset mentions.",
+            metrics,
+        )
+
+
+def extract_features_pipeline_item(
+    item_id: int,
+    task_id: str | None = None,
+    claimed: bool = False,
+) -> dict[str, Any]:
+    with PipelineRepository() as repo:
+        if not claimed and not repo.start_item_stage(item_id, PipelineStage.EXTRACT_FEATURES, task_id):
+            return _item_result(PipelineStage.EXTRACT_FEATURES, "skipped", item_id, "Item stage was already terminal.")
+        context = repo.get_pipeline_item_context(item_id)
+        if not context:
+            return _missing_item_result(repo, item_id, PipelineStage.EXTRACT_FEATURES)
+        rows = repo.get_unprocessed_candidates_for_publication(context["publication_row_id"])
+        mentions: list[DatasetMention] = []
+        candidate_ids: list[int] = []
+        for candidate in rows:
+            evidence = MentionEvidence(
+                body_quote=candidate["evidence_text"],
+                section_heading=candidate.get("section_heading"),
+                standardized_section=candidate.get("standardized_section"),
+            )
+            mentions.append(
+                DatasetMention(
+                    publication_id=candidate["publication_id"],
+                    dataset_name=candidate["dataset_name"],
+                    evidence=evidence,
+                    provenance=ExtractionProvenance(
+                        char_start=candidate.get("char_start"),
+                        char_end=candidate.get("char_end"),
+                        confidence=candidate.get("score", 0.0),
+                        prompt_version="rules-v1",
+                    ),
+                )
+            )
+            candidate_ids.append(candidate["candidate_id"])
+        inserted = repo.persist_dataset_mentions(mentions, candidate_ids)
+        metrics = {"mentions": inserted, "paper_id": context["paper_id"]}
+        repo.finish_item_stage(item_id, PipelineStage.EXTRACT_FEATURES, "successful", metrics)
+        return _item_result(
+            PipelineStage.EXTRACT_FEATURES,
+            "successful",
+            item_id,
+            f"Promoted {inserted} candidates into v1 mention records.",
+            metrics,
+        )
+
+
+def match_um_dataset_pipeline_item(
+    item_id: int,
+    task_id: str | None = None,
+    claimed: bool = False,
+) -> dict[str, Any]:
+    with PipelineRepository() as repo:
+        if not claimed and not repo.start_item_stage(item_id, PipelineStage.MATCH_UM_DATASET, task_id):
+            return _item_result(PipelineStage.MATCH_UM_DATASET, "skipped", item_id, "Item stage was already terminal.")
+        context = repo.get_pipeline_item_context(item_id)
+        if not context:
+            return _missing_item_result(repo, item_id, PipelineStage.MATCH_UM_DATASET)
+        records = repo.list_um_dataset_records()
+        if not records:
+            message = "No UM datasets are imported. Run import-um-datasets first."
+            repo.finish_item_stage(item_id, PipelineStage.MATCH_UM_DATASET, "failed", {"message": message}, message)
+            return _item_result(PipelineStage.MATCH_UM_DATASET, "failed", item_id, message)
+
+        mention_rows = repo.get_unmatched_mentions_for_publication(context["publication_row_id"])
+        decisions = []
+        for row in mention_rows:
+            mention = DatasetMention.model_validate(
+                {
+                    "publication_id": row["publication_id"],
+                    "dataset_name": row["dataset_name"],
+                    "aliases": row["aliases"] or [],
+                    "dataset_role": row["dataset_role"],
+                    "reference_directness": row["reference_directness"],
+                    "evidence": row["evidence"],
+                    "metadata": row["metadata"],
+                    "provenance": row["provenance"],
+                }
+            )
+            decision = match_mention_to_um_dataset(mention, records)
+            decision.mention_id = str(row["mention_id"])
+            decisions.append(decision)
+        inserted = repo.persist_match_decisions(decisions)
+        metrics = {"decisions": inserted, "paper_id": context["paper_id"]}
+        repo.finish_item_stage(item_id, PipelineStage.MATCH_UM_DATASET, "successful", metrics)
+        return _item_result(
+            PipelineStage.MATCH_UM_DATASET,
+            "successful",
+            item_id,
+            f"Matched {inserted} mentions against UM metadata candidates.",
+            metrics,
+        )
+
+
 def export_insights_csv(
     output_path: str,
     rows: list[dict[str, Any]] | None = None,
@@ -268,6 +497,28 @@ def _stage_result(
         message=message,
         payload=payload or {},
     ).model_dump(mode="json")
+
+
+def _item_result(
+    stage: PipelineStage,
+    status: Literal["successful", "failed", "skipped"],
+    item_id: int,
+    message: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "stage": stage.value,
+        "status": status,
+        "item_id": item_id,
+        "message": message,
+        "payload": payload or {},
+    }
+
+
+def _missing_item_result(repo: PipelineRepository, item_id: int, stage: PipelineStage) -> dict[str, Any]:
+    message = f"Pipeline item {item_id} was not found."
+    repo.finish_item_stage(item_id, stage, "failed", {"message": message}, message)
+    return _item_result(stage, "failed", item_id, message)
 
 
 def _coerce_csv_record(row: dict[str, str]) -> dict[str, Any]:

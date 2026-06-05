@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from datasight.application.reset import RESET_CONFIRMATION
+from datasight.domain.run_strategy import RunStrategy
 
 
 class HealthResponse(BaseModel):
@@ -35,6 +36,7 @@ class RunCreateRequest(BaseModel):
     overwrite: bool = False
     um_datasets_path: str | None = None
     output_path: str = "storage/exports/insights.csv"
+    strategy: RunStrategy = RunStrategy.STANDARD
 
 
 class StageRunCreateRequest(BaseModel):
@@ -50,7 +52,7 @@ class StageRunCreateRequest(BaseModel):
 class RunCreateResponse(BaseModel):
     pipeline_run_id: int
     task_id: str | None = None
-    status: Literal["queued", "running", "successful", "failed", "skipped"]
+    status: Literal["queued", "running", "successful", "completed_with_errors", "failed", "skipped"]
 
 
 class StageRunSummary(BaseModel):

@@ -48,6 +48,8 @@ curl -X POST http://localhost:8000/api/v1/runs `
   -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"open_access_only\":true,\"overwrite\":false,\"um_datasets_path\":\"data/um_datasets.csv\",\"output_path\":\"storage/exports/insights.csv\"}"
 ```
 
+Set `"strategy\":\"high_throughput\"` to stream individual publications through downstream stages in parallel. If omitted, runs use the standard sequential strategy.
+
 Response:
 
 ```json

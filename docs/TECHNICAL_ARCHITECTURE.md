@@ -92,7 +92,7 @@ Curated source/reference files belong under `data/` and should not be removed by
 Celery task names use the `datasight.*` prefix. The worker command is:
 
 ```powershell
-uv run celery -A datasight.infrastructure.worker.celery_app:celery_app worker --loglevel=INFO --pool=solo
+uv run celery -A datasight.infrastructure.worker.celery_app:celery_app worker --loglevel=INFO --pool=solo -Q celery,download,grobid,processing,matching,export
 ```
 
 ## Configuration

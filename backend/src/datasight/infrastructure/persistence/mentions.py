@@ -99,6 +99,30 @@ class MentionRepositoryMixin:
         self.cursor.execute(query, params)
         return [dict(row) for row in self.cursor.fetchall()]
 
+    def get_unprocessed_candidates_for_publication(self, publication_row_id: int) -> list[dict[str, Any]]:
+        self.cursor.execute(
+            """
+            SELECT
+                c.id AS candidate_id,
+                p.paper_id AS publication_id,
+                c.dataset_name,
+                c.evidence_text,
+                c.section_heading,
+                c.standardized_section,
+                c.char_start,
+                c.char_end,
+                c.score,
+                c.source
+            FROM mention_candidates c
+            JOIN publications p ON p.id = c.publication_id
+            WHERE c.promoted_mention_id IS NULL
+              AND c.publication_id = %s
+            ORDER BY c.id
+            """,
+            (publication_row_id,),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
     def persist_dataset_mentions(self, mentions: Iterable[DatasetMention], candidate_ids: Iterable[int]) -> int:
         count = 0
         for mention, candidate_id in zip(mentions, candidate_ids, strict=False):

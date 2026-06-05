@@ -6,6 +6,7 @@ from typing import Any
 
 from celery.signals import task_failure
 
+from datasight.application import high_throughput
 from datasight.application import pipeline_services as services
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.worker.celery_app import celery_app
@@ -96,6 +97,107 @@ def export_insights(
     return services.export_insights_csv(output_path, rows, pipeline_run_id=pipeline_run_id)
 
 
+@celery_app.task(name="datasight.bootstrap_high_throughput_run", bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def bootstrap_high_throughput_run(
+    self,
+    query: str,
+    limit: int,
+    output_path: str,
+    um_datasets_path: str | None = None,
+    overwrite: bool = False,
+    open_access_only: bool = True,
+    fields_of_study: str | None = None,
+    pipeline_run_id: int | None = None,
+) -> dict[str, Any]:
+    result = high_throughput.bootstrap_high_throughput_run(
+        query=query,
+        limit=limit,
+        um_datasets_path=um_datasets_path,
+        overwrite=overwrite,
+        open_access_only=open_access_only,
+        fields_of_study=fields_of_study,
+        pipeline_run_id=pipeline_run_id,
+    )
+    dispatch_high_throughput_run.apply_async(
+        kwargs={
+            "pipeline_run_id": pipeline_run_id,
+            "output_path": output_path,
+            "overwrite": overwrite,
+        },
+        queue="processing",
+    )
+    return result
+
+
+@celery_app.task(name="datasight.dispatch_high_throughput_run", bind=True)
+def dispatch_high_throughput_run(
+    self,
+    pipeline_run_id: int,
+    output_path: str,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    plan = high_throughput.build_dispatch_plan(pipeline_run_id)
+    for batch in plan.batches:
+        process_high_throughput_stage.apply_async(
+            kwargs={
+                "pipeline_run_id": pipeline_run_id,
+                "stage": batch.stage.value,
+                "batch_size": batch.batch_size,
+                "overwrite": overwrite,
+                "output_path": output_path,
+            },
+            queue=batch.queue,
+        )
+    if plan.finalize:
+        finalize_high_throughput_run.apply_async(
+            kwargs={"output_path": output_path, "pipeline_run_id": pipeline_run_id},
+            queue="export",
+        )
+    return {
+        "pipeline_run_id": pipeline_run_id,
+        "batches": len(plan.batches),
+        "finalize": plan.finalize,
+        "status": "queued" if plan.batches else ("finalizing" if plan.finalize else "idle"),
+    }
+
+
+@celery_app.task(name="datasight.process_high_throughput_stage", bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def process_high_throughput_stage(
+    self,
+    pipeline_run_id: int,
+    stage: str,
+    batch_size: int,
+    overwrite: bool = False,
+    output_path: str | None = None,
+) -> dict[str, Any]:
+    result = high_throughput.process_high_throughput_stage(
+        pipeline_run_id=pipeline_run_id,
+        stage=stage,
+        batch_size=batch_size,
+        overwrite=overwrite,
+        task_id=self.request.id,
+    )
+    if output_path:
+        dispatch_high_throughput_run.apply_async(
+            kwargs={
+                "pipeline_run_id": pipeline_run_id,
+                "output_path": output_path,
+                "overwrite": overwrite,
+            },
+            queue="processing",
+        )
+    return result
+
+
+@celery_app.task(name="datasight.finalize_high_throughput_run", bind=True)
+def finalize_high_throughput_run(
+    self,
+    output_path: str,
+    pipeline_run_id: int | None = None,
+) -> dict[str, Any]:
+    return high_throughput.finalize_high_throughput_run(output_path, pipeline_run_id=pipeline_run_id)
+
+
 @celery_app.task(name="datasight.finish_pipeline_run", bind=True)
 def finish_pipeline_run(self, pipeline_run_id: int, status: str) -> dict[str, Any]:
     with PipelineRepository() as repo:
@@ -126,6 +228,7 @@ def _extract_pipeline_run_id(args: tuple[Any, ...], kwargs: dict[str, Any]) -> i
     value = kwargs.get("pipeline_run_id")
     if isinstance(value, int):
         return value
-    if args and isinstance(args[-1], int):
-        return args[-1]
+    for arg in reversed(args):
+        if isinstance(arg, int):
+            return arg
     return None

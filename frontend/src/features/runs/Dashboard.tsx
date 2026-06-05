@@ -130,10 +130,14 @@ import {
 } from "@/shared/api/client";
 
 import {
+  activeParallelStages,
+  edgeToneFromSourceStatus,
   formatStageName,
   isTerminalStatus,
   isWorkingStatus,
   mergeStages,
+  runStrategy,
+  runStrategyLabel,
   stageProgress,
   statusBadgeVariant,
   statusTone,
@@ -151,6 +155,7 @@ type RunFormState = {
   outputPath: string;
   openAccessOnly: boolean;
   overwrite: boolean;
+  highThroughput: boolean;
 };
 
 type OutletContext = {
@@ -485,6 +490,7 @@ function LaunchPage() {
     outputPath: DEFAULT_OUTPUT,
     openAccessOnly: true,
     overwrite: false,
+    highThroughput: false,
   });
 
   const createRunMutation = useMutation({
@@ -512,6 +518,7 @@ function LaunchPage() {
       overwrite: form.overwrite,
       um_datasets_path: form.umDatasetsPath.trim() || null,
       output_path: form.outputPath.trim() || DEFAULT_OUTPUT,
+      strategy: form.highThroughput ? "high_throughput" : "standard",
     });
   }
 
@@ -634,6 +641,27 @@ function LaunchPage() {
                   </FieldDescription>
                 </FieldContent>
               </Field>
+              <Field orientation="horizontal" className="rounded-lg border p-3 sm:col-span-2">
+                <Switch
+                  id="highThroughput"
+                  checked={form.highThroughput}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      highThroughput: checked,
+                    }))
+                  }
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="highThroughput">
+                    High-throughput mode
+                  </FieldLabel>
+                  <FieldDescription>
+                    Stream papers through stages in parallel instead of waiting
+                    for each full stage batch.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
             </FieldGroup>
 
             {createRunMutation.error ? (
@@ -701,7 +729,7 @@ function RunsPage() {
       return runs;
     }
     return runs.filter((run) =>
-      `${run.id} ${run.query ?? ""} ${run.status}`
+      `${run.id} ${run.query ?? ""} ${run.status} ${runStrategyLabel(run)}`
         .toLowerCase()
         .includes(query),
     );
@@ -761,6 +789,7 @@ function RunsPage() {
                       {run.query || `Run ${run.id}`}
                     </h2>
                     <StatusBadge status={run.status} />
+                    <StrategyBadge run={run} />
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Run #{run.id} · {formatDate(run.created_at)} ·{" "}
@@ -925,8 +954,8 @@ function InsightsPage() {
     selectedInsightIndex === null ? null : rows[selectedInsightIndex];
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-5">
-      <Card>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5">
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Insights</CardTitle>
           <CardDescription>
@@ -938,7 +967,7 @@ function InsightsPage() {
             />
           </CardAction>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0 overflow-hidden">
           {insightsQuery.isLoading ? <TableSkeleton /> : null}
           {!insightsQuery.isLoading && !rows.length ? (
             <EmptyState
@@ -949,7 +978,7 @@ function InsightsPage() {
           ) : null}
           {rows.length ? (
             <>
-              <Table>
+              <Table className="min-w-max">
                 <TableHeader>
                   <TableRow>
                     {columns.map((column) => (
@@ -1225,6 +1254,7 @@ function WorkspaceHeader({
   stages: VisualStage[];
 }) {
   const progress = stageProgress(stages);
+  const parallelStages = activeParallelStages(run, stages);
 
   return (
     <Card size="sm">
@@ -1238,7 +1268,12 @@ function WorkspaceHeader({
             : "Select a run to inspect progress."}
         </CardDescription>
         <CardAction>
-          {run ? <StatusBadge status={run.status} /> : null}
+          {run ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <StrategyBadge run={run} />
+              <StatusBadge status={run.status} />
+            </div>
+          ) : null}
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
@@ -1258,6 +1293,16 @@ function WorkspaceHeader({
             value={stages.filter((stage) => stage.status === "failed").length}
           />
           <MetricPill label="Stages" value={stages.length} />
+          {run && runStrategy(run) === "high_throughput" ? (
+            <MetricPill
+              label="Mode"
+              value={
+                parallelStages.length > 1
+                  ? `Parallel: ${parallelStages.length} stages active`
+                  : "High-throughput"
+              }
+            />
+          ) : null}
         </div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -1434,6 +1479,7 @@ function PipelineGraph({
               isTerminalStatus(from.stage.status) ||
               isWorkingStatus(from.stage.status) ||
               isWorkingStatus(to.stage.status);
+            const edgeTone = edgeToneFromSourceStatus(from.stage.status);
             const start = pipelinePortPoint(from, edge.fromPort);
             const end = pipelinePortPoint(to, edge.toPort);
 
@@ -1442,15 +1488,17 @@ function PipelineGraph({
                 <path
                   d={pipelineEdgePath(edge, from, to)}
                   data-active={active}
+                  data-edge-tone={edgeTone}
                   data-edge={`${edge.from}-${edge.to}`}
                   className="pipeline-edge"
-                  filter={active ? "url(#pipelineGlow)" : undefined}
+                  filter={edgeTone !== "muted" ? "url(#pipelineGlow)" : undefined}
                 />
                 <circle
                   cx={start.x}
                   cy={start.y}
                   r="4.25"
                   data-active={active}
+                  data-edge-tone={edgeTone}
                   className="pipeline-port-dot"
                 />
                 <circle
@@ -1458,6 +1506,7 @@ function PipelineGraph({
                   cy={end.y}
                   r="4.25"
                   data-active={active}
+                  data-edge-tone={edgeTone}
                   className="pipeline-port-dot"
                 />
               </g>
@@ -1495,6 +1544,7 @@ function PipelineNode({
       className={cn("pipeline-node", selected && "pipeline-node-selected")}
       style={{ left: node.x, top: node.y }}
       data-status-tone={tone}
+      data-working={node.stage.working ? "true" : undefined}
       aria-label={`Inspect ${titleCase(formatStageName(node.stage.name))} status and filter events`}
       onClick={onSelect}
     >
@@ -1554,7 +1604,7 @@ function WorkspaceInspector({
           {selectedStage ? <StatusBadge status={selectedStage.status} /> : null}
         </CardAction>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+      <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="grid grid-cols-2 gap-2">
           <MetricPill label="Run" value={run ? `#${run.id}` : "-"} />
           <MetricPill
@@ -1572,14 +1622,14 @@ function WorkspaceInspector({
         <Tabs
           value={tab}
           onValueChange={setTab}
-          className="flex min-h-0 flex-1 flex-col"
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
           <TabsList variant="line">
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="metrics">Metrics</TabsTrigger>
           </TabsList>
-          <TabsContent value="events" className="min-h-0 flex-1">
-            <div className="mb-3 flex max-h-28 flex-wrap gap-2 overflow-auto pr-1">
+          <TabsContent value="events" className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <div className="mb-3 flex max-h-28 min-w-0 flex-wrap gap-2 overflow-auto pr-1">
               {stageFilters.map((stage) => (
                 <Button
                   key={stage}
@@ -1594,7 +1644,7 @@ function WorkspaceInspector({
             </div>
             <EventLog events={events} isLoading={eventsLoading} />
           </TabsContent>
-          <TabsContent value="metrics" className="min-h-0 flex-1">
+          <TabsContent value="metrics" className="min-h-0 min-w-0 flex-1 overflow-hidden">
             <MetricsPanel metrics={selectedStage?.run?.metrics ?? {}} />
           </TabsContent>
         </Tabs>
@@ -1625,12 +1675,12 @@ function EventLog({
   }
 
   return (
-    <ScrollArea className="h-[52svh] min-h-[340px] max-h-[520px] pr-3">
-      <div className="flex flex-col gap-2">
+    <ScrollArea className="h-[52svh] min-h-[340px] max-h-[520px] min-w-0">
+      <div className="box-border flex min-w-0 max-w-full flex-col gap-2 pr-5">
         {events.map((event) => (
           <article
             key={event.id}
-            className="min-w-0 rounded-lg border bg-background p-3"
+            className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border bg-background p-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1660,7 +1710,7 @@ function EventLog({
               </Button>
             </div>
             {Object.keys(event.payload).length ? (
-              <pre className="mt-3 max-h-36 overflow-auto rounded-md bg-muted p-3 text-xs text-muted-foreground">
+              <pre className="mt-3 box-border max-h-36 w-full min-w-0 max-w-full overflow-auto rounded-md bg-muted p-3 text-xs text-muted-foreground">
                 {JSON.stringify(event.payload, null, 2)}
               </pre>
             ) : null}
@@ -1779,6 +1829,15 @@ function StatusBadge({
       className={cn(passive && "system-status-badge pointer-events-none")}
     >
       {status}
+    </Badge>
+  );
+}
+
+function StrategyBadge({ run }: { run: PipelineRunSummary }) {
+  const strategy = runStrategy(run);
+  return (
+    <Badge variant={strategy === "high_throughput" ? "default" : "secondary"}>
+      {runStrategyLabel(run)}
     </Badge>
   );
 }

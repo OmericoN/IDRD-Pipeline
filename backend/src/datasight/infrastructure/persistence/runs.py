@@ -58,20 +58,52 @@ class RunRepositoryMixin:
             return
         self.cursor.execute(
             """
-            INSERT INTO stage_runs (
-                pipeline_run_id, stage, status, attempt_count, error, metrics,
-                started_at, finished_at, updated_at
-            )
-            VALUES (%s, %s, %s, 1, %s, %s, now(), now(), now())
+            SELECT id, attempt_count
+            FROM stage_runs
+            WHERE pipeline_run_id = %s AND publication_id IS NULL AND stage = %s
+            ORDER BY id
+            LIMIT 1
             """,
-            (
-                pipeline_run_id,
-                stage,
-                status,
-                error,
-                psycopg2.extras.Json(metrics or {}),
-            ),
+            (pipeline_run_id, str(stage)),
         )
+        existing = self.cursor.fetchone()
+        if existing:
+            self.cursor.execute(
+                """
+                UPDATE stage_runs
+                SET status = %s,
+                    attempt_count = GREATEST(attempt_count, 1),
+                    error = %s,
+                    metrics = %s,
+                    started_at = COALESCE(started_at, now()),
+                    finished_at = now(),
+                    updated_at = now()
+                WHERE id = %s
+                """,
+                (
+                    status,
+                    error,
+                    psycopg2.extras.Json(metrics or {}),
+                    existing["id"],
+                ),
+            )
+        else:
+            self.cursor.execute(
+                """
+                INSERT INTO stage_runs (
+                    pipeline_run_id, stage, status, attempt_count, error, metrics,
+                    started_at, finished_at, updated_at
+                )
+                VALUES (%s, %s, %s, 1, %s, %s, now(), now(), now())
+                """,
+                (
+                    pipeline_run_id,
+                    stage,
+                    status,
+                    error,
+                    psycopg2.extras.Json(metrics or {}),
+                ),
+            )
         self._insert_pipeline_run_event(
             pipeline_run_id=pipeline_run_id,
             stage=str(stage),
@@ -222,6 +254,8 @@ class RunRepositoryMixin:
         tables = [
             "pipeline_run_events",
             "stage_runs",
+            "pipeline_item_stages",
+            "pipeline_items",
             "um_match_decisions",
             "mention_candidates",
             "dataset_mentions",

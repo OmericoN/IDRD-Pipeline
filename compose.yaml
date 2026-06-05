@@ -114,7 +114,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     working_dir: /app/backend
-    command: ["uv", "run", "celery", "-A", "datasight.infrastructure.worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--pool=solo"]
+    command: ["uv", "run", "celery", "-A", "datasight.infrastructure.worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--pool=solo", "-Q", "celery,download,grobid,processing,matching,export"]
     environment: *app_env
     volumes:
       - .:/app

@@ -281,16 +281,25 @@ code {
     opacity: 0.96;
   }
 
-  .pipeline-edge[data-active="true"] {
+  .pipeline-edge[data-edge-tone="success"] {
     stroke: var(--pipeline-active);
     stroke-width: 4;
     stroke-dasharray: none;
     opacity: 1;
   }
 
-  .pipeline-edge[data-edge="discover-download_pdf"] {
-    stroke: var(--pipeline-active);
+  .pipeline-edge[data-edge-tone="warning"] {
+    stroke: var(--status-warning);
+    stroke-width: 4;
     stroke-dasharray: none;
+    opacity: 1;
+  }
+
+  .pipeline-edge[data-edge-tone="error"] {
+    stroke: var(--status-error);
+    stroke-width: 4;
+    stroke-dasharray: none;
+    opacity: 1;
   }
 
   .pipeline-port-dot {
@@ -299,9 +308,19 @@ code {
     stroke-width: 2.5;
   }
 
-  .pipeline-port-dot[data-active="true"] {
+  .pipeline-port-dot[data-edge-tone="success"] {
     fill: var(--pipeline-active);
     stroke: var(--pipeline-active);
+  }
+
+  .pipeline-port-dot[data-edge-tone="warning"] {
+    fill: var(--status-warning);
+    stroke: var(--status-warning);
+  }
+
+  .pipeline-port-dot[data-edge-tone="error"] {
+    fill: var(--status-error);
+    stroke: var(--status-error);
   }
 
   .pipeline-node {
@@ -319,11 +338,85 @@ code {
     text-align: left;
     color: var(--foreground);
     box-shadow: 0 12px 28px oklch(0 0 0 / 8%);
+    isolation: isolate;
     outline: none;
     transition:
       border-color 120ms ease,
       box-shadow 120ms ease,
       transform 120ms ease;
+  }
+
+  .pipeline-node > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .pipeline-node[data-working="true"]::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: 0;
+    border-radius: 10px;
+    background:
+      linear-gradient(var(--pipeline-node), var(--pipeline-node)) padding-box,
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--pipeline-active), transparent 70%),
+        var(--pipeline-active),
+        color-mix(in oklch, var(--pipeline-active), white 18%),
+        var(--pipeline-active),
+        color-mix(in oklch, var(--pipeline-active), transparent 70%)
+      )
+      border-box;
+    background-size:
+      100% 100%,
+      260% 100%;
+    border: 2px solid transparent;
+    animation: pipeline-node-border-load 1.45s linear infinite;
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--pipeline-active), transparent 46%),
+      0 0 18px color-mix(in oklch, var(--pipeline-active), transparent 62%);
+    pointer-events: none;
+  }
+
+  .pipeline-node[data-working="true"]::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    z-index: 0;
+    border-radius: 6px;
+    border: 1px solid color-mix(in oklch, var(--pipeline-active), transparent 72%);
+    opacity: 0.72;
+    pointer-events: none;
+  }
+
+  .pipeline-node[data-working="true"] {
+    border-color: color-mix(in oklch, var(--pipeline-active), transparent 24%);
+    box-shadow:
+      0 0 0 3px color-mix(in oklch, var(--pipeline-active), transparent 84%),
+      0 16px 34px oklch(0 0 0 / 12%);
+  }
+
+  @keyframes pipeline-node-border-load {
+    from {
+      background-position:
+        0 0,
+        0% 0;
+    }
+    to {
+      background-position:
+        0 0,
+        260% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pipeline-node[data-working="true"]::before {
+      animation: none;
+      background:
+        linear-gradient(var(--pipeline-node), var(--pipeline-node)) padding-box,
+        linear-gradient(var(--pipeline-active), var(--pipeline-active)) border-box;
+    }
   }
 
   .pipeline-node:hover,

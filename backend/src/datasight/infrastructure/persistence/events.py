@@ -8,7 +8,7 @@ from typing import Any
 def event_level(status: str) -> str:
     if status in {"failed", "error"}:
         return "error"
-    if status in {"skipped", "warning"}:
+    if status in {"skipped", "warning", "completed_with_errors"}:
         return "warning"
     return "info"
 

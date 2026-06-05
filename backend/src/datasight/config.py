@@ -45,6 +45,8 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_TASK_ALWAYS_EAGER = (
     os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in {"1", "true", "yes"}
 )
+HIGH_THROUGHPUT_STAGE_BATCH_SIZE = int(os.getenv("HIGH_THROUGHPUT_STAGE_BATCH_SIZE", "4"))
+HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH = int(os.getenv("HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH", "8"))
 
 # ── Embeddings / pgvector ─────────────────────────────────────────────────────
 VECTOR_DIMENSIONS = int(os.getenv("VECTOR_DIMENSIONS", "1536"))

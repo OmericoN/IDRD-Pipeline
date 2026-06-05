@@ -24,4 +24,10 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     task_always_eager=CELERY_TASK_ALWAYS_EAGER,
+    task_routes={
+        "datasight.bootstrap_high_throughput_run": {"queue": "processing"},
+        "datasight.dispatch_high_throughput_run": {"queue": "processing"},
+        "datasight.process_high_throughput_stage": {"queue": "processing"},
+        "datasight.finalize_high_throughput_run": {"queue": "export"},
+    },
 )

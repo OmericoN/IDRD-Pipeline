@@ -127,11 +127,62 @@ def test_record_stage_result_records_stage_event():
         pipeline_run_id=9,
     )
 
-    assert "INSERT INTO stage_runs" in cursor.executed[0][0]
-    event_query, event_params = cursor.executed[1]
+    assert "SELECT id, attempt_count" in cursor.executed[0][0]
+    assert "INSERT INTO stage_runs" in cursor.executed[1][0]
+    event_query, event_params = cursor.executed[2]
     assert "INSERT INTO pipeline_run_events" in event_query
     assert event_params[:4] == (9, "discover", "info", "Discovered 3 publications.")
     assert conn.commits == 1
+
+
+def test_create_pipeline_items_initializes_item_stages():
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [{"id": 100}, {"id": 200}]
+
+    item_ids = repo.create_pipeline_items(9, ["paper-1"])
+
+    assert item_ids == [200]
+    queries = [query for query, _ in cursor.executed]
+    assert any("INSERT INTO pipeline_items" in query for query in queries)
+    stage_inserts = [params for query, params in cursor.executed if "INSERT INTO pipeline_item_stages" in query]
+    assert len(stage_inserts) == 6
+    assert stage_inserts[0] == (200, "download_pdf")
+    assert conn.commits == 1
+
+
+def test_start_item_stage_marks_stage_and_item_running():
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [{"id": 10}, {"pipeline_run_id": 9}, {"total": 1, "successful": 0, "failed": 0, "skipped": 0, "active": 1, "pending": 0}, None]
+
+    assert repo.start_item_stage(200, "download_pdf", "task-1") is True
+
+    assert "UPDATE pipeline_item_stages" in cursor.executed[0][0]
+    assert "UPDATE pipeline_items SET status = 'running'" in cursor.executed[1][0]
+    assert conn.commits >= 1
+
+
+def test_claim_queued_item_stages_uses_skip_locked():
+    repo, cursor, _ = make_repo()
+    cursor.fetchall_results = [[{"pipeline_item_id": 200}, {"pipeline_item_id": 201}]]
+    cursor.fetchone_results = [
+        {"total": 2, "successful": 0, "failed": 0, "skipped": 0, "queued": 0, "running": 2, "pending": 0},
+        None,
+    ]
+
+    item_ids = repo.claim_queued_item_stages(9, "download_pdf", 2, "task-1")
+
+    assert item_ids == [200, 201]
+    claim_query, claim_params = cursor.executed[0]
+    assert "FOR UPDATE SKIP LOCKED" in claim_query
+    assert "pis.status = 'queued'" in claim_query
+    assert claim_params == (9, "download_pdf", 2, "task-1")
+
+
+def test_high_throughput_outcome_reports_partial_errors():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"failed": 1, "skipped": 3}]
+
+    assert repo.high_throughput_outcome(9) == "completed_with_errors"
 
 
 def test_fail_pipeline_run_records_error_event():
@@ -177,6 +228,8 @@ def test_reset_database_truncates_pipeline_tables_and_preserves_schema():
     query, _ = cursor.executed[-1]
     assert "TRUNCATE" in query
     assert "alembic_version" not in query
+    assert "pipeline_item_stages" in tables
+    assert "pipeline_items" in tables
     assert "pipeline_run_events" in tables
     assert "publications" in tables
     assert conn.commits == 1

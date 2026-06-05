@@ -57,6 +57,7 @@ export type RunCreateRequest = {
   overwrite: boolean;
   um_datasets_path?: string | null;
   output_path: string;
+  strategy?: "standard" | "high_throughput";
 };
 
 export type RunCreateResponse = {
