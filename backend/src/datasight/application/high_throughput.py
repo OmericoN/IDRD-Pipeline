@@ -7,11 +7,13 @@ from math import ceil
 from typing import Any
 
 from datasight.application import pipeline_services as services
-from datasight.config import HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH, HIGH_THROUGHPUT_STAGE_BATCH_SIZE
+from datasight.config import (
+    HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH,
+    HIGH_THROUGHPUT_STAGE_BATCH_SIZE,
+)
 from datasight.domain.stages import PipelineStage
 from datasight.infrastructure.persistence.items import ITEM_STAGES
 from datasight.infrastructure.persistence.repository import PipelineRepository
-
 
 STAGE_QUEUES: dict[PipelineStage, str] = {
     PipelineStage.DOWNLOAD_PDF: "download",
@@ -62,7 +64,11 @@ def bootstrap_high_throughput_run(
     paper_ids = [paper_id for paper_id in raw_paper_ids if isinstance(paper_id, str)]
     with PipelineRepository() as repo:
         item_ids = repo.create_pipeline_items(pipeline_run_id, paper_ids)
-        queued = repo.queue_item_stage_for_run(pipeline_run_id, PipelineStage.DOWNLOAD_PDF) if item_ids else 0
+        queued = (
+            repo.queue_item_stage_for_run(pipeline_run_id, PipelineStage.DOWNLOAD_PDF)
+            if item_ids
+            else 0
+        )
     return {
         "pipeline_run_id": pipeline_run_id,
         "items": len(item_ids),
@@ -79,7 +85,9 @@ def build_dispatch_plan(
 ) -> DispatchPlan:
     with PipelineRepository() as repo:
         if repo.all_item_stages_terminal(pipeline_run_id):
-            started = repo.try_start_run_level_stage(pipeline_run_id, PipelineStage.EXPORT_INSIGHTS)
+            started = repo.try_start_run_level_stage(
+                pipeline_run_id, PipelineStage.EXPORT_INSIGHTS
+            )
             return DispatchPlan(batches=(), finalize=started)
 
         queued_counts = repo.get_queued_item_stage_counts(pipeline_run_id)
@@ -93,7 +101,9 @@ def build_dispatch_plan(
             continue
         batch_count = min(safe_max_batches, ceil(queued / safe_batch_size))
         batches.extend(
-            StageBatch(stage=stage, queue=STAGE_QUEUES[stage], batch_size=safe_batch_size)
+            StageBatch(
+                stage=stage, queue=STAGE_QUEUES[stage], batch_size=safe_batch_size
+            )
             for _ in range(batch_count)
         )
     return DispatchPlan(batches=tuple(batches))
@@ -118,11 +128,17 @@ def process_high_throughput_stage(
     results: list[dict[str, Any]] = []
     for item_id in item_ids:
         try:
-            results.append(_process_claimed_item_stage(item_id, stage_value, overwrite, task_id))
-        except Exception as exc:  # pragma: no cover - defensive boundary around per-item work
+            results.append(
+                _process_claimed_item_stage(item_id, stage_value, overwrite, task_id)
+            )
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - defensive boundary around per-item work
             message = f"{stage_value.value} item processing error: {exc}"
             with PipelineRepository() as repo:
-                repo.finish_item_stage(item_id, stage_value, "failed", {"message": message}, str(exc))
+                repo.finish_item_stage(
+                    item_id, stage_value, "failed", {"message": message}, str(exc)
+                )
             results.append(
                 {
                     "stage": stage_value.value,
@@ -144,9 +160,13 @@ def process_high_throughput_stage(
     }
 
 
-def finalize_high_throughput_run(output_path: str, pipeline_run_id: int | None = None) -> dict[str, Any]:
+def finalize_high_throughput_run(
+    output_path: str, pipeline_run_id: int | None = None
+) -> dict[str, Any]:
     if pipeline_run_id is None:
-        raise ValueError("pipeline_run_id is required for high-throughput finalization.")
+        raise ValueError(
+            "pipeline_run_id is required for high-throughput finalization."
+        )
     result = services.export_insights_csv(output_path, pipeline_run_id=pipeline_run_id)
     with PipelineRepository() as repo:
         status = repo.high_throughput_outcome(pipeline_run_id)
@@ -161,7 +181,9 @@ def _process_claimed_item_stage(
     task_id: str | None,
 ) -> dict[str, Any]:
     if stage == PipelineStage.DOWNLOAD_PDF:
-        return services.download_pipeline_item(item_id, overwrite=overwrite, task_id=task_id, claimed=True)
+        return services.download_pipeline_item(
+            item_id, overwrite=overwrite, task_id=task_id, claimed=True
+        )
     if stage == PipelineStage.GROBID_CONVERT:
         return services.grobid_convert_pipeline_item(
             item_id,
@@ -171,11 +193,19 @@ def _process_claimed_item_stage(
             claimed=True,
         )
     if stage == PipelineStage.RENDER_DOCUMENT:
-        return services.render_pipeline_item(item_id, overwrite=overwrite, task_id=task_id, claimed=True)
+        return services.render_pipeline_item(
+            item_id, overwrite=overwrite, task_id=task_id, claimed=True
+        )
     if stage == PipelineStage.DETECT_MENTIONS:
-        return services.detect_mentions_pipeline_item(item_id, task_id=task_id, claimed=True)
+        return services.detect_mentions_pipeline_item(
+            item_id, task_id=task_id, claimed=True
+        )
     if stage == PipelineStage.EXTRACT_FEATURES:
-        return services.extract_features_pipeline_item(item_id, task_id=task_id, claimed=True)
+        return services.extract_features_pipeline_item(
+            item_id, task_id=task_id, claimed=True
+        )
     if stage == PipelineStage.MATCH_UM_DATASET:
-        return services.match_um_dataset_pipeline_item(item_id, task_id=task_id, claimed=True)
+        return services.match_um_dataset_pipeline_item(
+            item_id, task_id=task_id, claimed=True
+        )
     raise ValueError(f"Unsupported high-throughput item stage: {stage.value}")
