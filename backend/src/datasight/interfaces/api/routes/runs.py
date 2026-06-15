@@ -37,7 +37,12 @@ def create_run(request: RunCreateRequest) -> RunCreateResponse:
         um_datasets_path=request.um_datasets_path,
         overwrite=request.overwrite,
         open_access_only=request.open_access_only,
-        fields_of_study=request.fields_of_study,
+        topic_ids=request.topic_ids,
+        keyword_terms=request.keyword_terms,
+        mesh_terms=request.mesh_terms,
+        from_year=request.from_year,
+        to_year=request.to_year,
+        use_um_profile=request.use_um_profile,
         strategy=request.strategy,
     )
     return RunCreateResponse.model_validate(result)
@@ -58,7 +63,12 @@ def create_stage_run(stage: PipelineStage, request: StageRunCreateRequest) -> Ru
         overwrite=request.overwrite,
         delete_pdf=request.delete_pdf,
         open_access_only=request.open_access_only,
-        fields_of_study=request.fields_of_study,
+        topic_ids=request.topic_ids,
+        keyword_terms=request.keyword_terms,
+        mesh_terms=request.mesh_terms,
+        from_year=request.from_year,
+        to_year=request.to_year,
+        use_um_profile=request.use_um_profile,
         pipeline_run_id=pipeline_run_id,
     )
     try:

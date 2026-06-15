@@ -77,6 +77,56 @@ def test_upsert_um_datasets_uses_canonical_table():
     assert conn.commits == 1
 
 
+def test_upsert_openalex_publications_replaces_child_rows():
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [{"id": 11}]
+    paper = {
+        "paperId": "W123",
+        "id": "https://openalex.org/W123",
+        "doi": "10.123/example",
+        "title": "OpenAlex work",
+        "abstract": "A study using data.",
+        "year": 2024,
+        "publication_date": "2024-01-02",
+        "language": "en",
+        "publication_type": "article",
+        "source_url": "https://openalex.org/W123",
+        "open_access_url": "https://example.org/work.pdf",
+        "oa_status": "gold",
+        "cited_by_count": 12,
+        "is_retracted": False,
+        "has_fulltext": True,
+        "primary_source_name": "Journal",
+        "raw": {
+            "authorships": [
+                {
+                    "author": {"id": "https://openalex.org/A1", "display_name": "Jane Doe"},
+                    "is_corresponding": True,
+                    "institutions": [{"id": "https://openalex.org/I1", "display_name": "UM"}],
+                }
+            ],
+            "topics": [{"id": "https://openalex.org/T1", "display_name": "Health data", "score": 0.9}],
+            "keywords": [{"display_name": "biobank", "score": 0.8}],
+            "concepts": [{"display_name": "Epidemiology", "level": 1, "score": 0.7}],
+            "mesh": [{"descriptor_name": "Humans", "qualifier_name": "analysis"}],
+            "related_works": ["https://openalex.org/W999"],
+        },
+    }
+
+    assert repo.upsert_publications([paper], source="openalex") == 1
+
+    queries = [query for query, _ in cursor.executed]
+    assert "RETURNING id" in queries[0]
+    assert any("DELETE FROM publication_openalex_topics" in query for query in queries)
+    assert any("INSERT INTO publication_openalex_affiliations" in query for query in queries)
+    assert any("INSERT INTO publication_openalex_topics" in query for query in queries)
+    assert any("INSERT INTO publication_openalex_keywords" in query for query in queries)
+    assert any("INSERT INTO publication_openalex_concepts" in query for query in queries)
+    assert any("INSERT INTO publication_openalex_mesh" in query for query in queries)
+    assert any("INSERT INTO publication_openalex_related_works" in query for query in queries)
+    assert conn.commits == 1
+
+
 def test_healthcheck_reports_candidate_table_readiness():
     repo, cursor, _ = make_repo()
     cursor.fetchone_results = [

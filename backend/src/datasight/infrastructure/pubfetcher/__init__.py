@@ -1,6 +1,5 @@
 """Publication metadata clients."""
 
-from datasight.infrastructure.pubfetcher.semantic_scholar import SemanticScholarClient
+from datasight.infrastructure.pubfetcher.openalex import OpenAlexClient
 
-__all__ = ["SemanticScholarClient"]
-
+__all__ = ["OpenAlexClient"]

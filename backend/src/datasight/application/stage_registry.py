@@ -32,7 +32,12 @@ class StageRunOptions:
     overwrite: bool = False
     delete_pdf: bool = False
     open_access_only: bool = True
-    fields_of_study: str | None = None
+    topic_ids: str | list[str] | None = None
+    keyword_terms: str | list[str] | None = None
+    mesh_terms: str | list[str] | None = None
+    from_year: int | None = None
+    to_year: int | None = None
+    use_um_profile: bool = False
     rows: list[dict[str, Any]] | None = None
     pipeline_run_id: int | None = None
 
@@ -79,7 +84,12 @@ def stage_kwargs(stage: PipelineStage | str, options: StageRunOptions) -> dict[s
         kwargs = {
             "limit": options.limit or 100,
             "open_access_only": options.open_access_only,
-            "fields_of_study": options.fields_of_study,
+            "topic_ids": options.topic_ids,
+            "keyword_terms": options.keyword_terms,
+            "mesh_terms": options.mesh_terms,
+            "from_year": options.from_year,
+            "to_year": options.to_year,
+            "use_um_profile": options.use_um_profile,
         }
     elif stage_value in {PipelineStage.DOWNLOAD_PDF, PipelineStage.RENDER_DOCUMENT}:
         kwargs = {"limit": options.limit, "overwrite": options.overwrite}

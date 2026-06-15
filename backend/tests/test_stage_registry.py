@@ -30,13 +30,28 @@ def test_stage_catalog_exposes_canonical_order_and_descriptions():
 
 
 def test_stage_registry_builds_discover_arguments():
-    options = StageRunOptions(query="dataset reuse", limit=12, open_access_only=False, fields_of_study="Medicine")
+    options = StageRunOptions(
+        query="dataset reuse",
+        limit=12,
+        open_access_only=False,
+        topic_ids=["T123"],
+        keyword_terms=["biobank"],
+        mesh_terms=["Humans"],
+        from_year=2020,
+        to_year=2024,
+        use_um_profile=True,
+    )
 
     assert stage_args(PipelineStage.DISCOVER, options) == ["dataset reuse"]
     assert stage_kwargs(PipelineStage.DISCOVER, options) == {
         "limit": 12,
         "open_access_only": False,
-        "fields_of_study": "Medicine",
+        "topic_ids": ["T123"],
+        "keyword_terms": ["biobank"],
+        "mesh_terms": ["Humans"],
+        "from_year": 2020,
+        "to_year": 2024,
+        "use_um_profile": True,
     }
 
 

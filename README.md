@@ -16,7 +16,7 @@
 DataSight finds dataset references that are easy to miss in scholarly publications. It discovers open-access papers, downloads PDFs, converts them into structured text, detects dataset mentions, and matches those mentions against Maastricht University dataset metadata.
 
 ```text
-discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> analyze_formality_and_fairness
+discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions -> extract_features -> match_um_dataset -> export_insights
 ```
 
 ## Why It Exists
@@ -76,7 +76,7 @@ cd backend
 uv run datasight stages
 uv run datasight doctor
 uv run datasight import-um-datasets --path data/um_datasets.csv
-uv run datasight run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --mode enqueue
+uv run datasight run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --use-um-profile --mode enqueue
 ```
 
 

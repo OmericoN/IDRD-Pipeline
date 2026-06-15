@@ -31,7 +31,12 @@ class StagesResponse(BaseModel):
 class RunCreateRequest(BaseModel):
     query: str = Field(min_length=1)
     limit: int = Field(default=100, ge=1, le=1000)
-    fields_of_study: str | None = None
+    topic_ids: list[str] | None = None
+    keyword_terms: list[str] | None = None
+    mesh_terms: list[str] | None = None
+    from_year: int | None = Field(default=None, ge=1800, le=3000)
+    to_year: int | None = Field(default=None, ge=1800, le=3000)
+    use_um_profile: bool = False
     open_access_only: bool = True
     overwrite: bool = False
     um_datasets_path: str | None = None
@@ -42,7 +47,12 @@ class RunCreateRequest(BaseModel):
 class StageRunCreateRequest(BaseModel):
     query: str | None = None
     limit: int | None = Field(default=None, ge=1, le=1000)
-    fields_of_study: str | None = None
+    topic_ids: list[str] | None = None
+    keyword_terms: list[str] | None = None
+    mesh_terms: list[str] | None = None
+    from_year: int | None = Field(default=None, ge=1800, le=3000)
+    to_year: int | None = Field(default=None, ge=1800, le=3000)
+    use_um_profile: bool = False
     open_access_only: bool = True
     overwrite: bool = False
     delete_pdf: bool = False

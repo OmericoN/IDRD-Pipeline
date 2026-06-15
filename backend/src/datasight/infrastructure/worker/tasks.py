@@ -18,10 +18,26 @@ def discover_publications(
     query: str,
     limit: int = 100,
     open_access_only: bool = True,
-    fields_of_study: str | None = None,
+    topic_ids: str | list[str] | None = None,
+    keyword_terms: str | list[str] | None = None,
+    mesh_terms: str | list[str] | None = None,
+    from_year: int | None = None,
+    to_year: int | None = None,
+    use_um_profile: bool = False,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
-    return services.discover_publications(query, limit, open_access_only, fields_of_study, pipeline_run_id)
+    return services.discover_publications(
+        query=query,
+        limit=limit,
+        open_access_only=open_access_only,
+        topic_ids=topic_ids,
+        keyword_terms=keyword_terms,
+        mesh_terms=mesh_terms,
+        from_year=from_year,
+        to_year=to_year,
+        use_um_profile=use_um_profile,
+        pipeline_run_id=pipeline_run_id,
+    )
 
 
 @celery_app.task(name="datasight.download_pdf", bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
@@ -106,7 +122,12 @@ def bootstrap_high_throughput_run(
     um_datasets_path: str | None = None,
     overwrite: bool = False,
     open_access_only: bool = True,
-    fields_of_study: str | None = None,
+    topic_ids: str | list[str] | None = None,
+    keyword_terms: str | list[str] | None = None,
+    mesh_terms: str | list[str] | None = None,
+    from_year: int | None = None,
+    to_year: int | None = None,
+    use_um_profile: bool = False,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     result = high_throughput.bootstrap_high_throughput_run(
@@ -115,7 +136,12 @@ def bootstrap_high_throughput_run(
         um_datasets_path=um_datasets_path,
         overwrite=overwrite,
         open_access_only=open_access_only,
-        fields_of_study=fields_of_study,
+        topic_ids=topic_ids,
+        keyword_terms=keyword_terms,
+        mesh_terms=mesh_terms,
+        from_year=from_year,
+        to_year=to_year,
+        use_um_profile=use_um_profile,
         pipeline_run_id=pipeline_run_id,
     )
     dispatch_high_throughput_run.apply_async(

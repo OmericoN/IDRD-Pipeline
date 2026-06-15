@@ -22,10 +22,25 @@ def test_stage_values_are_canonical_order():
 
 
 def test_cli_parses_enqueue_discover():
-    args = build_parser().parse_args(["enqueue", PipelineStage.DISCOVER, "--query", "dataset reuse"])
+    args = build_parser().parse_args(
+        [
+            "enqueue",
+            PipelineStage.DISCOVER,
+            "--query",
+            "dataset reuse",
+            "--topic-id",
+            "T123",
+            "--keyword-term",
+            "biobank",
+            "--use-um-profile",
+        ]
+    )
     assert args.command == "enqueue"
     assert args.stage == "discover"
     assert args.query == "dataset reuse"
+    assert args.topic_ids == ["T123"]
+    assert args.keyword_terms == ["biobank"]
+    assert args.use_um_profile is True
 
 
 def test_cli_parses_doctor():
@@ -51,6 +66,7 @@ def test_cli_parses_guided_run_all():
             "um.csv",
             "--output",
             "storage/exports/insights.csv",
+            "--use-um-profile",
         ]
     )
     assert args.command == "run-all"
@@ -58,3 +74,4 @@ def test_cli_parses_guided_run_all():
     assert args.limit == 5
     assert args.um_datasets == "um.csv"
     assert args.output == "storage/exports/insights.csv"
+    assert args.use_um_profile is True

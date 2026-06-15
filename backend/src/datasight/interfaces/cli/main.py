@@ -74,7 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_all.add_argument("--um-datasets", required=True)
     run_all.add_argument("--output", required=True)
     run_all.add_argument("--mode", choices=["guided", "local", "enqueue"], default="guided")
-    run_all.add_argument("--fields-of-study")
+    run_all.add_argument("--topic-id", action="append", dest="topic_ids")
+    run_all.add_argument("--keyword-term", action="append", dest="keyword_terms")
+    run_all.add_argument("--mesh-term", action="append", dest="mesh_terms")
+    run_all.add_argument("--from-year", type=int)
+    run_all.add_argument("--to-year", type=int)
+    run_all.add_argument("--use-um-profile", action="store_true")
     run_all.add_argument("--all-access", action="store_true")
     run_all.add_argument("--overwrite", action="store_true")
 
@@ -124,7 +129,12 @@ def _add_stage_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("stage", choices=stage_values())
     parser.add_argument("--query")
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--fields-of-study")
+    parser.add_argument("--topic-id", action="append", dest="topic_ids")
+    parser.add_argument("--keyword-term", action="append", dest="keyword_terms")
+    parser.add_argument("--mesh-term", action="append", dest="mesh_terms")
+    parser.add_argument("--from-year", type=int)
+    parser.add_argument("--to-year", type=int)
+    parser.add_argument("--use-um-profile", action="store_true")
     parser.add_argument("--all-access", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--delete-pdf", action="store_true")
@@ -164,7 +174,12 @@ def _run_local(args: argparse.Namespace) -> dict[str, Any]:
             query=_require(args.query, "--query"),
             limit=args.limit or 100,
             open_access_only=not args.all_access,
-            fields_of_study=args.fields_of_study,
+            topic_ids=args.topic_ids,
+            keyword_terms=args.keyword_terms,
+            mesh_terms=args.mesh_terms,
+            from_year=args.from_year,
+            to_year=args.to_year,
+            use_um_profile=args.use_um_profile,
         )
     if stage == PipelineStage.DOWNLOAD_PDF:
         return services.download_pdf_batch(limit=args.limit, overwrite=args.overwrite)
@@ -206,7 +221,12 @@ def _run_all(args: argparse.Namespace) -> dict[str, Any]:
             um_datasets_path=args.um_datasets,
             overwrite=args.overwrite,
             open_access_only=not args.all_access,
-            fields_of_study=args.fields_of_study,
+            topic_ids=args.topic_ids,
+            keyword_terms=args.keyword_terms,
+            mesh_terms=args.mesh_terms,
+            from_year=args.from_year,
+            to_year=args.to_year,
+            use_um_profile=args.use_um_profile,
         )
 
     return orchestrator.run_all_local(
@@ -216,7 +236,12 @@ def _run_all(args: argparse.Namespace) -> dict[str, Any]:
         um_datasets_path=args.um_datasets,
         overwrite=args.overwrite,
         open_access_only=not args.all_access,
-        fields_of_study=args.fields_of_study,
+        topic_ids=args.topic_ids,
+        keyword_terms=args.keyword_terms,
+        mesh_terms=args.mesh_terms,
+        from_year=args.from_year,
+        to_year=args.to_year,
+        use_um_profile=args.use_um_profile,
     )
 
 
@@ -245,7 +270,12 @@ def _stage_options(args: argparse.Namespace) -> StageRunOptions:
         overwrite=args.overwrite,
         delete_pdf=args.delete_pdf,
         open_access_only=not args.all_access,
-        fields_of_study=args.fields_of_study,
+        topic_ids=args.topic_ids,
+        keyword_terms=args.keyword_terms,
+        mesh_terms=args.mesh_terms,
+        from_year=args.from_year,
+        to_year=args.to_year,
+        use_um_profile=args.use_um_profile,
         rows=_payload_rows(args) or None,
     )
 

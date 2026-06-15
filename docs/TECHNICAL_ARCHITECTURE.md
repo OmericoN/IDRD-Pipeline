@@ -10,7 +10,7 @@ GUI / CLI / API
   -> application services and orchestrator
   -> domain schemas and stage registry
   -> infrastructure adapters
-  -> PostgreSQL, Redis, GROBID, Semantic Scholar, storage/
+  -> PostgreSQL, Redis, GROBID, OpenAlex, storage/
 ```
 
 The FastAPI app starts at `datasight.interfaces.api.main:app`. The CLI starts at `datasight.interfaces.cli.main:main` and is exposed as `uv run datasight`.
@@ -56,7 +56,7 @@ discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions
 
 ## Data Flow
 
-1. `discover` queries Semantic Scholar and stores publication metadata.
+1. `discover` queries OpenAlex and stores publication metadata, topics, keywords, MeSH, concepts, affiliations, and related-work links.
 2. `download_pdf` downloads and validates open-access PDFs.
 3. `grobid_convert` submits PDFs to GROBID and stores TEI XML.
 4. `render_document` converts TEI XML into Markdown for extraction.
@@ -101,6 +101,9 @@ Local configuration comes from `.env` at the repository root. Important defaults
 
 ```env
 POSTGRES_DB=datasight_pipeline
+OPENALEX_API_URL=https://api.openalex.org
+OPENALEX_API_KEY=
+OPENALEX_MAILTO=
 REDIS_URL=redis://localhost:6379/0
 GROBID_BASE_URL=http://localhost:8070
 LLM_BASE_URL=https://api.groq.com/openai/v1

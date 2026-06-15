@@ -45,10 +45,11 @@ http://localhost:8000/api/v1
 ```powershell
 curl -X POST http://localhost:8000/api/v1/runs `
   -H "Content-Type: application/json" `
-  -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"open_access_only\":true,\"overwrite\":false,\"um_datasets_path\":\"data/um_datasets.csv\",\"output_path\":\"storage/exports/insights.csv\"}"
+  -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"open_access_only\":true,\"use_um_profile\":true,\"keyword_terms\":[\"biobank\"],\"topic_ids\":[\"T12345\"],\"from_year\":2020,\"to_year\":2026,\"overwrite\":false,\"um_datasets_path\":\"data/um_datasets.csv\",\"output_path\":\"storage/exports/insights.csv\"}"
 ```
 
 Set `"strategy\":\"high_throughput\"` to stream individual publications through downstream stages in parallel. If omitted, runs use the standard sequential strategy.
+Discovery uses OpenAlex. Optional filters include `topic_ids`, `keyword_terms`, `mesh_terms`, `from_year`, `to_year`, and `use_um_profile`. `use_um_profile=true` expands the search from imported UM/PURE OpenAlex metadata.
 
 Response:
 
@@ -90,7 +91,9 @@ export_insights
 
 ## Import UM Dataset Metadata
 
-Matching requires UM dataset records before `match_um_dataset` runs. CSV files should include at least:
+Matching requires UM dataset records before `match_um_dataset` runs. The importer supports either the original compact CSV/JSON shape or a directory containing PURE OpenAlex exports such as `OPEN_ALEX_DATA.csv`, `OPEN_ALEX_DATA_TOPICS.csv`, `OPEN_ALEX_DATA_KEYWORDS.csv`, `OPEN_ALEX_DATA_MESHS.csv`, `OPEN_ALEX_DATA_CONCEPTS.csv`, `OPEN_ALEX_AFFILIATIONS.csv`, and `OPEN_ALEX_DATA_RELATED_WORKS.csv`.
+
+Compact CSV files should include at least:
 
 ```text
 um_dataset_id,title
@@ -102,6 +105,14 @@ Optional list-like fields such as `aliases`, `creators`, and `keywords` use semi
 curl -X POST http://localhost:8000/api/v1/um-datasets/import `
   -H "Content-Type: application/json" `
   -d "{\"path\":\"data/um_datasets.csv\"}"
+```
+
+PURE export directory example:
+
+```powershell
+curl -X POST http://localhost:8000/api/v1/um-datasets/import `
+  -H "Content-Type: application/json" `
+  -d "{\"path\":\"data/pure_openalex_exports\"}"
 ```
 
 ## Reset

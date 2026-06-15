@@ -44,7 +44,12 @@ def bootstrap_high_throughput_run(
     um_datasets_path: str | None = None,
     overwrite: bool = False,
     open_access_only: bool = True,
-    fields_of_study: str | None = None,
+    topic_ids: str | list[str] | None = None,
+    keyword_terms: str | list[str] | None = None,
+    mesh_terms: str | list[str] | None = None,
+    from_year: int | None = None,
+    to_year: int | None = None,
+    use_um_profile: bool = False,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     if pipeline_run_id is None:
@@ -56,7 +61,12 @@ def bootstrap_high_throughput_run(
         query=query,
         limit=limit,
         open_access_only=open_access_only,
-        fields_of_study=fields_of_study,
+        topic_ids=topic_ids,
+        keyword_terms=keyword_terms,
+        mesh_terms=mesh_terms,
+        from_year=from_year,
+        to_year=to_year,
+        use_um_profile=use_um_profile,
         pipeline_run_id=pipeline_run_id,
     )
     payload = result.get("payload", {})

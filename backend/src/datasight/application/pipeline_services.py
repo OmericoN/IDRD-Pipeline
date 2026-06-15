@@ -8,11 +8,22 @@ from pathlib import Path
 from typing import Any, Literal
 
 from datasight.config import MARKDOWN_DIR, PDF_DIR, PROJECT_ROOT, XML_DIR
+from datasight.domain.discovery import (
+    DiscoveryOptions,
+    build_discovery_profile,
+    build_openalex_discovery_queries,
+    dedupe_and_score_publications,
+    parse_terms,
+)
 from datasight.infrastructure.ingestion.converter import GrobidConverter
 from datasight.infrastructure.ingestion.downloader import PDFDownloader
+from datasight.infrastructure.ingestion.openalex_exports import (
+    load_um_openalex_exports,
+    looks_like_openalex_export,
+)
 from datasight.infrastructure.ingestion.renderer import render_papers, render_to_markdown
 from datasight.infrastructure.persistence.repository import PipelineRepository
-from datasight.infrastructure.pubfetcher.semantic_scholar import SemanticScholarClient
+from datasight.infrastructure.pubfetcher.openalex import OpenAlexClient
 from datasight.matching.um_matcher import match_mention_to_um_dataset
 from datasight.domain.candidate_detection import detect_dataset_candidates
 from datasight.domain.schemas import DatasetMention, ExtractionProvenance, MentionEvidence, StageResult, UMDatasetRecord
@@ -23,18 +34,52 @@ def discover_publications(
     query: str,
     limit: int = 100,
     open_access_only: bool = True,
-    fields_of_study: str | None = None,
+    topic_ids: str | list[str] | None = None,
+    keyword_terms: str | list[str] | None = None,
+    mesh_terms: str | list[str] | None = None,
+    from_year: int | None = None,
+    to_year: int | None = None,
+    use_um_profile: bool = False,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
-    client = SemanticScholarClient()
-    papers = client.search_papers(
-        query=query,
-        limit=limit,
-        open_access_pdf=open_access_only,
-        fields_of_study=fields_of_study,
+    options = DiscoveryOptions(
+        topic_ids=parse_terms(topic_ids),
+        keyword_terms=parse_terms(keyword_terms),
+        mesh_terms=parse_terms(mesh_terms),
+        from_year=from_year,
+        to_year=to_year,
+        use_um_profile=use_um_profile,
     )
+    client = OpenAlexClient()
     with PipelineRepository() as repo:
-        inserted = repo.upsert_publications(papers, source="semantic_scholar")
+        profile = build_discovery_profile(repo.list_um_dataset_records()) if use_um_profile else None
+        discovery_queries = build_openalex_discovery_queries(
+            query=query,
+            options=options,
+            profile=profile,
+            open_access_only=open_access_only,
+        )
+        fetched: list[dict[str, Any]] = []
+        per_query_limit = min(100, max(10, limit))
+        query_payloads = []
+        for discovery_query in discovery_queries:
+            papers = client.search_works(
+                query=discovery_query.query,
+                limit=per_query_limit,
+                filters=discovery_query.filters,
+                sort=discovery_query.sort,
+            )
+            fetched.extend(papers)
+            query_payloads.append(
+                {
+                    "reason": discovery_query.reason,
+                    "query": discovery_query.query,
+                    "filters": discovery_query.filters,
+                    "fetched": len(papers),
+                }
+            )
+        papers = dedupe_and_score_publications(fetched, query, options, profile)[:limit]
+        inserted = repo.upsert_publications(papers, source="openalex")
         result = _stage_result(
             PipelineStage.DISCOVER,
             "successful" if papers else "skipped",
@@ -42,8 +87,15 @@ def discover_publications(
             f"Discovered {len(papers)} publications.",
             {
                 "query": query,
+                "provider": "openalex",
                 "fetched": len(papers),
-                "paper_ids": [paper.get("paperId") or paper.get("id") for paper in papers if paper.get("paperId") or paper.get("id")],
+                "openalex_queries": query_payloads,
+                "use_um_profile": use_um_profile,
+                "paper_ids": [
+                    paper.get("paperId") or paper.get("id")
+                    for paper in papers
+                    if paper.get("paperId") or paper.get("id")
+                ],
             },
         )
         repo.record_stage_result(PipelineStage.DISCOVER, result["status"], result, pipeline_run_id)
@@ -456,6 +508,9 @@ def export_insights_csv(
 
 def load_um_dataset_records(path: str) -> list[UMDatasetRecord]:
     source = _project_path(path)
+    if looks_like_openalex_export(source):
+        return load_um_openalex_exports(source)
+
     if source.suffix.lower() == ".csv":
         with source.open(newline="", encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))

@@ -153,6 +153,12 @@ type RunFormState = {
   limit: number;
   umDatasetsPath: string;
   outputPath: string;
+  topicIds: string;
+  keywordTerms: string;
+  meshTerms: string;
+  fromYear: string;
+  toYear: string;
+  useUmProfile: boolean;
   openAccessOnly: boolean;
   overwrite: boolean;
   highThroughput: boolean;
@@ -488,6 +494,12 @@ function LaunchPage() {
     limit: 25,
     umDatasetsPath: DEFAULT_UM_DATASETS,
     outputPath: DEFAULT_OUTPUT,
+    topicIds: "",
+    keywordTerms: "",
+    meshTerms: "",
+    fromYear: "",
+    toYear: "",
+    useUmProfile: true,
     openAccessOnly: true,
     overwrite: false,
     highThroughput: false,
@@ -514,6 +526,12 @@ function LaunchPage() {
     createRunMutation.mutate({
       query: form.query.trim(),
       limit: form.limit,
+      topic_ids: splitTerms(form.topicIds),
+      keyword_terms: splitTerms(form.keywordTerms),
+      mesh_terms: splitTerms(form.meshTerms),
+      from_year: parseOptionalYear(form.fromYear),
+      to_year: parseOptionalYear(form.toYear),
+      use_um_profile: form.useUmProfile,
       open_access_only: form.openAccessOnly,
       overwrite: form.overwrite,
       um_datasets_path: form.umDatasetsPath.trim() || null,
@@ -600,10 +618,108 @@ function LaunchPage() {
                     }
                   />
                 </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="topicIds">OpenAlex topics</FieldLabel>
+                    <Input
+                      id="topicIds"
+                      value={form.topicIds}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          topicIds: event.target.value,
+                        }))
+                      }
+                      placeholder="T12345, T67890"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="keywordTerms">Keywords</FieldLabel>
+                    <Input
+                      id="keywordTerms"
+                      value={form.keywordTerms}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          keywordTerms: event.target.value,
+                        }))
+                      }
+                      placeholder="biobank, cohort"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="meshTerms">MeSH terms</FieldLabel>
+                    <Input
+                      id="meshTerms"
+                      value={form.meshTerms}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          meshTerms: event.target.value,
+                        }))
+                      }
+                      placeholder="Humans, Surveys"
+                    />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="fromYear">From</FieldLabel>
+                      <Input
+                        id="fromYear"
+                        type="number"
+                        min={1800}
+                        max={3000}
+                        value={form.fromYear}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            fromYear: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="toYear">To</FieldLabel>
+                      <Input
+                        id="toYear"
+                        type="number"
+                        min={1800}
+                        max={3000}
+                        value={form.toYear}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            toYear: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                  </div>
+                </div>
               </FieldGroup>
             </FieldSet>
 
             <FieldGroup className="grid gap-4 sm:grid-cols-2">
+              <Field orientation="horizontal" className="rounded-lg border p-3">
+                <Switch
+                  id="useUmProfile"
+                  checked={form.useUmProfile}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      useUmProfile: checked,
+                    }))
+                  }
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="useUmProfile">
+                    UM profile discovery
+                  </FieldLabel>
+                  <FieldDescription>
+                    Expand discovery from imported OpenAlex metadata.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
               <Field orientation="horizontal" className="rounded-lg border p-3">
                 <Switch
                   id="openAccessOnly"
@@ -641,7 +757,7 @@ function LaunchPage() {
                   </FieldDescription>
                 </FieldContent>
               </Field>
-              <Field orientation="horizontal" className="rounded-lg border p-3 sm:col-span-2">
+              <Field orientation="horizontal" className="rounded-lg border p-3">
                 <Switch
                   id="highThroughput"
                   checked={form.highThroughput}
@@ -2000,6 +2116,22 @@ function formatCell(value: unknown) {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+function splitTerms(value: string) {
+  const terms = value
+    .split(/[;,|]/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+  return terms.length ? terms : null;
+}
+
+function parseOptionalYear(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function titleCase(value: string) {

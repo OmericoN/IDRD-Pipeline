@@ -41,6 +41,12 @@ def test_create_run_enqueues_pipeline(monkeypatch):
     def fake_enqueue_run_all(**kwargs):
         assert kwargs["query"] == "Maastricht dataset reuse"
         assert kwargs["limit"] == 5
+        assert kwargs["topic_ids"] == ["T123"]
+        assert kwargs["keyword_terms"] == ["biobank"]
+        assert kwargs["mesh_terms"] == ["Humans"]
+        assert kwargs["from_year"] == 2020
+        assert kwargs["to_year"] == 2024
+        assert kwargs["use_um_profile"] is True
         assert kwargs["strategy"] == "standard"
         return {"pipeline_run_id": 7, "task_id": "task-1", "status": "queued"}
 
@@ -48,7 +54,16 @@ def test_create_run_enqueues_pipeline(monkeypatch):
 
     response = client.post(
         "/api/v1/runs",
-        json={"query": "Maastricht dataset reuse", "limit": 5},
+        json={
+            "query": "Maastricht dataset reuse",
+            "limit": 5,
+            "topic_ids": ["T123"],
+            "keyword_terms": ["biobank"],
+            "mesh_terms": ["Humans"],
+            "from_year": 2020,
+            "to_year": 2024,
+            "use_um_profile": True,
+        },
     )
 
     assert response.status_code == 202

@@ -52,7 +52,12 @@ export type PipelineRunEvent = {
 export type RunCreateRequest = {
   query: string;
   limit: number;
-  fields_of_study?: string | null;
+  topic_ids?: string[] | null;
+  keyword_terms?: string[] | null;
+  mesh_terms?: string[] | null;
+  from_year?: number | null;
+  to_year?: number | null;
+  use_um_profile?: boolean;
   open_access_only: boolean;
   overwrite: boolean;
   um_datasets_path?: string | null;
