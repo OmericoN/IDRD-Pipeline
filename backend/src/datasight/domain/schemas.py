@@ -31,16 +31,6 @@ class MatchStatus(StrEnum):
     REVIEW_REQUIRED = "review_required"
 
 
-class PublicationRecord(BaseModel):
-    paper_id: str
-    title: str | None = None
-    doi: str | None = None
-    year: int | None = None
-    source: str
-    open_access_url: str | None = None
-    raw: dict[str, Any] = Field(default_factory=dict)
-
-
 class MentionEvidence(BaseModel):
     abstract_quote: str | None = None
     body_quote: str

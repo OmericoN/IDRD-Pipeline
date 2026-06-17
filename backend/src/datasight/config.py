@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 
@@ -36,8 +37,9 @@ POSTGRES_DSN = (
 )
 
 POSTGRES_URI = (
-    f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
-    f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    "postgresql+psycopg2://"
+    f"{quote(POSTGRES_USER, safe='')}:{quote(POSTGRES_PASSWORD, safe='')}"
+    f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{quote(POSTGRES_DB, safe='')}"
 )
 
 # ── Queue Runtime (free/open-source: Celery + Redis) ──────────────────────────
@@ -56,15 +58,7 @@ HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH = int(
     os.getenv("HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH", "8")
 )
 
-# ── Embeddings / pgvector ─────────────────────────────────────────────────────
-VECTOR_DIMENSIONS = int(os.getenv("VECTOR_DIMENSIONS", "1536"))
-
-# ── LLM (future extraction provider) ──────────────────────────────────────────
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-
 # ── Paths ──────────────────────────────────────────────────────────────────────
-DATA_DIR = PROJECT_ROOT / "data"
 STORAGE_DIR = PROJECT_ROOT / "storage"
 
 # Source/reference inputs live in data/. Generated runtime files live in storage/.
@@ -73,7 +67,6 @@ XML_DIR = STORAGE_DIR / "xml"
 MARKDOWN_DIR = STORAGE_DIR / "markdown"
 EXPORTS_DIR = STORAGE_DIR / "exports"
 LOGS_DIR = STORAGE_DIR / "logs"
-RUNS_DIR = LOGS_DIR / "runs"
 
 # ── Pipeline Settings ──────────────────────────────────────────────────────────
 
@@ -81,19 +74,14 @@ RUNS_DIR = LOGS_DIR / "runs"
 DOWNLOAD_TIMEOUT_SEC = 60  # HTTP request timeout for downloading PDFs
 DOWNLOAD_CHUNK_SIZE_BYTES = 8192  # Chunk size for streaming downloads
 DOWNLOAD_DELAY_SEC = 0.5  # Delay between downloads to avoid rate limiting
-DOWNLOAD_MAX_RETRIES = 3  # Maximum retry attempts for failed downloads
 
 # GROBID Converter
 GROBID_BASE_URL = os.getenv("GROBID_BASE_URL", "http://localhost:8070")
 GROBID_STARTUP_TIMEOUT_SEC = 30  # Wait time for GROBID server to start
 GROBID_ALIVE_CHECK_TIMEOUT_SEC = 2  # Timeout for /api/isalive endpoint
 GROBID_CONVERSION_TIMEOUT_SEC = 300  # Timeout for PDF→XML conversion
-GROBID_STARTUP_RETRY_TIMEOUT_SEC = 5  # Timeout when checking if GROBID started
 CONVERSION_DELAY_SEC = 0.1  # Delay between conversions
 
-# Renderer
-RENDER_TIMEOUT_SEC = 30  # Timeout for markdown rendering operations
-
 # Create generated runtime directories on import
-for _dir in (PDF_DIR, XML_DIR, MARKDOWN_DIR, EXPORTS_DIR, RUNS_DIR):
+for _dir in (PDF_DIR, XML_DIR, MARKDOWN_DIR, EXPORTS_DIR, LOGS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

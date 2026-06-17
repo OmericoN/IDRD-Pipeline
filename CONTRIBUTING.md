@@ -68,7 +68,9 @@ docker compose config
 - `datasight.domain` owns shared schemas, stage names, and result objects.
 - `datasight.infrastructure` owns SQL, queues, health probes, external HTTP clients, generated files, and GROBID adapters.
 - `datasight.matching` owns dataset matching and normalization.
-- `frontend/src/features` owns feature workflows; `frontend/src/shared` owns reusable API and UI utilities.
+- `frontend/src/features` owns feature workflows.
+- `frontend/src/components/ui` owns reusable UI primitives.
+- `frontend/src/shared/api` owns API client contracts and request helpers.
 
 Prefer importing through the active `datasight` package. Do not add compatibility imports for old package names.
 

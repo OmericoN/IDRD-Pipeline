@@ -113,35 +113,6 @@ class OpenAlexClient:
             )
         return works
 
-    def list_topics(
-        self,
-        query: str | None = None,
-        limit: int = 25,
-        filters: Mapping[str, str | int | bool | Sequence[str | int]] | None = None,
-        select: Sequence[str] | None = None,
-    ) -> list[dict[str, Any]]:
-        return self.list_entities("topics", query=query, limit=limit, filters=filters, select=select)
-
-    def list_keywords(
-        self,
-        query: str | None = None,
-        limit: int = 25,
-        filters: Mapping[str, str | int | bool | Sequence[str | int]] | None = None,
-        select: Sequence[str] | None = None,
-    ) -> list[dict[str, Any]]:
-        return self.list_entities("keywords", query=query, limit=limit, filters=filters, select=select)
-
-    def autocomplete(self, entity: str, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        data = self._request_json(
-            "GET",
-            f"/autocomplete/{entity}",
-            {
-                "q": query,
-                "per_page": min(max(limit, 1), self._MAX_PER_PAGE),
-            },
-        )
-        return list(data.get("results") or [])
-
     def get_entity(
         self,
         entity: str,

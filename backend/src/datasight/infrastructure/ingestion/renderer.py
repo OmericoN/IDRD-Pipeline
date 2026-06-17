@@ -410,25 +410,8 @@ def extract_markdown(xml_path: str | Path) -> str:
     return md
 
 
-def extract_markdown_to_file(xml_path: str | Path, output_path: str | Path | None = None) -> Path:
-    xml_path = Path(xml_path)
-
-    if output_path is None:
-        markdown_dir = MARKDOWN_DIR
-        markdown_dir.mkdir(parents=True, exist_ok=True)
-        output_path = markdown_dir / xml_path.with_suffix("").with_suffix("").with_suffix(".md").name
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    md = extract_markdown(xml_path)
-    output_path.write_text(md, encoding="utf-8")
-    logger.info("Extracted markdown -> %s", output_path)
-    return output_path
-
-
 # ──────────────────────────────────────────────────────────────────────────────
-# NEW API: Results-based rendering (database-agnostic)
+# Results-based rendering (database-agnostic)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_to_markdown(

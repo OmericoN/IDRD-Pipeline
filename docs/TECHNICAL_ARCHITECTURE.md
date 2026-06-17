@@ -106,9 +106,9 @@ OPENALEX_API_KEY=
 OPENALEX_MAILTO=
 REDIS_URL=redis://localhost:6379/0
 GROBID_BASE_URL=http://localhost:8070
-LLM_BASE_URL=https://api.groq.com/openai/v1
-VECTOR_DIMENSIONS=1536
 ```
+
+Semantic Scholar configuration and client code are intentionally retained as an inactive publication-fetching adapter. The current discovery flow uses OpenAlex.
 
 Compose uses service names for internal networking and exposes Postgres on `localhost:5433`, Redis on `localhost:6379`, GROBID on `localhost:8070`, and the API on `localhost:8000`.
 

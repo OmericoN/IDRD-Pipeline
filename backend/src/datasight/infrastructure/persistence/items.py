@@ -279,20 +279,6 @@ class PipelineItemRepositoryMixin:
         )
         return {str(row["stage"]): int(row["count"]) for row in self.cursor.fetchall()}
 
-    def get_running_item_stage_count(self, pipeline_run_id: int) -> int:
-        self.cursor.execute(
-            """
-            SELECT COUNT(*) AS count
-            FROM pipeline_item_stages pis
-            JOIN pipeline_items pi ON pi.id = pis.pipeline_item_id
-            WHERE pi.pipeline_run_id = %s
-              AND pis.status IN ('running', 'started')
-            """,
-            (pipeline_run_id,),
-        )
-        row = self.cursor.fetchone() or {}
-        return int(row.get("count") or 0)
-
     def high_throughput_outcome(self, pipeline_run_id: int) -> str:
         self.cursor.execute(
             """

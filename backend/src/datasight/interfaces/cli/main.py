@@ -43,14 +43,6 @@ class DataSightPipeline:
             return "failed"
         return "skipped" if message.lower().startswith("already exists:") else "successful"
 
-    @staticmethod
-    def _summarize_status_counts(statuses: list[str]) -> dict[str, int]:
-        return {
-            "successful": sum(1 for status in statuses if status == "successful"),
-            "failed": sum(1 for status in statuses if status == "failed"),
-            "skipped": sum(1 for status in statuses if status == "skipped"),
-        }
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
