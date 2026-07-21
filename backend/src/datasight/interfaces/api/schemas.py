@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from datasight.application.reset import RESET_CONFIRMATION
+from datasight.config import DEFAULT_UM_DATASETS_PATH
 from datasight.domain.run_strategy import RunStrategy
 
 
@@ -36,10 +37,10 @@ class RunCreateRequest(BaseModel):
     mesh_terms: list[str] | None = None
     from_year: int | None = Field(default=None, ge=1800, le=3000)
     to_year: int | None = Field(default=None, ge=1800, le=3000)
-    use_um_profile: bool = False
+    use_um_profile: bool = True
     open_access_only: bool = True
     overwrite: bool = False
-    um_datasets_path: str | None = None
+    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH
     output_path: str = "storage/exports/insights.csv"
     strategy: RunStrategy = RunStrategy.STANDARD
 
@@ -52,7 +53,7 @@ class StageRunCreateRequest(BaseModel):
     mesh_terms: list[str] | None = None
     from_year: int | None = Field(default=None, ge=1800, le=3000)
     to_year: int | None = Field(default=None, ge=1800, le=3000)
-    use_um_profile: bool = False
+    use_um_profile: bool = True
     open_access_only: bool = True
     overwrite: bool = False
     delete_pdf: bool = False
@@ -122,7 +123,10 @@ class ImportUMDatasetsRequest(BaseModel):
 class ImportUMDatasetsResponse(BaseModel):
     status: str
     count: int
+    deleted: int = 0
     path: str
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResetRequest(BaseModel):

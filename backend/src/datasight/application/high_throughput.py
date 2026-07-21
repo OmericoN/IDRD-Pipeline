@@ -8,6 +8,7 @@ from typing import Any
 
 from datasight.application import pipeline_services as services
 from datasight.config import (
+    DEFAULT_UM_DATASETS_PATH,
     HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH,
     HIGH_THROUGHPUT_STAGE_BATCH_SIZE,
 )
@@ -41,7 +42,7 @@ class DispatchPlan:
 def bootstrap_high_throughput_run(
     query: str,
     limit: int,
-    um_datasets_path: str | None = None,
+    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
@@ -49,7 +50,7 @@ def bootstrap_high_throughput_run(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     if pipeline_run_id is None:

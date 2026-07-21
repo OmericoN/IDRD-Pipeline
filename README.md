@@ -75,9 +75,12 @@ The backend exposes a `datasight` command for operators and development:
 cd backend
 uv run datasight stages
 uv run datasight doctor
-uv run datasight import-um-datasets --path data/um_datasets.csv
-uv run datasight run-all --query "Maastricht dataset reuse" --limit 25 --um-datasets data/um_datasets.csv --output storage/exports/insights.csv --use-um-profile --mode enqueue
+uv run datasight import-um-datasets --path data/um_dataset
+uv run datasight run-all --query "Maastricht dataset reuse" --limit 25 --output storage/exports/insights.csv --mode enqueue
 ```
+
+Full runs use `data/um_dataset` and UM-profile discovery by default. Use
+`--no-use-um-profile` to run only the explicit search query and filters.
 
 
 ## Documentation

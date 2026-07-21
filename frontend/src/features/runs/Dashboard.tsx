@@ -145,7 +145,7 @@ import {
 } from "./pipeline";
 
 const DEFAULT_OUTPUT = "storage/exports/insights.csv";
-const DEFAULT_UM_DATASETS = "data/um_datasets.csv";
+const DEFAULT_UM_DATASETS = "data/um_dataset";
 const RESET_CONFIRMATION = "RESET DATASIGHT";
 
 type RunFormState = {
@@ -335,7 +335,7 @@ function PipelineShell() {
               <div className="min-w-0">
                 <p className="font-heading text-sm font-medium">DataSight</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  Dataset mention workflow
+                  Dataset reuse discovery
                 </p>
               </div>
             </div>
@@ -423,6 +423,10 @@ function PipelineShell() {
 
       <SidebarInset>
         <header className="sticky top-0 z-20 flex min-h-14 items-center gap-3 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-5">
+          <SidebarTrigger
+            aria-label="Open navigation menu"
+            className="shrink-0 md:hidden"
+          />
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-base font-medium">
               {title}
@@ -1154,19 +1158,29 @@ function InsightsPage() {
           <ScrollArea className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
             <div className="grid min-w-0 gap-3 pb-4">
               {selectedInsight
-                ? Object.entries(selectedInsight).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="min-w-0 rounded-lg border bg-background p-3"
-                    >
-                      <p className="mb-1 text-xs font-medium uppercase tracking-normal text-muted-foreground">
-                        {titleCase(formatStageName(key))}
-                      </p>
-                      <p className="max-h-72 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-                        {formatCell(value)}
-                      </p>
-                    </div>
-                  ))
+                ? Object.entries(selectedInsight).map(([key, value]) => {
+                    const formattedJson = formatJsonValue(value);
+
+                    return (
+                      <div
+                        key={key}
+                        className="min-w-0 rounded-lg border bg-background p-3"
+                      >
+                        <p className="mb-1 text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                          {titleCase(formatStageName(key))}
+                        </p>
+                        {formattedJson ? (
+                          <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground [overflow-wrap:anywhere] [tab-size:2]">
+                            {formattedJson}
+                          </pre>
+                        ) : (
+                          <p className="max-h-72 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
+                            {formatCell(value)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
                 : null}
             </div>
           </ScrollArea>
@@ -1791,7 +1805,7 @@ function EventLog({
   }
 
   return (
-    <ScrollArea className="h-[52svh] min-h-[340px] max-h-[520px] min-w-0">
+    <div className="h-[52svh] min-h-[340px] max-h-[520px] min-w-0 overflow-x-hidden overflow-y-auto">
       <div className="box-border flex min-w-0 max-w-full flex-col gap-2 pr-5">
         {events.map((event) => (
           <article
@@ -1833,7 +1847,7 @@ function EventLog({
           </article>
         ))}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -2116,6 +2130,34 @@ function formatCell(value: unknown) {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+function formatJsonValue(value: unknown) {
+  if (typeof value === "object" && value !== null) {
+    return JSON.stringify(value, null, 2);
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (
+    !(
+      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith("[") && trimmed.endsWith("]"))
+    )
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return typeof parsed === "object" && parsed !== null
+      ? JSON.stringify(parsed, null, 2)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function splitTerms(value: string) {

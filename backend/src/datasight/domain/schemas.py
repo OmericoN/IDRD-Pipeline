@@ -107,6 +107,7 @@ class UMMatchDecision(BaseModel):
     dataset_name: str
     status: MatchStatus
     um_dataset_id: str | None = None
+    candidate_um_dataset_ids: list[str] = Field(default_factory=list)
     match_method: str
     match_score: float = Field(ge=0.0, le=1.0)
     matched_fields: list[str] = Field(default_factory=list)

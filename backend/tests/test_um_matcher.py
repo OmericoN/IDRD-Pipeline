@@ -47,3 +47,27 @@ def test_match_possible_title_creator_year():
     assert decision.status == MatchStatus.POSSIBLE
     assert decision.review_required is True
     assert "title_or_alias" in decision.matched_fields
+
+
+def test_ambiguous_metadata_match_returns_all_candidate_ids_without_selection():
+    mention = DatasetMention(
+        publication_id="p3",
+        dataset_name="Versioned Dataset",
+        evidence=MentionEvidence(body_quote="We used the Versioned Dataset."),
+        metadata=DatasetMetadata(dataset_authors=["Jane Doe"], dataset_year=2024),
+    )
+    records = [
+        UMDatasetRecord(
+            um_dataset_id="W1", title="Versioned Dataset", creators=["Jane Doe"], year=2024
+        ),
+        UMDatasetRecord(
+            um_dataset_id="W2", title="Versioned Dataset", creators=["Jane Doe"], year=2024
+        ),
+    ]
+
+    decision = match_mention_to_um_dataset(mention, records)
+
+    assert decision.status == MatchStatus.REVIEW_REQUIRED
+    assert decision.um_dataset_id is None
+    assert decision.candidate_um_dataset_ids == ["W1", "W2"]
+    assert decision.match_method == "ambiguous_metadata_similarity"

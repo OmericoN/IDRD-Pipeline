@@ -7,6 +7,7 @@ from typing import Any
 from celery import chain
 
 from datasight.application import pipeline_services as services
+from datasight.config import DEFAULT_UM_DATASETS_PATH
 from datasight.domain.run_strategy import RunStrategy
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.worker.celery_app import celery_app
@@ -21,7 +22,7 @@ def run_all_local(
     query: str,
     limit: int,
     output: str,
-    um_datasets_path: str | None = None,
+    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
@@ -29,7 +30,7 @@ def run_all_local(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
 ) -> dict[str, Any]:
     config = {
         "limit": limit,
@@ -106,7 +107,7 @@ def enqueue_run_all(
     query: str,
     limit: int,
     output: str,
-    um_datasets_path: str | None = None,
+    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
@@ -114,7 +115,7 @@ def enqueue_run_all(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
     strategy: RunStrategy | str = RunStrategy.STANDARD,
 ) -> dict[str, Any]:
     strategy_value = RunStrategy(strategy)
@@ -187,7 +188,7 @@ def enqueue_high_throughput_run(
     query: str,
     limit: int,
     output: str,
-    um_datasets_path: str | None = None,
+    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
@@ -195,7 +196,7 @@ def enqueue_high_throughput_run(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
 ) -> dict[str, Any]:
     config = {
         "limit": limit,

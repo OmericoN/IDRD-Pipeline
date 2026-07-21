@@ -9,7 +9,7 @@ from typing import Any
 
 import redis
 
-from datasight.config import CELERY_BROKER_URL
+from datasight.config import CELERY_BROKER_URL, DEFAULT_UM_DATASETS_PATH
 from datasight.application.stage_registry import (
     MissingStageArgument,
     PipelineStage,
@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_all = subcommands.add_parser("run-all", help="Run or enqueue the full pipeline")
     run_all.add_argument("--query", required=True)
     run_all.add_argument("--limit", type=int, default=100)
-    run_all.add_argument("--um-datasets", required=True)
+    run_all.add_argument("--um-datasets", default=DEFAULT_UM_DATASETS_PATH)
     run_all.add_argument("--output", required=True)
     run_all.add_argument("--mode", choices=["guided", "local", "enqueue"], default="guided")
     run_all.add_argument("--topic-id", action="append", dest="topic_ids")
@@ -71,7 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_all.add_argument("--mesh-term", action="append", dest="mesh_terms")
     run_all.add_argument("--from-year", type=int)
     run_all.add_argument("--to-year", type=int)
-    run_all.add_argument("--use-um-profile", action="store_true")
+    run_all.add_argument(
+        "--use-um-profile",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     run_all.add_argument("--all-access", action="store_true")
     run_all.add_argument("--overwrite", action="store_true")
 
@@ -126,7 +130,11 @@ def _add_stage_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--mesh-term", action="append", dest="mesh_terms")
     parser.add_argument("--from-year", type=int)
     parser.add_argument("--to-year", type=int)
-    parser.add_argument("--use-um-profile", action="store_true")
+    parser.add_argument(
+        "--use-um-profile",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--all-access", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--delete-pdf", action="store_true")

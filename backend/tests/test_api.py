@@ -47,6 +47,7 @@ def test_create_run_enqueues_pipeline(monkeypatch):
         assert kwargs["from_year"] == 2020
         assert kwargs["to_year"] == 2024
         assert kwargs["use_um_profile"] is True
+        assert kwargs["um_datasets_path"] == "data/um_dataset"
         assert kwargs["strategy"] == "standard"
         return {"pipeline_run_id": 7, "task_id": "task-1", "status": "queued"}
 
@@ -73,6 +74,8 @@ def test_create_run_enqueues_pipeline(monkeypatch):
 def test_create_run_accepts_high_throughput_strategy(monkeypatch):
     def fake_enqueue_run_all(**kwargs):
         assert kwargs["strategy"] == "high_throughput"
+        assert kwargs["use_um_profile"] is True
+        assert kwargs["um_datasets_path"] == "data/um_dataset"
         return {"pipeline_run_id": 8, "task_id": "task-2", "status": "queued"}
 
     monkeypatch.setattr("datasight.interfaces.api.routes.runs.orchestrator.enqueue_run_all", fake_enqueue_run_all)

@@ -14,44 +14,76 @@ class UMDatasetRepositoryMixin:
     conn: Any
     cursor: Any
 
+    _UM_DATASET_UPSERT = """
+        INSERT INTO um_datasets (
+            um_dataset_id, title, aliases, creators, doi, url, year,
+            repository, keywords, raw, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+        ON CONFLICT (um_dataset_id) DO UPDATE SET
+            title = EXCLUDED.title,
+            aliases = EXCLUDED.aliases,
+            creators = EXCLUDED.creators,
+            doi = EXCLUDED.doi,
+            url = EXCLUDED.url,
+            year = EXCLUDED.year,
+            repository = EXCLUDED.repository,
+            keywords = EXCLUDED.keywords,
+            raw = EXCLUDED.raw,
+            updated_at = now()
+        WHERE (
+            um_datasets.title, um_datasets.aliases, um_datasets.creators,
+            um_datasets.doi, um_datasets.url, um_datasets.year,
+            um_datasets.repository, um_datasets.keywords, um_datasets.raw
+        ) IS DISTINCT FROM (
+            EXCLUDED.title, EXCLUDED.aliases, EXCLUDED.creators,
+            EXCLUDED.doi, EXCLUDED.url, EXCLUDED.year,
+            EXCLUDED.repository, EXCLUDED.keywords, EXCLUDED.raw
+        )
+    """
+
     def upsert_um_datasets(self, records: Iterable[UMDatasetRecord]) -> int:
-        count = 0
-        for record in records:
-            self.cursor.execute(
-                """
-                INSERT INTO um_datasets (
-                    um_dataset_id, title, aliases, creators, doi, url, year,
-                    repository, keywords, raw, updated_at
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-                ON CONFLICT (um_dataset_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    aliases = EXCLUDED.aliases,
-                    creators = EXCLUDED.creators,
-                    doi = EXCLUDED.doi,
-                    url = EXCLUDED.url,
-                    year = EXCLUDED.year,
-                    repository = EXCLUDED.repository,
-                    keywords = EXCLUDED.keywords,
-                    raw = EXCLUDED.raw,
-                    updated_at = now()
-                """,
-                (
-                    record.um_dataset_id,
-                    record.title,
-                    record.aliases,
-                    record.creators,
-                    record.doi,
-                    record.url,
-                    record.year,
-                    record.repository,
-                    record.keywords,
-                    psycopg2.extras.Json(record.raw),
-                ),
-            )
-            count += 1
+        record_list = list(records)
+        for record in record_list:
+            self.cursor.execute(self._UM_DATASET_UPSERT, self._um_dataset_params(record))
         self.conn.commit()
-        return count
+        return len(record_list)
+
+    def sync_um_datasets(self, records: Iterable[UMDatasetRecord]) -> tuple[int, int]:
+        """Atomically upsert an authoritative catalog and remove stale records."""
+        record_list = list(records)
+        if not record_list:
+            raise ValueError("Refusing to synchronize an empty UM dataset catalog.")
+        try:
+            self.cursor.executemany(
+                self._UM_DATASET_UPSERT,
+                [self._um_dataset_params(record) for record in record_list],
+            )
+            self.cursor.execute(
+                "DELETE FROM um_datasets WHERE NOT (um_dataset_id = ANY(%s))",
+                ([record.um_dataset_id for record in record_list],),
+            )
+            deleted = max(int(getattr(self.cursor, "rowcount", 0)), 0)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        return len(record_list), deleted
+
+    @staticmethod
+    def _um_dataset_params(record: UMDatasetRecord) -> tuple[Any, ...]:
+        return (
+            record.um_dataset_id,
+            record.title,
+            record.aliases,
+            record.creators,
+            record.doi,
+            record.url,
+            record.year,
+            record.repository,
+            record.keywords,
+            psycopg2.extras.Json(record.raw),
+        )
 
     def list_um_dataset_records(self) -> list[UMDatasetRecord]:
         self.cursor.execute(
@@ -128,9 +160,10 @@ class UMDatasetRepositoryMixin:
                 """
                 INSERT INTO um_match_decisions (
                     dataset_mention_id, um_dataset_row_id, status, match_method,
-                    match_score, matched_fields, review_required, updated_at
+                    match_score, matched_fields, candidate_um_dataset_ids,
+                    review_required, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
                 """,
                 (
                     mention_id,
@@ -139,6 +172,7 @@ class UMDatasetRepositoryMixin:
                     decision.match_method,
                     decision.match_score,
                     decision.matched_fields,
+                    decision.candidate_um_dataset_ids,
                     decision.review_required,
                 ),
             )

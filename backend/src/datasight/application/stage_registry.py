@@ -37,7 +37,7 @@ class StageRunOptions:
     mesh_terms: str | list[str] | None = None
     from_year: int | None = None
     to_year: int | None = None
-    use_um_profile: bool = False
+    use_um_profile: bool = True
     rows: list[dict[str, Any]] | None = None
     pipeline_run_id: int | None = None
 

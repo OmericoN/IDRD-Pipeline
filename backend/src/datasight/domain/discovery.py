@@ -17,7 +17,7 @@ class DiscoveryOptions:
     mesh_terms: tuple[str, ...] = ()
     from_year: int | None = None
     to_year: int | None = None
-    use_um_profile: bool = False
+    use_um_profile: bool = True
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,7 @@ class DiscoveryQuery:
     filters: dict[str, str | int | bool | Sequence[str | int]] = field(default_factory=dict)
     sort: str = "relevance_score:desc"
     reason: str = "query"
+    seed_work_ids: tuple[str, ...] = ()
 
 
 def build_discovery_profile(records: Iterable[UMDatasetRecord], max_terms: int = 20) -> DiscoveryProfile:
@@ -102,6 +103,26 @@ def build_openalex_discovery_queries(
 ) -> list[DiscoveryQuery]:
     base_filters = _base_filters(options, open_access_only)
     queries = [DiscoveryQuery(query=query, filters=dict(base_filters), reason="user_query")]
+    if profile and profile.openalex_work_ids:
+        for work_id_batch in _chunks(profile.openalex_work_ids, 100):
+            queries.extend(
+                [
+                    DiscoveryQuery(
+                        query=None,
+                        filters={**base_filters, "cites": work_id_batch},
+                        sort="cited_by_count:desc",
+                        reason="um_dataset_citation",
+                        seed_work_ids=work_id_batch,
+                    ),
+                    DiscoveryQuery(
+                        query=None,
+                        filters={**base_filters, "datasets": work_id_batch},
+                        sort="cited_by_count:desc",
+                        reason="um_dataset_link",
+                        seed_work_ids=work_id_batch,
+                    ),
+                ]
+            )
     merged_topic_ids = _dedupe([*options.topic_ids, *((profile.topic_ids if profile else ()) or ())])
     if merged_topic_ids:
         queries.append(
@@ -180,6 +201,12 @@ def score_openalex_candidate(
     if candidate_terms & expected_terms:
         score += 0.22
 
+    relation = _um_relation(publication, raw_mapping, profile)
+    if relation == "dataset":
+        score += 0.50
+    elif relation == "citation":
+        score += 0.40
+
     year = publication.get("year") or raw_mapping.get("publication_year")
     if isinstance(year, int) and year >= 2020:
         score += 0.05
@@ -193,15 +220,45 @@ def dedupe_and_score_publications(
     profile: DiscoveryProfile | None = None,
 ) -> list[dict[str, Any]]:
     best_by_id: dict[str, dict[str, Any]] = {}
+    known_dataset_ids = set(profile.openalex_work_ids if profile else ())
     for publication in publications:
-        paper_id = str(publication.get("paperId") or publication.get("id") or "")
-        if not paper_id:
+        paper_id = _id_tail(publication.get("paperId") or publication.get("id"))
+        if not paper_id or paper_id in known_dataset_ids:
             continue
         scored = dict(publication)
+        raw = scored.get("raw") if isinstance(scored.get("raw"), Mapping) else scored
+        raw_mapping = raw if isinstance(raw, Mapping) else {}
+        matched_ids = sorted(
+            known_dataset_ids
+            & (
+                _work_ids(raw_mapping.get("referenced_works"))
+                | _work_ids(raw_mapping.get("datasets"))
+            )
+        )
+        scored["matched_um_dataset_ids"] = matched_ids
         scored["discovery_score"] = score_openalex_candidate(scored, query, options, profile)
         existing = best_by_id.get(paper_id)
+        if existing:
+            scored["discovery_reasons"] = sorted(
+                set(existing.get("discovery_reasons") or [])
+                | set(scored.get("discovery_reasons") or [])
+            )
+            scored["matched_um_dataset_ids"] = sorted(
+                set(existing.get("matched_um_dataset_ids") or []) | set(matched_ids)
+            )
         if not existing or scored["discovery_score"] > existing.get("discovery_score", 0):
             best_by_id[paper_id] = scored
+        elif existing:
+            existing["discovery_reasons"] = scored["discovery_reasons"]
+            existing["matched_um_dataset_ids"] = scored["matched_um_dataset_ids"]
+    for publication in best_by_id.values():
+        raw = dict(publication.get("raw") or {})
+        raw["datasight_discovery"] = {
+            "reasons": publication.pop("discovery_reasons", []),
+            "matched_um_dataset_ids": publication.pop("matched_um_dataset_ids", []),
+            "score": publication["discovery_score"],
+        }
+        publication["raw"] = raw
     return sorted(
         best_by_id.values(),
         key=lambda item: (
@@ -284,3 +341,40 @@ def _id_tail(value: Any) -> str:
 
 def _dedupe(items: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item.strip() for item in items if item and item.strip()))
+
+
+def _chunks(items: Sequence[str], size: int) -> Iterable[tuple[str, ...]]:
+    for index in range(0, len(items), size):
+        yield tuple(items[index : index + size])
+
+
+def _um_relation(
+    publication: Mapping[str, Any],
+    raw: Mapping[str, Any],
+    profile: DiscoveryProfile | None,
+) -> str | None:
+    reasons = set(publication.get("discovery_reasons") or [])
+    if "um_dataset_link" in reasons:
+        return "dataset"
+    if "um_dataset_citation" in reasons:
+        return "citation"
+    if not profile:
+        return None
+    known_ids = set(profile.openalex_work_ids)
+    if known_ids & _work_ids(raw.get("datasets")):
+        return "dataset"
+    if known_ids & _work_ids(raw.get("referenced_works")):
+        return "citation"
+    return None
+
+
+def _work_ids(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {_id_tail(value)}
+    ids: set[str] = set()
+    for item in value or []:
+        if isinstance(item, Mapping):
+            item = item.get("id") or item.get("openalex_id") or item.get("dataset_id")
+        if item and (work_id := _id_tail(item)):
+            ids.add(work_id)
+    return ids

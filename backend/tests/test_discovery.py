@@ -59,6 +59,34 @@ def test_build_openalex_discovery_queries_expands_topics_and_terms():
     assert any(query.reason == "term_profile" and "survey" in str(query.query) for query in queries)
 
 
+def test_build_openalex_discovery_queries_batches_full_catalog_relationships():
+    records = [
+        UMDatasetRecord(
+            um_dataset_id=f"W{index}",
+            title=f"Dataset {index}",
+            raw={"openalex": {"id": f"https://openalex.org/W{index}"}},
+        )
+        for index in range(2748)
+    ]
+    profile = build_discovery_profile(records)
+
+    queries = build_openalex_discovery_queries("reuse", DiscoveryOptions(), profile)
+    citation_queries = [query for query in queries if query.reason == "um_dataset_citation"]
+    dataset_queries = [query for query in queries if query.reason == "um_dataset_link"]
+
+    assert len(citation_queries) == 28
+    assert len(dataset_queries) == 28
+    assert all(
+        isinstance(query.filters["cites"], tuple) and len(query.filters["cites"]) <= 100
+        for query in citation_queries
+    )
+    assert all(
+        isinstance(query.filters["datasets"], tuple) and len(query.filters["datasets"]) <= 100
+        for query in dataset_queries
+    )
+    assert sum(len(query.seed_work_ids) for query in citation_queries) == 2748
+
+
 def test_dedupe_and_score_publications_prefers_profile_overlap():
     options = DiscoveryOptions(topic_ids=("T42",), keyword_terms=("cohort",))
     publications = [
@@ -87,3 +115,38 @@ def test_dedupe_and_score_publications_prefers_profile_overlap():
     assert scored[0]["title"] == "Maastricht cohort reuse"
     assert scored[0]["discovery_score"] > 0.7
 
+
+def test_direct_um_relationships_outrank_terms_and_catalog_seeds_are_excluded():
+    profile = build_discovery_profile(
+        [
+            UMDatasetRecord(
+                um_dataset_id="WSEED",
+                title="Known Dataset",
+                keywords=["cohort"],
+                raw={"openalex": {"id": "https://openalex.org/WSEED"}},
+            )
+        ]
+    )
+    publications = [
+        {"paperId": "WSEED", "title": "Known Dataset", "raw": {}},
+        {
+            "paperId": "WCITE",
+            "title": "A reuse paper",
+            "raw": {"referenced_works": ["https://openalex.org/WSEED"]},
+            "discovery_reasons": ["um_dataset_citation"],
+        },
+        {
+            "paperId": "WTERM",
+            "title": "A cohort analysis",
+            "raw": {"keywords": [{"display_name": "cohort"}]},
+            "discovery_reasons": ["term_profile"],
+        },
+    ]
+
+    scored = dedupe_and_score_publications(
+        publications, "cohort", DiscoveryOptions(keyword_terms=("cohort",)), profile
+    )
+
+    assert [publication["paperId"] for publication in scored] == ["WCITE", "WTERM"]
+    assert scored[0]["raw"]["datasight_discovery"]["matched_um_dataset_ids"] == ["WSEED"]
+    assert scored[0]["raw"]["datasight_discovery"]["reasons"] == ["um_dataset_citation"]

@@ -8,6 +8,7 @@ from celery.signals import task_failure
 
 from datasight.application import high_throughput
 from datasight.application import pipeline_services as services
+from datasight.config import DEFAULT_UM_DATASETS_PATH
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.worker.celery_app import celery_app
 
@@ -23,7 +24,7 @@ def discover_publications(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     return services.discover_publications(
@@ -119,7 +120,7 @@ def bootstrap_high_throughput_run(
     query: str,
     limit: int,
     output_path: str,
-    um_datasets_path: str | None = None,
+    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
@@ -127,7 +128,7 @@ def bootstrap_high_throughput_run(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     result = high_throughput.bootstrap_high_throughput_run(

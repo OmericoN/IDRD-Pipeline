@@ -45,11 +45,11 @@ http://localhost:8000/api/v1
 ```powershell
 curl -X POST http://localhost:8000/api/v1/runs `
   -H "Content-Type: application/json" `
-  -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"open_access_only\":true,\"use_um_profile\":true,\"keyword_terms\":[\"biobank\"],\"topic_ids\":[\"T12345\"],\"from_year\":2020,\"to_year\":2026,\"overwrite\":false,\"um_datasets_path\":\"data/um_datasets.csv\",\"output_path\":\"storage/exports/insights.csv\"}"
+  -d "{\"query\":\"Maastricht dataset reuse\",\"limit\":25,\"open_access_only\":true,\"keyword_terms\":[\"biobank\"],\"topic_ids\":[\"T12345\"],\"from_year\":2020,\"to_year\":2026,\"overwrite\":false,\"output_path\":\"storage/exports/insights.csv\"}"
 ```
 
 Set `"strategy\":\"high_throughput\"` to stream individual publications through downstream stages in parallel. If omitted, runs use the standard sequential strategy.
-Discovery uses OpenAlex. Optional filters include `topic_ids`, `keyword_terms`, `mesh_terms`, `from_year`, `to_year`, and `use_um_profile`. `use_um_profile=true` expands the search from imported UM/PURE OpenAlex metadata.
+Discovery uses OpenAlex. Full runs default to `data/um_dataset` with `use_um_profile=true`. The UM profile searches works that cite or link any known UM dataset in batches of 100, then uses topics, keywords, and related works as secondary signals. Set `use_um_profile=false` to opt out. Optional filters include `topic_ids`, `keyword_terms`, `mesh_terms`, `from_year`, and `to_year`.
 
 Response:
 
@@ -91,7 +91,7 @@ export_insights
 
 ## Import UM Dataset Metadata
 
-Matching requires UM dataset records before `match_um_dataset` runs. The importer supports either the original compact CSV/JSON shape or a directory containing PURE OpenAlex exports such as `OPEN_ALEX_DATA.csv`, `OPEN_ALEX_DATA_TOPICS.csv`, `OPEN_ALEX_DATA_KEYWORDS.csv`, `OPEN_ALEX_DATA_MESHS.csv`, `OPEN_ALEX_DATA_CONCEPTS.csv`, `OPEN_ALEX_AFFILIATIONS.csv`, and `OPEN_ALEX_DATA_RELATED_WORKS.csv`.
+Matching requires UM dataset records before `match_um_dataset` runs. The importer supports either the original compact CSV/JSON shape or the authoritative `data/um_dataset` directory. Directory exports may be comma- or tab-delimited and UTF-8 or Windows-1252. Both `OPEN_ALEX_AFFILIATION.csv` and the older plural filename are accepted. A validated directory import synchronizes the catalog; compact CSV/JSON imports remain additive.
 
 Compact CSV files should include at least:
 
@@ -104,7 +104,7 @@ Optional list-like fields such as `aliases`, `creators`, and `keywords` use semi
 ```powershell
 curl -X POST http://localhost:8000/api/v1/um-datasets/import `
   -H "Content-Type: application/json" `
-  -d "{\"path\":\"data/um_datasets.csv\"}"
+  -d "{\"path\":\"data/um_dataset\"}"
 ```
 
 PURE export directory example:
@@ -112,7 +112,7 @@ PURE export directory example:
 ```powershell
 curl -X POST http://localhost:8000/api/v1/um-datasets/import `
   -H "Content-Type: application/json" `
-  -d "{\"path\":\"data/pure_openalex_exports\"}"
+  -d "{\"path\":\"data/um_dataset\"}"
 ```
 
 ## Reset

@@ -32,6 +32,8 @@ OPENALEX_WORK_SELECT_FIELDS = [
     "keywords",
     "concepts",
     "mesh",
+    "referenced_works",
+    "datasets",
     "related_works",
     "abstract_inverted_index",
     "cited_by_count",

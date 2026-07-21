@@ -60,6 +60,7 @@ HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH = int(
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 STORAGE_DIR = PROJECT_ROOT / "storage"
+DEFAULT_UM_DATASETS_PATH = os.getenv("UM_DATASETS_PATH", "data/um_dataset")
 
 # Source/reference inputs live in data/. Generated runtime files live in storage/.
 PDF_DIR = STORAGE_DIR / "pdf"

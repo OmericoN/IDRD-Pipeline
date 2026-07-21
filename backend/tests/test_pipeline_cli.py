@@ -54,6 +54,26 @@ def test_cli_parses_import_um_datasets():
     assert args.path == "um.json"
 
 
+def test_cli_defaults_to_catalog_profile_and_supports_opt_out():
+    defaults = build_parser().parse_args(
+        ["run-all", "--query", "reuse", "--output", "storage/exports/insights.csv"]
+    )
+    opted_out = build_parser().parse_args(
+        [
+            "run-all",
+            "--query",
+            "reuse",
+            "--output",
+            "storage/exports/insights.csv",
+            "--no-use-um-profile",
+        ]
+    )
+
+    assert defaults.um_datasets == "data/um_dataset"
+    assert defaults.use_um_profile is True
+    assert opted_out.use_um_profile is False
+
+
 def test_cli_parses_guided_run_all():
     args = build_parser().parse_args(
         [

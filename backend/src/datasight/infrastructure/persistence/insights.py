@@ -25,6 +25,7 @@ class InsightRepositoryMixin:
                 md.match_method,
                 md.match_score,
                 md.matched_fields,
+                md.candidate_um_dataset_ids,
                 md.review_required,
                 ud.um_dataset_id,
                 ud.title AS um_dataset_title,

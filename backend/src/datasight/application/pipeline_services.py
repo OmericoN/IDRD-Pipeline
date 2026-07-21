@@ -18,6 +18,7 @@ from datasight.domain.discovery import (
 from datasight.infrastructure.ingestion.converter import GrobidConverter
 from datasight.infrastructure.ingestion.downloader import PDFDownloader
 from datasight.infrastructure.ingestion.openalex_exports import (
+    load_um_openalex_export_bundle,
     load_um_openalex_exports,
     looks_like_openalex_export,
 )
@@ -39,7 +40,7 @@ def discover_publications(
     mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
-    use_um_profile: bool = False,
+    use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     options = DiscoveryOptions(
@@ -60,21 +61,31 @@ def discover_publications(
             open_access_only=open_access_only,
         )
         fetched: list[dict[str, Any]] = []
-        per_query_limit = min(100, max(10, limit))
         query_payloads = []
         for discovery_query in discovery_queries:
+            per_query_limit = (
+                100
+                if discovery_query.reason in {"um_dataset_citation", "um_dataset_link"}
+                else min(100, max(10, limit))
+            )
             papers = client.search_works(
                 query=discovery_query.query,
                 limit=per_query_limit,
                 filters=discovery_query.filters,
                 sort=discovery_query.sort,
             )
+            for paper in papers:
+                reasons = list(paper.get("discovery_reasons") or [])
+                if discovery_query.reason not in reasons:
+                    reasons.append(discovery_query.reason)
+                paper["discovery_reasons"] = reasons
             fetched.extend(papers)
             query_payloads.append(
                 {
                     "reason": discovery_query.reason,
                     "query": discovery_query.query,
                     "filters": discovery_query.filters,
+                    "seed_count": len(discovery_query.seed_work_ids),
                     "fetched": len(papers),
                 }
             )
@@ -210,10 +221,33 @@ def extract_features_from_candidates(
 
 
 def import_um_datasets(path: str) -> dict[str, Any]:
-    records = load_um_dataset_records(path)
+    source = _project_path(path)
+    authoritative = looks_like_openalex_export(source)
+    if authoritative:
+        bundle = load_um_openalex_export_bundle(source)
+        records = bundle.records
+        warnings = bundle.warnings
+        metrics = bundle.metrics
+    else:
+        records = load_um_dataset_records(path)
+        warnings = []
+        metrics = {"source_rows": len(records)}
+    if not records:
+        raise ValueError(f"No UM dataset records were found in {source}.")
     with PipelineRepository() as repo:
-        count = repo.upsert_um_datasets(records)
-    return {"status": "successful" if count else "skipped", "count": count, "path": path}
+        if authoritative:
+            count, deleted = repo.sync_um_datasets(records)
+        else:
+            count = repo.upsert_um_datasets(records)
+            deleted = 0
+    return {
+        "status": "successful" if count else "skipped",
+        "count": count,
+        "deleted": deleted,
+        "path": path,
+        "warnings": warnings,
+        "metrics": metrics,
+    }
 
 
 def match_um_dataset_batch(

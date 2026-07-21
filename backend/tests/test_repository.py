@@ -13,9 +13,14 @@ class FakeCursor:
         self.executed = []
         self.fetchone_results = []
         self.fetchall_results = []
+        self.rowcount = 0
 
     def execute(self, query, params=None):
         self.executed.append((str(query), params))
+
+    def executemany(self, query, params):
+        for values in params:
+            self.execute(query, values)
 
     def fetchone(self):
         if self.fetchone_results:
@@ -74,6 +79,20 @@ def test_upsert_um_datasets_uses_canonical_table():
     assert "INSERT INTO um_datasets" in query
     assert params[0] == "um-1"
     assert params[2] == ["MHS"]
+    assert conn.commits == 1
+
+
+def test_sync_um_datasets_upserts_then_removes_stale_records():
+    repo, cursor, conn = make_repo()
+    cursor.rowcount = 1
+    record = UMDatasetRecord(um_dataset_id="W123", title="Dataset")
+
+    assert repo.sync_um_datasets([record]) == (1, 1)
+
+    assert any("INSERT INTO um_datasets" in query for query, _ in cursor.executed)
+    delete_query, delete_params = cursor.executed[-1]
+    assert "DELETE FROM um_datasets" in delete_query
+    assert delete_params == (["W123"],)
     assert conn.commits == 1
 
 

@@ -56,13 +56,13 @@ discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions
 
 ## Data Flow
 
-1. `discover` queries OpenAlex and stores publication metadata, topics, keywords, MeSH, concepts, affiliations, and related-work links.
+1. `discover` queries OpenAlex and stores publication metadata, topics, keywords, MeSH, concepts, affiliations, citation/dataset relationships, and related-work links. UM-profile runs sweep the authoritative catalog in 100-ID `cites` and `datasets` batches before applying secondary metadata signals.
 2. `download_pdf` downloads and validates open-access PDFs.
 3. `grobid_convert` submits PDFs to GROBID and stores TEI XML.
 4. `render_document` converts TEI XML into Markdown for extraction.
 5. `detect_mentions` records high-recall dataset mention candidates.
 6. `extract_features` promotes candidates into structured dataset mention records.
-7. `match_um_dataset` compares mentions against imported UM dataset records.
+7. `match_um_dataset` compares mentions against imported UM dataset records and returns all candidate IDs when metadata-only evidence is ambiguous.
 8. `export_insights` writes joined insight rows to CSV.
 
 ## Persistence And Artifacts
