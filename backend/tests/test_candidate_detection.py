@@ -33,6 +33,12 @@ We collected survey responses from 500 participants during 2024.
     assert candidates[0].dataset_name == "Author-described dataset"
 
 
+def test_ignores_generic_discussion_of_survey_responses():
+    markdown = "Survey responses can be influenced by question wording."
+
+    assert detect_dataset_candidates("p3", markdown) == []
+
+
 def test_standardize_section_fallbacks():
     assert standardize_section("Data Availability Statement") == "Data Availability"
     assert standardize_section("Results") == "Results"

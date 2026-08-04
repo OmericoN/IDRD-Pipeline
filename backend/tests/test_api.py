@@ -98,6 +98,55 @@ def test_create_run_rejects_invalid_strategy():
     assert response.status_code == 422
 
 
+def test_stage_run_validates_required_arguments_before_creating_run(monkeypatch):
+    def unexpected_repository():
+        raise AssertionError("A run must not be created for an invalid request.")
+
+    monkeypatch.setattr(
+        "datasight.interfaces.api.routes.runs.PipelineRepository",
+        unexpected_repository,
+    )
+
+    response = client.post("/api/v1/stages/discover/runs", json={})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "query is required."
+
+
+def test_stage_run_marks_created_run_failed_when_queueing_fails(monkeypatch):
+    class FakeRepo:
+        failed = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return None
+
+        def create_pipeline_run(self, query, config):
+            return 17
+
+        def fail_pipeline_run(self, run_id, error):
+            self.failed.append((run_id, error))
+
+    def queue_failure(*args, **kwargs):
+        raise RuntimeError("Redis unavailable")
+
+    monkeypatch.setattr("datasight.interfaces.api.routes.runs.PipelineRepository", FakeRepo)
+    monkeypatch.setattr(
+        "datasight.interfaces.api.routes.runs.tasks.discover_publications.delay",
+        queue_failure,
+    )
+
+    response = client.post(
+        "/api/v1/stages/discover/runs",
+        json={"query": "dataset reuse"},
+    )
+
+    assert response.status_code == 503
+    assert FakeRepo.failed == [(17, "Redis unavailable")]
+
+
 def test_get_run_returns_stage_progress(monkeypatch):
     class FakeRepo:
         def __enter__(self):
@@ -186,6 +235,81 @@ def test_get_run_events_rejects_unknown_run(monkeypatch):
     response = client.get("/api/v1/runs/404/events")
 
     assert response.status_code == 404
+
+
+def test_list_um_datasets_returns_paginated_catalog(monkeypatch):
+    class FakeRepo:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return None
+
+        def list_um_dataset_catalog(self, **kwargs):
+            assert kwargs == {
+                "query": "health",
+                "repository": "Dataverse",
+                "year": 2024,
+                "offset": 50,
+                "limit": 25,
+            }
+            return {
+                "items": [{"um_dataset_id": "W1", "title": "Health Dataset"}],
+                "total": 1,
+                "offset": 50,
+                "limit": 25,
+                "repositories": ["Dataverse"],
+                "years": [2024],
+            }
+
+    monkeypatch.setattr("datasight.interfaces.api.routes.um_datasets.PipelineRepository", FakeRepo)
+    response = client.get(
+        "/api/v1/um-datasets?q=health&repository=Dataverse&year=2024&offset=50&limit=25"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["um_dataset_id"] == "W1"
+
+
+def test_get_um_dataset_returns_404_for_unknown_id(monkeypatch):
+    class FakeRepo:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return None
+
+        def get_um_dataset_catalog_record(self, um_dataset_id):
+            return None
+
+    monkeypatch.setattr("datasight.interfaces.api.routes.um_datasets.PipelineRepository", FakeRepo)
+
+    response = client.get("/api/v1/um-datasets/W404")
+
+    assert response.status_code == 404
+
+
+def test_verify_um_datasets_returns_integrity_result(monkeypatch):
+    monkeypatch.setattr(
+        "datasight.interfaces.api.routes.um_datasets.verify_um_dataset_catalog",
+        lambda: {
+            "status": "verified",
+            "source_path": "data/um_dataset",
+            "checked_at": "2026-07-21T00:00:00Z",
+            "source_count": 2748,
+            "stored_count": 2748,
+            "verified_count": 2748,
+            "issues": [],
+            "warnings": [],
+            "metrics": {"source_rows": 2748},
+            "message": None,
+        },
+    )
+
+    response = client.get("/api/v1/um-datasets/verification")
+
+    assert response.status_code == 200
+    assert response.json()["verified_count"] == 2748
 
 
 def test_reset_rejects_wrong_confirmation():

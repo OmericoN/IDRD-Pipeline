@@ -49,6 +49,24 @@ def test_match_possible_title_creator_year():
     assert "title_or_alias" in decision.matched_fields
 
 
+def test_exact_title_is_reviewable_without_fabricated_metadata():
+    mention = DatasetMention(
+        publication_id="p2",
+        dataset_name="Maastricht Health Survey",
+        evidence=MentionEvidence(body_quote="We used the Maastricht Health Survey dataset."),
+    )
+    record = UMDatasetRecord(
+        um_dataset_id="um-2",
+        title="Maastricht Health Survey",
+    )
+
+    decision = match_mention_to_um_dataset(mention, [record])
+
+    assert decision.status == MatchStatus.POSSIBLE
+    assert decision.match_method == "exact_title_or_alias"
+    assert decision.review_required is True
+
+
 def test_ambiguous_metadata_match_returns_all_candidate_ids_without_selection():
     mention = DatasetMention(
         publication_id="p3",
@@ -70,4 +88,4 @@ def test_ambiguous_metadata_match_returns_all_candidate_ids_without_selection():
     assert decision.status == MatchStatus.REVIEW_REQUIRED
     assert decision.um_dataset_id is None
     assert decision.candidate_um_dataset_ids == ["W1", "W2"]
-    assert decision.match_method == "ambiguous_metadata_similarity"
+    assert decision.match_method == "ambiguous_exact_title_or_alias"

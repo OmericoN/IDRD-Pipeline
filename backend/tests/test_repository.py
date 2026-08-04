@@ -96,6 +96,55 @@ def test_sync_um_datasets_upserts_then_removes_stale_records():
     assert conn.commits == 1
 
 
+def test_list_um_dataset_catalog_applies_filters_and_returns_facets():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"count": 1}]
+    cursor.fetchall_results = [
+        [
+            {
+                "um_dataset_id": "W123",
+                "title": "Health Dataset",
+                "aliases": [],
+                "creators": ["Jane Doe"],
+                "doi": "10.1234/demo",
+                "url": "https://example.org",
+                "year": 2024,
+                "repository": "Dataverse",
+                "keywords": ["health"],
+                "created_at": None,
+                "updated_at": None,
+            }
+        ],
+        [{"repository": "Dataverse"}],
+        [{"year": 2024}],
+    ]
+
+    result = repo.list_um_dataset_catalog(
+        query="health", repository="Dataverse", year=2024, offset=50, limit=50
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["um_dataset_id"] == "W123"
+    assert result["repositories"] == ["Dataverse"]
+    assert result["years"] == [2024]
+    count_query, count_params = cursor.executed[0]
+    assert "array_to_string(creators" in count_query
+    assert count_params[-2:] == ["Dataverse", 2024]
+    page_query, page_params = cursor.executed[1]
+    assert "LIMIT %s OFFSET %s" in page_query
+    assert page_params[-2:] == [50, 50]
+
+
+def test_get_um_dataset_catalog_record_returns_full_record():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"um_dataset_id": "W123", "title": "Dataset", "raw": {"a": 1}}]
+
+    result = repo.get_um_dataset_catalog_record("W123")
+
+    assert result == {"um_dataset_id": "W123", "title": "Dataset", "raw": {"a": 1}}
+    assert cursor.executed[-1][1] == ("W123",)
+
+
 def test_upsert_openalex_publications_replaces_child_rows():
     repo, cursor, conn = make_repo()
     cursor.fetchone_results = [{"id": 11}]
@@ -252,6 +301,16 @@ def test_high_throughput_outcome_reports_partial_errors():
     cursor.fetchone_results = [{"failed": 1, "skipped": 3}]
 
     assert repo.high_throughput_outcome(9) == "completed_with_errors"
+
+
+def test_standard_run_outcome_reports_partial_errors():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"count": 1}]
+
+    assert repo.standard_run_outcome(9) == "completed_with_errors"
+    query, params = cursor.executed[-1]
+    assert "status IN ('failed', 'completed_with_errors')" in query
+    assert params == (9,)
 
 
 def test_fail_pipeline_run_records_error_event():
