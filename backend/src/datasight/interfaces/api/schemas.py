@@ -129,6 +129,53 @@ class ImportUMDatasetsResponse(BaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 
+class UMDatasetSummary(BaseModel):
+    um_dataset_id: str
+    title: str
+    aliases: list[str] = Field(default_factory=list)
+    creators: list[str] = Field(default_factory=list)
+    doi: str | None = None
+    url: str | None = None
+    year: int | None = None
+    repository: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class UMDatasetDetail(UMDatasetSummary):
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class UMDatasetListResponse(BaseModel):
+    items: list[UMDatasetSummary]
+    total: int
+    offset: int
+    limit: int
+    repositories: list[str] = Field(default_factory=list)
+    years: list[int] = Field(default_factory=list)
+
+
+class UMDatasetVerificationIssue(BaseModel):
+    um_dataset_id: str
+    title: str
+    status: Literal["missing", "unexpected", "changed"]
+    changed_fields: list[str] = Field(default_factory=list)
+
+
+class UMDatasetVerificationResponse(BaseModel):
+    status: Literal["verified", "mismatch", "unavailable"]
+    source_path: str
+    checked_at: datetime
+    source_count: int | None = None
+    stored_count: int
+    verified_count: int
+    issues: list[UMDatasetVerificationIssue] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    message: str | None = None
+
+
 class ResetRequest(BaseModel):
     confirm: str = Field(description=f'Must equal "{RESET_CONFIRMATION}".')
     force: bool = False

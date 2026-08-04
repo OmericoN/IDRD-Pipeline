@@ -117,7 +117,7 @@ class UMMatchDecision(BaseModel):
 
 class StageResult(BaseModel):
     stage: str
-    status: Literal["successful", "failed", "skipped"]
+    status: Literal["successful", "completed_with_errors", "failed", "skipped"]
     count: int = 0
     message: str = ""
     payload: dict[str, Any] = Field(default_factory=dict)

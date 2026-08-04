@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -27,7 +28,16 @@ from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.pubfetcher.openalex import OpenAlexClient
 from datasight.matching.um_matcher import match_mention_to_um_dataset
 from datasight.domain.candidate_detection import detect_dataset_candidates
-from datasight.domain.schemas import DatasetMention, ExtractionProvenance, MentionEvidence, StageResult, UMDatasetRecord
+from datasight.domain.schemas import (
+    DatasetMention,
+    DatasetMetadata,
+    DatasetRole,
+    ExtractionProvenance,
+    MentionEvidence,
+    ReferenceDirectness,
+    StageResult,
+    UMDatasetRecord,
+)
 from datasight.domain.stages import PipelineStage
 
 
@@ -190,23 +200,7 @@ def extract_features_from_candidates(
         mentions: list[DatasetMention] = []
         candidate_ids: list[int] = []
         for candidate in rows:
-            evidence = MentionEvidence(
-                body_quote=candidate["evidence_text"],
-                section_heading=candidate.get("section_heading"),
-                standardized_section=candidate.get("standardized_section"),
-            )
-            mention = DatasetMention(
-                publication_id=candidate["publication_id"],
-                dataset_name=candidate["dataset_name"],
-                evidence=evidence,
-                provenance=ExtractionProvenance(
-                    char_start=candidate.get("char_start"),
-                    char_end=candidate.get("char_end"),
-                    confidence=candidate.get("score", 0.0),
-                    prompt_version="rules-v1",
-                ),
-            )
-            mentions.append(mention)
+            mentions.append(_mention_from_candidate(candidate))
             candidate_ids.append(candidate["candidate_id"])
         inserted = repo.persist_dataset_mentions(mentions, candidate_ids)
         result = _stage_result(
@@ -437,24 +431,7 @@ def extract_features_pipeline_item(
         mentions: list[DatasetMention] = []
         candidate_ids: list[int] = []
         for candidate in rows:
-            evidence = MentionEvidence(
-                body_quote=candidate["evidence_text"],
-                section_heading=candidate.get("section_heading"),
-                standardized_section=candidate.get("standardized_section"),
-            )
-            mentions.append(
-                DatasetMention(
-                    publication_id=candidate["publication_id"],
-                    dataset_name=candidate["dataset_name"],
-                    evidence=evidence,
-                    provenance=ExtractionProvenance(
-                        char_start=candidate.get("char_start"),
-                        char_end=candidate.get("char_end"),
-                        confidence=candidate.get("score", 0.0),
-                        prompt_version="rules-v1",
-                    ),
-                )
-            )
+            mentions.append(_mention_from_candidate(candidate))
             candidate_ids.append(candidate["candidate_id"])
         inserted = repo.persist_dataset_mentions(mentions, candidate_ids)
         metrics = {"mentions": inserted, "paper_id": context["paper_id"]}
@@ -559,9 +536,17 @@ def load_um_dataset_records(path: str) -> list[UMDatasetRecord]:
 def _result_from_operation(stage: PipelineStage, results: list[Any]) -> dict[str, Any]:
     successful = sum(1 for result in results if result.success)
     failed = sum(1 for result in results if not result.success)
+    if successful and failed:
+        status = "completed_with_errors"
+    elif successful:
+        status = "successful"
+    elif failed:
+        status = "failed"
+    else:
+        status = "skipped"
     return _stage_result(
         stage,
-        "successful" if successful else ("failed" if failed else "skipped"),
+        status,
         len(results),
         f"{stage.value}: {successful} successful, {failed} failed.",
         {
@@ -574,7 +559,7 @@ def _result_from_operation(stage: PipelineStage, results: list[Any]) -> dict[str
 
 def _stage_result(
     stage: PipelineStage,
-    status: Literal["successful", "failed", "skipped"],
+    status: Literal["successful", "completed_with_errors", "failed", "skipped"],
     count: int,
     message: str,
     payload: dict[str, Any] | None = None,
@@ -620,6 +605,58 @@ def _coerce_csv_record(row: dict[str, str]) -> dict[str, Any]:
         coerced["year"] = int(coerced["year"])
     coerced["raw"] = dict(row)
     return coerced
+
+
+DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+URL_RE = re.compile(r"https?://[^\s<>{}\[\]]+", re.I)
+YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+
+
+def _mention_from_candidate(candidate: dict[str, Any]) -> DatasetMention:
+    text = str(candidate["evidence_text"])
+    doi_match = DOI_RE.search(text)
+    url_match = URL_RE.search(text)
+    years = {int(value) for value in YEAR_RE.findall(text)}
+    lowered = text.casefold()
+
+    if any(
+        phrase in lowered
+        for phrase in ("we collected", "we gathered", "data were collected", "data was collected")
+    ):
+        role = DatasetRole.CREATED
+    elif re.search(r"\b(used|using|analysed|analyzed)\b", lowered):
+        role = DatasetRole.USED
+    else:
+        role = DatasetRole.UNCLEAR
+
+    dataset_name = str(candidate["dataset_name"])
+    directness = (
+        ReferenceDirectness.DIRECT
+        if doi_match or url_match or dataset_name != "Author-described dataset"
+        else ReferenceDirectness.INFORMAL
+    )
+    return DatasetMention(
+        publication_id=str(candidate["publication_id"]),
+        dataset_name=dataset_name,
+        dataset_role=role,
+        reference_directness=directness,
+        evidence=MentionEvidence(
+            body_quote=text,
+            section_heading=candidate.get("section_heading"),
+            standardized_section=candidate.get("standardized_section"),
+        ),
+        metadata=DatasetMetadata(
+            persistent_identifier=doi_match.group(0).rstrip(".,;:") if doi_match else None,
+            dataset_url=url_match.group(0).rstrip(".,;:)") if url_match else None,
+            dataset_year=next(iter(years)) if len(years) == 1 else None,
+        ),
+        provenance=ExtractionProvenance(
+            char_start=candidate.get("char_start"),
+            char_end=candidate.get("char_end"),
+            confidence=candidate.get("score", 0.0),
+            prompt_version="rules-v2",
+        ),
+    )
 
 
 def _project_path(path: str | Path) -> Path:

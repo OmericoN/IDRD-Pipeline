@@ -61,6 +61,16 @@ describe("pipeline view helpers", () => {
     expect(stageProgress(visual)).toBe(67);
   });
 
+  it("counts completed-with-errors stages as complete", () => {
+    const visual = [
+      { ...stages[0]!, status: "completed_with_errors", working: false },
+      { ...stages[1]!, status: "pending", working: false },
+      { ...stages[2]!, status: "pending", working: false },
+    ];
+
+    expect(stageProgress(visual)).toBe(33);
+  });
+
   it("preserves multiple recorded running stages for high-throughput runs", () => {
     const run: PipelineRunSummary = {
       id: 1,

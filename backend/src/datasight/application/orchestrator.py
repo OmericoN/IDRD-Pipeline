@@ -95,10 +95,11 @@ def run_all_local(
         _finish_run(pipeline_run_id, "failed")
         raise
 
-    _finish_run(pipeline_run_id, "successful")
+    status = _run_outcome(results)
+    _finish_run(pipeline_run_id, status)
     return {
         "pipeline_run_id": pipeline_run_id,
-        "status": "successful",
+        "status": status,
         "results": results,
     }
 
@@ -150,34 +151,38 @@ def enqueue_run_all(
         "strategy": strategy_value.value,
     }
     pipeline_run_id = create_run(query, config)
-    if um_datasets_path:
-        services.import_um_datasets(um_datasets_path)
+    try:
+        if um_datasets_path:
+            services.import_um_datasets(um_datasets_path)
 
-    from datasight.infrastructure.worker import tasks
+        from datasight.infrastructure.worker import tasks
 
-    workflow = chain(
-        tasks.discover_publications.si(
-            query,
-            limit,
-            open_access_only,
-            topic_ids,
-            keyword_terms,
-            mesh_terms,
-            from_year,
-            to_year,
-            use_um_profile,
-            pipeline_run_id,
-        ),
-        tasks.download_pdf.si(limit, overwrite, pipeline_run_id),
-        tasks.grobid_convert.si(limit, overwrite, False, pipeline_run_id),
-        tasks.render_document.si(limit, overwrite, pipeline_run_id),
-        tasks.detect_mentions.si(limit, pipeline_run_id),
-        tasks.extract_features.si(limit, pipeline_run_id),
-        tasks.match_um_dataset.si(limit, pipeline_run_id),
-        tasks.export_insights.si(output, None, pipeline_run_id),
-        tasks.finish_pipeline_run.si(pipeline_run_id, "successful"),
-    )
-    async_result = workflow.apply_async()
+        workflow = chain(
+            tasks.discover_publications.si(
+                query,
+                limit,
+                open_access_only,
+                topic_ids,
+                keyword_terms,
+                mesh_terms,
+                from_year,
+                to_year,
+                use_um_profile,
+                pipeline_run_id,
+            ),
+            tasks.download_pdf.si(limit, overwrite, pipeline_run_id),
+            tasks.grobid_convert.si(limit, overwrite, False, pipeline_run_id),
+            tasks.render_document.si(limit, overwrite, pipeline_run_id),
+            tasks.detect_mentions.si(limit, pipeline_run_id),
+            tasks.extract_features.si(limit, pipeline_run_id),
+            tasks.match_um_dataset.si(limit, pipeline_run_id),
+            tasks.export_insights.si(output, None, pipeline_run_id),
+            tasks.finish_pipeline_run.si(pipeline_run_id, "successful"),
+        )
+        async_result = workflow.apply_async()
+    except Exception as exc:
+        _fail_run(pipeline_run_id, str(exc))
+        raise
     task_id = getattr(async_result, "id", None)
     with PipelineRepository() as repo:
         repo.update_pipeline_run_task_id(pipeline_run_id, task_id)
@@ -216,24 +221,28 @@ def enqueue_high_throughput_run(
 
     from datasight.infrastructure.worker import tasks
 
-    async_result = tasks.bootstrap_high_throughput_run.apply_async(
-        kwargs={
-            "query": query,
-            "limit": limit,
-            "output_path": output,
-            "um_datasets_path": um_datasets_path,
-            "overwrite": overwrite,
-            "open_access_only": open_access_only,
-            "topic_ids": topic_ids,
-            "keyword_terms": keyword_terms,
-            "mesh_terms": mesh_terms,
-            "from_year": from_year,
-            "to_year": to_year,
-            "use_um_profile": use_um_profile,
-            "pipeline_run_id": pipeline_run_id,
-        },
-        queue="processing",
-    )
+    try:
+        async_result = tasks.bootstrap_high_throughput_run.apply_async(
+            kwargs={
+                "query": query,
+                "limit": limit,
+                "output_path": output,
+                "um_datasets_path": um_datasets_path,
+                "overwrite": overwrite,
+                "open_access_only": open_access_only,
+                "topic_ids": topic_ids,
+                "keyword_terms": keyword_terms,
+                "mesh_terms": mesh_terms,
+                "from_year": from_year,
+                "to_year": to_year,
+                "use_um_profile": use_um_profile,
+                "pipeline_run_id": pipeline_run_id,
+            },
+            queue="processing",
+        )
+    except Exception as exc:
+        _fail_run(pipeline_run_id, str(exc))
+        raise
     task_id = getattr(async_result, "id", None)
     with PipelineRepository() as repo:
         repo.update_pipeline_run_task_id(pipeline_run_id, task_id)
@@ -251,3 +260,17 @@ def celery_worker_available(timeout: float = 1.0) -> bool:
 def _finish_run(pipeline_run_id: int, status: str) -> None:
     with PipelineRepository() as repo:
         repo.finish_pipeline_run(pipeline_run_id, status)
+
+
+def _fail_run(pipeline_run_id: int, error: str) -> None:
+    with PipelineRepository() as repo:
+        repo.fail_pipeline_run(pipeline_run_id, error)
+
+
+def _run_outcome(results: list[dict[str, Any]]) -> str:
+    error_statuses = {"failed", "completed_with_errors"}
+    return (
+        "completed_with_errors"
+        if any(result.get("status") in error_statuses for result in results)
+        else "successful"
+    )

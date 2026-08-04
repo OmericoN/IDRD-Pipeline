@@ -51,11 +51,6 @@ def create_run(request: RunCreateRequest) -> RunCreateResponse:
 @router.post("/stages/{stage}/runs", response_model=RunCreateResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_stage_run(stage: PipelineStage, request: StageRunCreateRequest) -> RunCreateResponse:
     task = task_for_stage(stage, tasks)
-    with PipelineRepository() as repo:
-        pipeline_run_id = repo.create_pipeline_run(
-            query=request.query or stage.value,
-            config={"stage": stage.value, **request.model_dump(mode="json")},
-        )
     options = StageRunOptions(
         query=request.query,
         limit=request.limit,
@@ -69,12 +64,28 @@ def create_stage_run(stage: PipelineStage, request: StageRunCreateRequest) -> Ru
         from_year=request.from_year,
         to_year=request.to_year,
         use_um_profile=request.use_um_profile,
-        pipeline_run_id=pipeline_run_id,
     )
     try:
-        async_result = task.delay(*stage_args(stage, options), **stage_kwargs(stage, options))
+        args = stage_args(stage, options)
+        kwargs = stage_kwargs(stage, options)
     except MissingStageArgument as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+    with PipelineRepository() as repo:
+        pipeline_run_id = repo.create_pipeline_run(
+            query=request.query or stage.value,
+            config={"stage": stage.value, **request.model_dump(mode="json")},
+        )
+    kwargs["pipeline_run_id"] = pipeline_run_id
+    try:
+        async_result = task.delay(*args, **kwargs)
+    except Exception as exc:
+        with PipelineRepository() as repo:
+            repo.fail_pipeline_run(pipeline_run_id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The stage run could not be queued.",
+        ) from exc
     task_id = getattr(async_result, "id", None)
     with PipelineRepository() as repo:
         repo.update_pipeline_run_task_id(pipeline_run_id, task_id)

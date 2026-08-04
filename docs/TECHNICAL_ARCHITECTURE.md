@@ -108,8 +108,6 @@ REDIS_URL=redis://localhost:6379/0
 GROBID_BASE_URL=http://localhost:8070
 ```
 
-Semantic Scholar configuration and client code are intentionally retained as an inactive publication-fetching adapter. The current discovery flow uses OpenAlex.
-
 Compose uses service names for internal networking and exposes Postgres on `localhost:5433`, Redis on `localhost:6379`, GROBID on `localhost:8070`, and the API on `localhost:8000`.
 
 ## Reset Behavior

@@ -27,6 +27,36 @@ def match_mention_to_um_dataset(
         if mention_url and record_url and mention_url == record_url:
             return _decision(mention, record, MatchStatus.MATCHED, 1.0, "exact_url", ["url"])
 
+    mention_name = normalize_text(mention.dataset_name)
+    exact_name_records = [
+        record
+        for record in candidate_list
+        if mention_name
+        and mention_name
+        in {normalize_text(record.title), *(normalize_text(alias) for alias in record.aliases)}
+    ]
+    if len(exact_name_records) > 1:
+        return UMMatchDecision(
+            publication_id=mention.publication_id,
+            dataset_name=mention.dataset_name,
+            status=MatchStatus.REVIEW_REQUIRED,
+            candidate_um_dataset_ids=[record.um_dataset_id for record in exact_name_records],
+            match_method="ambiguous_exact_title_or_alias",
+            match_score=0.85,
+            matched_fields=["title_or_alias"],
+            review_required=True,
+        )
+    if exact_name_records:
+        return _decision(
+            mention,
+            exact_name_records[0],
+            MatchStatus.POSSIBLE,
+            0.85,
+            "exact_title_or_alias",
+            ["title_or_alias"],
+            review_required=True,
+        )
+
     scored: list[tuple[float, UMDatasetRecord, list[str]]] = []
     for record in candidate_list:
         fields: list[str] = []

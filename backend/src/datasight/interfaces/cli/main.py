@@ -19,31 +19,6 @@ from datasight.application.stage_registry import (
     stage_values,
     task_for_stage,
 )
-from datasight.domain.results import ConversionResult, DownloadResult
-
-
-class DataSightPipeline:
-    """Small compatibility helpers for result classification tests."""
-
-    @staticmethod
-    def _download_result_status(result: DownloadResult) -> str:
-        if not result.success:
-            return "failed"
-        return "skipped" if result.message.lower().startswith("already exists:") else "successful"
-
-    @staticmethod
-    def _convert_result_status(result: ConversionResult) -> str:
-        if not result.success:
-            return "failed"
-        return "skipped" if "already converted" in result.message.lower() else "successful"
-
-    @staticmethod
-    def _render_result_status(success: bool, message: str) -> str:
-        if not success:
-            return "failed"
-        return "skipped" if message.lower().startswith("already exists:") else "successful"
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="uv run datasight",

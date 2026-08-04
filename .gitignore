@@ -1,5 +1,6 @@
 # Project-local generated artifacts
 /storage/
+/backend/logs/
 data/um_dataset/
 /outputs/
 /logs/

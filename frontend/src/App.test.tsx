@@ -197,6 +197,108 @@ function defaultFetchMock(resetResponse = response({
     if (path.startsWith("/api/v1/insights?")) {
       return response({ rows: [] });
     }
+    if (path === "/api/v1/um-datasets?offset=0&limit=50") {
+      return response({
+        items: [
+          {
+            um_dataset_id: "W123",
+            title: "Maastricht Health Dataset",
+            aliases: ["MHD"],
+            creators: ["Jane Doe"],
+            doi: "10.1234/health",
+            url: "https://example.org/dataset",
+            year: 2024,
+            repository: "Dataverse",
+            keywords: ["health"],
+            created_at: "2026-07-20T00:00:00Z",
+            updated_at: "2026-07-21T00:00:00Z",
+          },
+        ],
+        total: 51,
+        offset: 0,
+        limit: 50,
+        repositories: ["Dataverse"],
+        years: [2024],
+      });
+    }
+    if (path === "/api/v1/um-datasets?offset=50&limit=50") {
+      return response({
+        items: [
+          {
+            um_dataset_id: "W999",
+            title: "Final UM Dataset",
+            aliases: [],
+            creators: [],
+            doi: null,
+            url: null,
+            year: 2023,
+            repository: "Zenodo",
+            keywords: [],
+            created_at: null,
+            updated_at: null,
+          },
+        ],
+        total: 51,
+        offset: 50,
+        limit: 50,
+        repositories: ["Dataverse", "Zenodo"],
+        years: [2024, 2023],
+      });
+    }
+    if (path.startsWith("/api/v1/um-datasets?")) {
+      return response({
+        items: [
+          {
+            um_dataset_id: "W123",
+            title: "Maastricht Health Dataset",
+            aliases: ["MHD"],
+            creators: ["Jane Doe"],
+            doi: "10.1234/health",
+            url: "https://example.org/dataset",
+            year: 2024,
+            repository: "Dataverse",
+            keywords: ["health"],
+            created_at: "2026-07-20T00:00:00Z",
+            updated_at: "2026-07-21T00:00:00Z",
+          },
+        ],
+        total: 51,
+        offset: 0,
+        limit: 50,
+        repositories: ["Dataverse"],
+        years: [2024],
+      });
+    }
+    if (path === "/api/v1/um-datasets/verification") {
+      return response({
+        status: "verified",
+        source_path: "data/um_dataset",
+        checked_at: "2026-07-21T00:00:00Z",
+        source_count: 1,
+        stored_count: 1,
+        verified_count: 1,
+        issues: [],
+        warnings: [],
+        metrics: { source_rows: 1 },
+        message: null,
+      });
+    }
+    if (path === "/api/v1/um-datasets/W123") {
+      return response({
+        um_dataset_id: "W123",
+        title: "Maastricht Health Dataset",
+        aliases: ["MHD"],
+        creators: ["Jane Doe"],
+        doi: "10.1234/health",
+        url: "https://example.org/dataset",
+        year: 2024,
+        repository: "Dataverse",
+        keywords: ["health"],
+        raw: { source: "openalex_pure_export" },
+        created_at: "2026-07-20T00:00:00Z",
+        updated_at: "2026-07-21T00:00:00Z",
+      });
+    }
     if (path === "/api/v1/admin/reset" && init?.method === "POST") {
       return resetResponse;
     }
@@ -281,6 +383,111 @@ describe("App routed workflow", () => {
     expect(await screen.findByText("Open a run to inspect the workspace, events, and stage metrics.")).toBeInTheDocument();
     expect(screen.getByText("Maastricht dataset reuse")).toBeInTheDocument();
     expect(screen.getByText("High-throughput")).toBeInTheDocument();
+  });
+
+  it("browses the verified UM dataset catalog and opens raw details", async () => {
+    renderApp(defaultFetchMock(), "/datasets");
+
+    expect(await screen.findByText("Catalog verified")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1–1 of 51")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Maastricht Health Dataset/ }));
+
+    expect(await screen.findByText("Raw metadata")).toBeInTheDocument();
+    expect(screen.getByText(/openalex_pure_export/)).toBeInTheDocument();
+  });
+
+  it("paginates through the complete UM dataset catalog", async () => {
+    renderApp(defaultFetchMock(), "/datasets");
+
+    await screen.findByText("Maastricht Health Dataset");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByText("Final UM Dataset")).toBeInTheDocument();
+    expect(screen.getByText("Showing 51–51 of 51")).toBeInTheDocument();
+  });
+
+  it("applies UM dataset search and year filters", async () => {
+    const fetchMock = defaultFetchMock();
+    renderApp(fetchMock, "/datasets");
+
+    await screen.findByText("Maastricht Health Dataset");
+    fireEvent.change(screen.getByLabelText("Filter by year"), {
+      target: { value: "2024" },
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/um-datasets?year=2024&offset=0&limit=50",
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+    fireEvent.change(screen.getByLabelText("Search UM datasets"), {
+      target: { value: "health data" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/um-datasets?q=health+data&year=2024&offset=0&limit=50",
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+  });
+
+  it("shows changed fields when UM catalog verification finds mismatches", async () => {
+    const baseFetch = defaultFetchMock();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/um-datasets/verification") {
+        return response({
+          status: "mismatch",
+          source_path: "data/um_dataset",
+          checked_at: "2026-07-21T00:00:00Z",
+          source_count: 51,
+          stored_count: 51,
+          verified_count: 50,
+          issues: [
+            {
+              um_dataset_id: "W123",
+              title: "Maastricht Health Dataset",
+              status: "changed",
+              changed_fields: ["title", "raw"],
+            },
+          ],
+          warnings: [],
+          metrics: {},
+          message: null,
+        });
+      }
+      return baseFetch(input, init);
+    });
+    renderApp(fetchMock, "/datasets");
+
+    expect(await screen.findByText(/Stored catalog differs/)).toBeInTheDocument();
+    expect(screen.getByText("title, raw")).toBeInTheDocument();
+  });
+
+  it("keeps stored UM datasets browsable when verification is unavailable", async () => {
+    const baseFetch = defaultFetchMock();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/um-datasets/verification") {
+        return response({
+          status: "unavailable",
+          source_path: "data/um_dataset",
+          checked_at: "2026-07-21T00:00:00Z",
+          source_count: null,
+          stored_count: 51,
+          verified_count: 0,
+          issues: [],
+          warnings: [],
+          metrics: {},
+          message: "Authoritative export is missing",
+        });
+      }
+      return baseFetch(input, init);
+    });
+    renderApp(fetchMock, "/datasets");
+
+    expect(await screen.findByText("Catalog verification unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Maastricht Health Dataset")).toBeInTheDocument();
   });
 
   it("submits high-throughput launch strategy from the toggle", async () => {

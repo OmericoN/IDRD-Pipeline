@@ -7,7 +7,7 @@ export type VisualStage = StageInfo & {
   run?: StageRunSummary;
 };
 
-const COMPLETE_STATUSES = new Set(["successful", "failed", "skipped"]);
+const COMPLETE_STATUSES = new Set(["successful", "completed_with_errors", "failed", "skipped"]);
 const ACTIVE_STATUSES = new Set(["queued", "running", "started"]);
 const SUCCESS_EDGE_STATUSES = new Set(["successful", "queued", "running", "started"]);
 

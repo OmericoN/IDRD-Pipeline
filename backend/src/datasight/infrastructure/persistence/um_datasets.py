@@ -95,6 +95,94 @@ class UMDatasetRepositoryMixin:
         )
         return [UMDatasetRecord.model_validate(dict(row)) for row in self.cursor.fetchall()]
 
+    def list_um_dataset_catalog(
+        self,
+        *,
+        query: str | None = None,
+        repository: str | None = None,
+        year: int | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Return a filtered, paginated view of stored UM datasets and filter facets."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if query:
+            pattern = f"%{query}%"
+            clauses.append(
+                "("
+                "um_dataset_id ILIKE %s OR title ILIKE %s OR COALESCE(doi, '') ILIKE %s "
+                "OR COALESCE(array_to_string(creators, ' '), '') ILIKE %s "
+                "OR COALESCE(array_to_string(keywords, ' '), '') ILIKE %s"
+                ")"
+            )
+            params.extend([pattern] * 5)
+        if repository:
+            clauses.append("repository = %s")
+            params.append(repository)
+        if year is not None:
+            clauses.append("year = %s")
+            params.append(year)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        self.cursor.execute(f"SELECT COUNT(*) AS count FROM um_datasets{where}", params)
+        count_row = self.cursor.fetchone() or {}
+        total = int(count_row.get("count", 0))
+
+        self.cursor.execute(
+            """
+            SELECT
+                um_dataset_id, title, aliases, creators, doi, url, year,
+                repository, keywords, created_at, updated_at
+            FROM um_datasets
+            """
+            + where
+            + " ORDER BY lower(title), um_dataset_id LIMIT %s OFFSET %s",
+            [*params, limit, offset],
+        )
+        items = [dict(row) for row in self.cursor.fetchall()]
+
+        self.cursor.execute(
+            """
+            SELECT DISTINCT repository
+            FROM um_datasets
+            WHERE repository IS NOT NULL AND repository <> ''
+            ORDER BY repository
+            """
+        )
+        repositories = [row["repository"] for row in self.cursor.fetchall()]
+        self.cursor.execute(
+            """
+            SELECT DISTINCT year
+            FROM um_datasets
+            WHERE year IS NOT NULL
+            ORDER BY year DESC
+            """
+        )
+        years = [int(row["year"]) for row in self.cursor.fetchall()]
+        return {
+            "items": items,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "repositories": repositories,
+            "years": years,
+        }
+
+    def get_um_dataset_catalog_record(self, um_dataset_id: str) -> dict[str, Any] | None:
+        self.cursor.execute(
+            """
+            SELECT
+                um_dataset_id, title, aliases, creators, doi, url, year,
+                repository, keywords, raw, created_at, updated_at
+            FROM um_datasets
+            WHERE um_dataset_id = %s
+            """,
+            (um_dataset_id,),
+        )
+        row = self.cursor.fetchone()
+        return dict(row) if row else None
+
     def get_unmatched_mentions(self, limit: int | None = None) -> list[dict[str, Any]]:
         query = """
             SELECT

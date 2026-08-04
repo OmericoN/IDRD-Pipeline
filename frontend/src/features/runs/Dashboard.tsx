@@ -118,6 +118,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import maastrichtBanner from "@/assets/maastricht-university-seeklogo.png";
+import UMDatasetsPage from "@/features/datasets/UMDatasetsPage";
 import { cn } from "@/lib/utils";
 import {
   ApiError,
@@ -198,6 +199,7 @@ const NAV_ITEMS: Array<{
   { label: "Runs", to: "/runs", icon: RiListCheck },
   { label: "Workspace", to: "/workspace", icon: RiRouteLine, workspace: true },
   { label: "Insights", to: "/insights", icon: RiFileList3Line },
+  { label: "UM datasets", to: "/datasets", icon: RiDatabase2Line },
   { label: "Admin", to: "/admin", icon: RiAdminLine },
 ];
 
@@ -281,6 +283,7 @@ function Dashboard() {
           <Route path="workspace" element={<WorkspaceRedirect />} />
           <Route path="runs/:runId" element={<WorkspacePage />} />
           <Route path="insights" element={<InsightsPage />} />
+          <Route path="datasets" element={<UMDatasetsPage />} />
           <Route path="admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate replace to="/launch" />} />
         </Route>
@@ -317,6 +320,8 @@ function PipelineShell() {
     void queryClient.invalidateQueries({ queryKey: ["run"] });
     void queryClient.invalidateQueries({ queryKey: ["run-events"] });
     void queryClient.invalidateQueries({ queryKey: ["insights"] });
+    void queryClient.invalidateQueries({ queryKey: ["um-datasets"] });
+    void queryClient.invalidateQueries({ queryKey: ["um-datasets-verification"] });
   }
 
   return (
@@ -2105,6 +2110,9 @@ function routeTitle(pathname: string) {
   }
   if (pathname.startsWith("/insights")) {
     return "Insights";
+  }
+  if (pathname.startsWith("/datasets")) {
+    return "UM datasets";
   }
   if (pathname.startsWith("/admin")) {
     return "Admin";

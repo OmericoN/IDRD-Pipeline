@@ -12,10 +12,6 @@ env_path = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=env_path)
 load_dotenv()
 
-# ── Semantic Scholar ───────────────────────────────────────────────────────────
-SEMANTIC_SCHOLAR_API_URL = "https://api.semanticscholar.org/graph/v1"
-SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
-
 # ── OpenAlex ──────────────────────────────────────────────────────────────────
 OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "")
 OPENALEX_API_URL = os.getenv("OPENALEX_API_URL", "https://api.openalex.org")

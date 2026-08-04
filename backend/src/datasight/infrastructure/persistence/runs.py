@@ -129,6 +129,19 @@ class RunRepositoryMixin:
         )
         self.conn.commit()
 
+    def standard_run_outcome(self, pipeline_run_id: int) -> str:
+        self.cursor.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM stage_runs
+            WHERE pipeline_run_id = %s
+              AND status IN ('failed', 'completed_with_errors')
+            """,
+            (pipeline_run_id,),
+        )
+        row = self.cursor.fetchone() or {}
+        return "completed_with_errors" if int(row.get("count") or 0) else "successful"
+
     def fail_pipeline_run(self, pipeline_run_id: int | None, error: str) -> None:
         if pipeline_run_id is None:
             return

@@ -38,6 +38,9 @@ http://localhost:8000/api/v1
 | `GET` | `/runs/{run_id}/events` | Read chronological run events. |
 | `GET` | `/insights` | Preview joined insight rows. |
 | `POST` | `/um-datasets/import` | Import UM dataset metadata from a local CSV or JSON file. |
+| `GET` | `/um-datasets` | Search and paginate stored UM dataset metadata. |
+| `GET` | `/um-datasets/verification` | Compare stored metadata with the configured authoritative UM export. |
+| `GET` | `/um-datasets/{um_dataset_id}` | Inspect one normalized UM dataset record and its raw metadata. |
 | `POST` | `/admin/reset` | Clear database rows and generated storage files. |
 
 ## Full Run
@@ -92,6 +95,8 @@ export_insights
 ## Import UM Dataset Metadata
 
 Matching requires UM dataset records before `match_um_dataset` runs. The importer supports either the original compact CSV/JSON shape or the authoritative `data/um_dataset` directory. Directory exports may be comma- or tab-delimited and UTF-8 or Windows-1252. Both `OPEN_ALEX_AFFILIATION.csv` and the older plural filename are accepted. A validated directory import synchronizes the catalog; compact CSV/JSON imports remain additive.
+
+The GUI's **UM datasets** page is read-only. It uses the catalog endpoints to search stored records and compares every normalized field and raw payload against `UM_DATASETS_PATH`. A mismatch reports missing, unexpected, and changed records without modifying storage; use the import endpoint or CLI to repair the catalog.
 
 Compact CSV files should include at least:
 

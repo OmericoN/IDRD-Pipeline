@@ -19,7 +19,7 @@ DATASET_PATTERNS = [
 
 SECTION_RE = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<title>.+)$", re.MULTILINE)
 SENTENCE_RE = re.compile(
-    r"[^.!?\n]*(?:dataset|database|databank|registry|repository|data source|data were|data was|we collected|we gathered|survey responses)[^.!?\n]*[.!?]",
+    r"[^.!?\n]*(?:dataset|database|databank|registry|repository|data source|data were|data was|we collected|we gathered|survey responses (?:were|was|are) (?:collected|gathered|obtained))[^.!?\n]*[.!?]",
     re.I,
 )
 
@@ -111,7 +111,9 @@ def _looks_like_implicit_dataset(sentence: str) -> bool:
             "we gathered",
             "data were collected",
             "data was collected",
-            "survey responses",
+            "survey responses were collected",
+            "survey responses were gathered",
+            "survey responses were obtained",
             "interviews were",
         )
     )

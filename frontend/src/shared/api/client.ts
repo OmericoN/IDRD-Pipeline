@@ -75,6 +75,61 @@ export type InsightsResponse = {
   rows: Record<string, unknown>[];
 };
 
+export type UMDatasetSummary = {
+  um_dataset_id: string;
+  title: string;
+  aliases: string[];
+  creators: string[];
+  doi: string | null;
+  url: string | null;
+  year: number | null;
+  repository: string | null;
+  keywords: string[];
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type UMDatasetDetail = UMDatasetSummary & {
+  raw: Record<string, unknown>;
+};
+
+export type UMDatasetListResponse = {
+  items: UMDatasetSummary[];
+  total: number;
+  offset: number;
+  limit: number;
+  repositories: string[];
+  years: number[];
+};
+
+export type UMDatasetVerificationIssue = {
+  um_dataset_id: string;
+  title: string;
+  status: "missing" | "unexpected" | "changed";
+  changed_fields: string[];
+};
+
+export type UMDatasetVerificationResponse = {
+  status: "verified" | "mismatch" | "unavailable";
+  source_path: string;
+  checked_at: string;
+  source_count: number | null;
+  stored_count: number;
+  verified_count: number;
+  issues: UMDatasetVerificationIssue[];
+  warnings: string[];
+  metrics: Record<string, unknown>;
+  message: string | null;
+};
+
+export type UMDatasetListParams = {
+  q?: string;
+  repository?: string;
+  year?: number;
+  offset?: number;
+  limit?: number;
+};
+
 export type ResetRequest = {
   confirm: string;
   force: boolean;
@@ -149,6 +204,19 @@ export const api = {
     const params = new URLSearchParams({ limit: String(limit) });
     return request<InsightsResponse>(`/api/v1/insights?${params}`);
   },
+  umDatasets: (filters: UMDatasetListParams = {}) => {
+    const params = new URLSearchParams();
+    if (filters.q) params.set("q", filters.q);
+    if (filters.repository) params.set("repository", filters.repository);
+    if (filters.year !== undefined) params.set("year", String(filters.year));
+    params.set("offset", String(filters.offset ?? 0));
+    params.set("limit", String(filters.limit ?? 50));
+    return request<UMDatasetListResponse>(`/api/v1/um-datasets?${params}`);
+  },
+  umDataset: (umDatasetId: string) =>
+    request<UMDatasetDetail>(`/api/v1/um-datasets/${encodeURIComponent(umDatasetId)}`),
+  verifyUmDatasets: () =>
+    request<UMDatasetVerificationResponse>("/api/v1/um-datasets/verification"),
   reset: (body: ResetRequest) =>
     request<ResetResponse>("/api/v1/admin/reset", { method: "POST", body }),
 };

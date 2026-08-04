@@ -228,8 +228,13 @@ def finalize_high_throughput_run(
 @celery_app.task(name="datasight.finish_pipeline_run", bind=True)
 def finish_pipeline_run(self, pipeline_run_id: int, status: str) -> dict[str, Any]:
     with PipelineRepository() as repo:
-        repo.finish_pipeline_run(pipeline_run_id, status)
-    return {"pipeline_run_id": pipeline_run_id, "status": status}
+        effective_status = (
+            repo.standard_run_outcome(pipeline_run_id)
+            if status == "successful"
+            else status
+        )
+        repo.finish_pipeline_run(pipeline_run_id, effective_status)
+    return {"pipeline_run_id": pipeline_run_id, "status": effective_status}
 
 
 @task_failure.connect

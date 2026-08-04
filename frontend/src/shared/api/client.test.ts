@@ -83,6 +83,40 @@ describe("api client", () => {
     );
   });
 
+  it("builds encoded UM dataset catalog requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [], total: 0, offset: 50, limit: 50, repositories: [], years: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.umDatasets({ q: "health data", repository: "Harvard Dataverse", year: 2024, offset: 50 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/um-datasets?q=health+data&repository=Harvard+Dataverse&year=2024&offset=50&limit=50",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("requests verification and encoded UM dataset details", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.verifyUmDatasets();
+    await api.umDataset("W/123");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/um-datasets/verification",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/um-datasets/W%2F123",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("raises ApiError with reset failure details", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
