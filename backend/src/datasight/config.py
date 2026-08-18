@@ -1,6 +1,8 @@
 """Global configuration for DataSight."""
 
 import os
+import hashlib
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from urllib.parse import quote
 
@@ -11,6 +13,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 env_path = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=env_path)
 load_dotenv()
+
+try:
+    APP_VERSION = version("datasight")
+except PackageNotFoundError:
+    APP_VERSION = "0.1.0"
+
+
+def _source_code_version() -> str:
+    digest = hashlib.sha256()
+    source_root = PROJECT_ROOT / "backend" / "src" / "datasight"
+    files = sorted(source_root.rglob("*.py")) if source_root.exists() else []
+    if not files:
+        return APP_VERSION
+    for source in files:
+        digest.update(source.relative_to(source_root).as_posix().encode("utf-8"))
+        digest.update(source.read_bytes())
+    return f"source-{digest.hexdigest()[:16]}"
+
+
+CODE_VERSION = os.getenv("DATASIGHT_CODE_VERSION") or _source_code_version()
 
 # ── OpenAlex ──────────────────────────────────────────────────────────────────
 OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "")
@@ -71,6 +93,9 @@ LOGS_DIR = STORAGE_DIR / "logs"
 DOWNLOAD_TIMEOUT_SEC = 60  # HTTP request timeout for downloading PDFs
 DOWNLOAD_CHUNK_SIZE_BYTES = 8192  # Chunk size for streaming downloads
 DOWNLOAD_DELAY_SEC = 0.5  # Delay between downloads to avoid rate limiting
+DOWNLOAD_MAX_BYTES = int(os.getenv("DOWNLOAD_MAX_BYTES", str(100 * 1024 * 1024)))
+DOWNLOAD_MAX_RETRIES = int(os.getenv("DOWNLOAD_MAX_RETRIES", "3"))
+DOWNLOAD_BACKOFF_SEC = float(os.getenv("DOWNLOAD_BACKOFF_SEC", "1"))
 
 # GROBID Converter
 GROBID_BASE_URL = os.getenv("GROBID_BASE_URL", "http://localhost:8070")

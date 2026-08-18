@@ -76,11 +76,15 @@ cd backend
 uv run datasight stages
 uv run datasight doctor
 uv run datasight import-um-datasets --path data/um_dataset
-uv run datasight run-all --query "Maastricht dataset reuse" --limit 25 --output storage/exports/insights.csv --mode enqueue
+uv run datasight discovery-preview --processing-limit 25 --discovery-limit 250
+uv run datasight discovery-preview --mode random --random-seed 42 --processing-limit 25 --discovery-limit 250
+uv run datasight run-all --preview-id PREVIEW_UUID --processing-limit 25 --output storage/exports/insights.csv --mode enqueue
 ```
 
-Full runs use `data/um_dataset` and UM-profile discovery by default. Use
-`--no-use-um-profile` to run only the explicit search query and filters.
+Production full runs require an unexpired discovery preview from the adaptive funnel,
+seeded random sampler, or advanced manual query. Direct
+query-first discovery remains available only through the single-stage command
+for development diagnostics.
 
 
 ## Documentation

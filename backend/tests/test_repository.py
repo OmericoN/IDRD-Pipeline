@@ -4,7 +4,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from datasight.domain.schemas import UMDatasetRecord
+from datasight.domain.results import DownloadResult
+from datasight.domain.schemas import MentionCandidate, UMDatasetRecord
 from datasight.infrastructure.persistence.repository import PipelineRepository
 
 
@@ -80,6 +81,36 @@ def test_upsert_um_datasets_uses_canonical_table():
     assert params[0] == "um-1"
     assert params[2] == ["MHS"]
     assert conn.commits == 1
+
+
+def test_artifact_persistence_records_hash_version_metrics_and_downloadability(tmp_path):
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [{"id": 1}, {"id": 1}]
+    pdf = tmp_path / "W1.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+    result = DownloadResult(
+        paper_id="W1",
+        success=True,
+        message="downloaded",
+        filepath=pdf,
+        file_size_bytes=pdf.stat().st_size,
+        sha256="known-hash",
+        warnings=["fixture warning"],
+        quality_metrics={"attempts": 1},
+    )
+
+    assert repo.persist_download_results([result]) == 1
+
+    artifact_query, artifact_params = next(
+        (query, params) for query, params in cursor.executed if "INSERT INTO artifacts" in query
+    )
+    assert "sha256" in artifact_query
+    assert "known-hash" in artifact_params
+    assert artifact_params[-1].adapted["producer_version"] == "pdf-downloader-v2"
+    download_query, download_params = cursor.executed[-1]
+    assert "download_status" in download_query
+    assert download_params == ("downloaded", None, 1)
+    assert conn.commits == 2
 
 
 def test_sync_um_datasets_upserts_then_removes_stale_records():
@@ -176,7 +207,6 @@ def test_upsert_openalex_publications_replaces_child_rows():
             "topics": [{"id": "https://openalex.org/T1", "display_name": "Health data", "score": 0.9}],
             "keywords": [{"display_name": "biobank", "score": 0.8}],
             "concepts": [{"display_name": "Epidemiology", "level": 1, "score": 0.7}],
-            "mesh": [{"descriptor_name": "Humans", "qualifier_name": "analysis"}],
             "related_works": ["https://openalex.org/W999"],
         },
     }
@@ -190,9 +220,145 @@ def test_upsert_openalex_publications_replaces_child_rows():
     assert any("INSERT INTO publication_openalex_topics" in query for query in queries)
     assert any("INSERT INTO publication_openalex_keywords" in query for query in queries)
     assert any("INSERT INTO publication_openalex_concepts" in query for query in queries)
-    assert any("INSERT INTO publication_openalex_mesh" in query for query in queries)
+    assert not any("publication_openalex_mesh" in query for query in queries)
     assert any("INSERT INTO publication_openalex_related_works" in query for query in queries)
     assert conn.commits == 1
+
+
+def test_preview_backed_batch_queries_scope_to_selected_candidates():
+    repo, cursor, _ = make_repo()
+
+    assert repo.get_papers_needing_download(limit=25, pipeline_run_id=9) == []
+
+    query, params = cursor.executed[-1]
+    assert "NULLIF(pr.config->>'preview_id', '') IS NOT NULL" in query
+    assert "dc.included" in query
+    assert "dc.pipeline_ready" in query
+    assert params == [9, 9, 25]
+
+
+def test_detection_selection_is_keyed_by_render_hash_and_detector_version():
+    repo, cursor, _ = make_repo()
+    cursor.fetchall_results = [[{
+        "publication_row_id": 1,
+        "paper_id": "W1",
+        "markdown_artifact_id": 2,
+        "path": "paper.md",
+        "render_sha256": "abc",
+    }]]
+
+    rows = repo.get_markdown_artifacts_needing_detection(
+        detector_version="rules-v3", limit=10, pipeline_run_id=9
+    )
+
+    assert rows[0]["render_sha256"] == "abc"
+    query, params = cursor.executed[-1]
+    assert "mention_detection_runs" in query
+    assert "dr.render_sha256 = md.sha256" in query
+    assert "dr.status = 'successful'" in query
+    assert params == ["rules-v3", 9, 9, 10]
+
+
+def test_zero_candidate_detection_is_persisted_as_successful_completion():
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [{"id": 77}]
+
+    detection_run_id = repo.begin_detection_run(1, 2, "abc", "rules-v3")
+    repo.finish_detection_run(detection_run_id, 0, {"candidate_text_fraction": 0})
+
+    assert detection_run_id == 77
+    assert any("DELETE FROM mention_candidates" in query for query, _ in cursor.executed)
+    finish_query, finish_params = cursor.executed[-1]
+    assert "status = 'successful'" in finish_query
+    assert finish_params[0] == 0
+    assert finish_params[-1] == 77
+    assert conn.commits == 2
+
+
+def test_rules_v3_candidate_persistence_carries_full_lineage():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"id": 1}]
+    candidate = MentionCandidate(
+        publication_id="W1",
+        dataset_name="PRJNA123456",
+        evidence_text="Data are available as PRJNA123456.",
+        char_start=10,
+        char_end=45,
+        evidence_tier="strong",
+        trigger_type="accession",
+        trigger_text="PRJNA123456",
+        triggers=[{"type": "accession", "text": "PRJNA123456", "tier": "strong"}],
+        render_sha256="abc",
+    )
+
+    assert repo.upsert_mention_candidates([candidate], detection_run_id=77) == 1
+    query, params = cursor.executed[-1]
+    assert "detection_run_id" in query
+    assert "detector_version" in query
+    assert "WHERE detection_run_id IS NOT NULL" in query
+    assert 77 in params
+    assert "rules-v3" in params
+
+
+def test_evaluation_queries_are_strictly_run_scoped_and_include_zero_result_papers():
+    repo, cursor, _ = make_repo()
+    cursor.fetchall_results = [[{"paper_id": "W1", "candidate_count": 0}], []]
+
+    papers = repo.evaluation_paper_rows(9)
+    candidates = repo.evaluation_candidate_rows(9)
+
+    assert papers[0]["candidate_count"] == 0
+    paper_query, paper_params = cursor.executed[-2]
+    candidate_query, candidate_params = cursor.executed[-1]
+    assert "dc.pipeline_run_id = %s" in paper_query
+    assert "dc.included" in paper_query
+    assert paper_params == ("rules-v3", 9)
+    assert "dr.render_sha256 = md.sha256" in candidate_query
+    assert "dr.status = 'successful'" in candidate_query
+    assert candidate_params == ("rules-v3", 9)
+    assert candidates == []
+
+
+def test_discovery_candidate_pages_include_the_full_api_contract():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"count": 0}]
+    cursor.fetchall_results = [[]]
+
+    result = repo.list_discovery_candidates(9)
+
+    page_query = cursor.executed[-1][0]
+    assert "p.primary_source_name" in page_query
+    assert result["items"] == []
+
+
+def test_insight_rows_resolve_run_specific_discovery_provenance_without_duplicates():
+    repo, cursor, _ = make_repo()
+    cursor.fetchall_results = [[{"paper_id": "W123", "discovery_mode": "random"}]]
+
+    rows = repo.export_insight_rows(pipeline_run_id=9)
+
+    query, params = cursor.executed[-1]
+    assert rows[0]["discovery_mode"] == "random"
+    assert "LEFT JOIN LATERAL" in query
+    assert "dc.evidence_reasons AS discovery_methods" in query
+    assert "dc.included" in query
+    assert "dc.pipeline_ready" in query
+    assert "dc.pipeline_run_id = %s THEN 0" in query
+    assert "LIMIT 1" in query
+    assert params == (9, 9)
+
+
+def test_global_insight_rows_use_latest_provenance_and_label_legacy_rows():
+    repo, cursor, _ = make_repo()
+    cursor.fetchall_results = [[]]
+
+    assert repo.export_insight_rows() == []
+
+    query, params = cursor.executed[-1]
+    assert "dc.updated_at DESC" in query
+    assert "COALESCE(discovery.discovery_mode, 'unrecorded')" in query
+    assert "COALESCE(discovery.discovery_methods, ARRAY[]::TEXT[])" in query
+    assert params == (None, None)
 
 
 def test_healthcheck_reports_candidate_table_readiness():
@@ -350,14 +516,44 @@ def test_list_pipeline_run_events_reads_chronological_events():
 
 def test_reset_database_truncates_pipeline_tables_and_preserves_schema():
     repo, cursor, conn = make_repo()
+    cursor.fetchall_results = [
+        [
+            {"tablename": "artifacts", "quoted_table_name": '"artifacts"'},
+            {"tablename": "discovery_previews", "quoted_table_name": '"discovery_previews"'},
+            {"tablename": "pipeline_runs", "quoted_table_name": '"pipeline_runs"'},
+            {
+                "tablename": "publication_openalex_topics",
+                "quoted_table_name": '"publication_openalex_topics"',
+            },
+        ]
+    ]
 
     tables = repo.reset_database()
 
-    query, _ = cursor.executed[-1]
-    assert "TRUNCATE" in query
-    assert "alembic_version" not in query
-    assert "pipeline_item_stages" in tables
-    assert "pipeline_items" in tables
-    assert "pipeline_run_events" in tables
-    assert "publications" in tables
+    discovery_query, _ = cursor.executed[-2]
+    truncate_query, _ = cursor.executed[-1]
+    assert "FROM pg_tables" in discovery_query
+    assert "tablename <> 'alembic_version'" in discovery_query
+    assert "tablename <> 'um_datasets'" in discovery_query
+    assert "TRUNCATE" in truncate_query
+    assert '"discovery_previews"' in truncate_query
+    assert '"publication_openalex_topics"' in truncate_query
+    assert '"um_datasets"' not in truncate_query
+    assert tables == [
+        "artifacts",
+        "discovery_previews",
+        "pipeline_runs",
+        "publication_openalex_topics",
+    ]
     assert conn.commits == 1
+
+
+def test_reset_database_is_a_noop_when_schema_has_no_pipeline_tables():
+    repo, cursor, conn = make_repo()
+    cursor.fetchall_results = [[]]
+
+    assert repo.reset_database() == []
+
+    assert len(cursor.executed) == 1
+    assert "FROM pg_tables" in cursor.executed[0][0]
+    assert conn.commits == 0

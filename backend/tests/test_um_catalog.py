@@ -69,6 +69,26 @@ def test_verification_reports_missing_unexpected_and_changed_records(monkeypatch
     assert issues["W3"]["status"] == "unexpected"
 
 
+def test_verification_reports_empty_database_as_import_required(monkeypatch):
+    source_record = UMDatasetRecord(um_dataset_id="W1", title="Expected dataset")
+    FakeRepo.records = []
+    monkeypatch.setattr(um_catalog, "PipelineRepository", FakeRepo)
+    monkeypatch.setattr(um_catalog, "looks_like_openalex_export", lambda path: True)
+    monkeypatch.setattr(
+        um_catalog,
+        "load_um_openalex_export_bundle",
+        lambda path: UMOpenAlexImportBundle([source_record], [], {"source_rows": 1}),
+    )
+
+    result = um_catalog.verify_um_dataset_catalog()
+
+    assert result["status"] == "not_imported"
+    assert result["source_count"] == 1
+    assert result["stored_count"] == 0
+    assert result["issues"] == []
+    assert "has not been imported" in result["message"]
+
+
 def test_verification_keeps_stored_catalog_available_when_source_is_invalid(monkeypatch):
     FakeRepo.records = [UMDatasetRecord(um_dataset_id="W1", title="Stored dataset")]
     monkeypatch.setattr(um_catalog, "PipelineRepository", FakeRepo)

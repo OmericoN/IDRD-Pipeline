@@ -20,10 +20,6 @@ ITEM_STAGES: tuple[PipelineStage, ...] = (
     PipelineStage.MATCH_UM_DATASET,
 )
 
-TERMINAL_STATUSES = {"successful", "failed", "skipped"}
-ACTIVE_STATUSES = {"queued", "running", "started"}
-
-
 class PipelineItemRepositoryMixin:
     conn: Any
     cursor: Any
@@ -107,7 +103,9 @@ class PipelineItemRepositoryMixin:
                 p.open_access_url,
                 pdf.path AS pdf_path,
                 xml.path AS xml_path,
-                md.path AS markdown_path
+                md.path AS markdown_path,
+                md.id AS markdown_artifact_id,
+                md.sha256 AS markdown_sha256
             FROM pipeline_items pi
             JOIN publications p ON p.id = pi.publication_id
             LEFT JOIN artifacts pdf

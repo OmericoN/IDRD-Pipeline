@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from celery.signals import task_failure
 
 from datasight.application import high_throughput
 from datasight.application import pipeline_services as services
-from datasight.config import DEFAULT_UM_DATASETS_PATH
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.worker.celery_app import celery_app
 
@@ -21,11 +20,13 @@ def discover_publications(
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
     keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
     use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
+    preview_id: str | None = None,
+    processing_limit: int | None = None,
+    excluded_candidate_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     return services.discover_publications(
         query=query,
@@ -33,11 +34,13 @@ def discover_publications(
         open_access_only=open_access_only,
         topic_ids=topic_ids,
         keyword_terms=keyword_terms,
-        mesh_terms=mesh_terms,
         from_year=from_year,
         to_year=to_year,
         use_um_profile=use_um_profile,
         pipeline_run_id=pipeline_run_id,
+        preview_id=preview_id,
+        processing_limit=processing_limit,
+        excluded_candidate_ids=excluded_candidate_ids,
     )
 
 
@@ -73,8 +76,14 @@ def render_document(
     limit: int | None = None,
     overwrite: bool = False,
     pipeline_run_id: int | None = None,
+    profile: Literal["full_body", "pruned"] = "full_body",
 ) -> dict[str, Any]:
-    return services.render_document_batch(limit=limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id)
+    return services.render_document_batch(
+        limit=limit,
+        overwrite=overwrite,
+        pipeline_run_id=pipeline_run_id,
+        profile=profile,
+    )
 
 
 @celery_app.task(name="datasight.detect_mentions", bind=True)
@@ -117,33 +126,19 @@ def export_insights(
 @celery_app.task(name="datasight.bootstrap_high_throughput_run", bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
 def bootstrap_high_throughput_run(
     self,
-    query: str,
-    limit: int,
+    preview_id: str,
+    processing_limit: int,
     output_path: str,
-    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
-    open_access_only: bool = True,
-    topic_ids: str | list[str] | None = None,
-    keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
-    use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
+    excluded_candidate_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     result = high_throughput.bootstrap_high_throughput_run(
-        query=query,
-        limit=limit,
-        um_datasets_path=um_datasets_path,
+        preview_id=preview_id,
+        processing_limit=processing_limit,
         overwrite=overwrite,
-        open_access_only=open_access_only,
-        topic_ids=topic_ids,
-        keyword_terms=keyword_terms,
-        mesh_terms=mesh_terms,
-        from_year=from_year,
-        to_year=to_year,
-        use_um_profile=use_um_profile,
         pipeline_run_id=pipeline_run_id,
+        excluded_candidate_ids=excluded_candidate_ids,
     )
     dispatch_high_throughput_run.apply_async(
         kwargs={

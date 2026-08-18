@@ -19,7 +19,6 @@ EXPORT_FILENAMES: dict[str, tuple[str, ...]] = {
     "topics": ("OPEN_ALEX_DATA_TOPICS.csv",),
     "keywords": ("OPEN_ALEX_DATA_KEYWORDS.csv",),
     "concepts": ("OPEN_ALEX_DATA_CONCEPTS.csv",),
-    "mesh": ("OPEN_ALEX_DATA_MESHS.csv",),
     "affiliations": ("OPEN_ALEX_AFFILIATION.csv", "OPEN_ALEX_AFFILIATIONS.csv"),
     "related_works": ("OPEN_ALEX_DATA_RELATED_WORKS.csv",),
 }
@@ -90,7 +89,7 @@ def load_um_openalex_export_bundle(path: Path) -> UMOpenAlexImportBundle:
             continue
         table = _read_csv(child_path)
         fields = set(table.fields)
-        if key in {"concepts", "mesh"} and "OPENALEX_ID" not in fields:
+        if key == "concepts" and "OPENALEX_ID" not in fields:
             warnings.append(f"{child_path.name} declares no usable {key} rows.")
             table = CSVTable([], table.fields, table.encoding, table.delimiter)
         elif key in REQUIRED_CHILD_FIELDS:
@@ -276,7 +275,6 @@ def _raw_openalex(
         "topics": child_rows.get("topics", {}).get(openalex_id, []),
         "keywords": child_rows.get("keywords", {}).get(openalex_id, []),
         "concepts": child_rows.get("concepts", {}).get(openalex_id, []),
-        "mesh": child_rows.get("mesh", {}).get(openalex_id, []),
         "related_works": [
             related_id
             for related in child_rows.get("related_works", {}).get(openalex_id, [])
@@ -355,8 +353,6 @@ def _normalize_child_row(normalized: dict[str, str | None], original: dict[str, 
         "score": normalized.get("SCORE"),
         "concept": normalized.get("CONCEPT"),
         "level": normalized.get("LEVEL"),
-        "mesh": normalized.get("MESH"),
-        "qualifier": normalized.get("QUALIFIER"),
         "domain": normalized.get("DOMAIN"),
         "domain_id": normalized.get("DOMAIN_ID"),
         "field": normalized.get("FIELD"),

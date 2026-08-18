@@ -16,6 +16,8 @@ from datasight.domain.discovery import (
     dedupe_and_score_publications,
     parse_terms,
 )
+from datasight.application.discovery_preview import materialize_discovery_preview
+from datasight.application.insights import INSIGHT_COLUMNS, serialize_insights_csv
 from datasight.infrastructure.ingestion.converter import GrobidConverter
 from datasight.infrastructure.ingestion.downloader import PDFDownloader
 from datasight.infrastructure.ingestion.openalex_exports import (
@@ -27,7 +29,8 @@ from datasight.infrastructure.ingestion.renderer import render_papers, render_to
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.pubfetcher.openalex import OpenAlexClient
 from datasight.matching.um_matcher import match_mention_to_um_dataset
-from datasight.domain.candidate_detection import detect_dataset_candidates
+from datasight.domain.candidate_detection import DETECTOR_VERSION, detect_dataset_candidates
+from datasight.infrastructure.ingestion.file_integrity import sha256_file
 from datasight.domain.schemas import (
     DatasetMention,
     DatasetMetadata,
@@ -47,16 +50,45 @@ def discover_publications(
     open_access_only: bool = True,
     topic_ids: str | list[str] | None = None,
     keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
     from_year: int | None = None,
     to_year: int | None = None,
     use_um_profile: bool = True,
     pipeline_run_id: int | None = None,
+    preview_id: str | None = None,
+    processing_limit: int | None = None,
+    excluded_candidate_ids: list[str] | None = None,
 ) -> dict[str, Any]:
+    if preview_id:
+        if pipeline_run_id is None:
+            raise ValueError("pipeline_run_id is required when materializing a discovery preview.")
+        materialized = materialize_discovery_preview(
+            preview_id=preview_id,
+            pipeline_run_id=pipeline_run_id,
+            processing_limit=processing_limit or limit,
+            excluded_candidate_ids=excluded_candidate_ids,
+        )
+        result = _stage_result(
+            PipelineStage.DISCOVER,
+            "successful" if materialized["paper_ids"] else "skipped",
+            int(materialized["persisted"]),
+            (
+                f"Retained {materialized['candidate_count']} discovery candidates and "
+                f"queued {materialized['included']} papers with an OpenAlex PDF URL."
+            ),
+            materialized,
+        )
+        with PipelineRepository() as repo:
+            repo.record_stage_result(
+                PipelineStage.DISCOVER,
+                result["status"],
+                result,
+                pipeline_run_id,
+            )
+        return result
+
     options = DiscoveryOptions(
         topic_ids=parse_terms(topic_ids),
         keyword_terms=parse_terms(keyword_terms),
-        mesh_terms=parse_terms(mesh_terms),
         from_year=from_year,
         to_year=to_year,
         use_um_profile=use_um_profile,
@@ -130,7 +162,7 @@ def download_pdf_batch(
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
         downloader = PDFDownloader(output_dir=PDF_DIR)
-        papers = repo.get_papers_needing_download(limit=limit)
+        papers = repo.get_papers_needing_download(limit=limit, pipeline_run_id=pipeline_run_id)
         results = downloader.download_papers(papers, overwrite=overwrite)
         repo.persist_download_results(results)
         result = _result_from_operation(PipelineStage.DOWNLOAD_PDF, results)
@@ -146,7 +178,7 @@ def grobid_convert_batch(
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
         converter = GrobidConverter(output_dir=XML_DIR)
-        papers = repo.get_papers_needing_conversion(limit=limit)
+        papers = repo.get_papers_needing_conversion(limit=limit, pipeline_run_id=pipeline_run_id)
         results = converter.convert_papers(papers, overwrite=overwrite, delete_pdf=delete_pdf)
         repo.persist_conversion_results(results)
         result = _result_from_operation(PipelineStage.GROBID_CONVERT, results)
@@ -158,10 +190,13 @@ def render_document_batch(
     limit: int | None = None,
     overwrite: bool = False,
     pipeline_run_id: int | None = None,
+    profile: Literal["full_body", "pruned"] = "full_body",
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
-        papers = repo.get_papers_needing_rendering(limit=limit)
-        results = render_papers(papers, output_dir=MARKDOWN_DIR, overwrite=overwrite)
+        papers = repo.get_papers_needing_rendering(limit=limit, pipeline_run_id=pipeline_run_id)
+        results = render_papers(
+            papers, output_dir=MARKDOWN_DIR, overwrite=overwrite, profile=profile
+        )
         repo.persist_render_results(results)
         result = _result_from_operation(PipelineStage.RENDER_DOCUMENT, results)
         repo.record_stage_result(PipelineStage.RENDER_DOCUMENT, result["status"], result, pipeline_run_id)
@@ -173,19 +208,71 @@ def detect_mentions_batch(
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
-        artifacts = repo.get_markdown_artifacts_without_candidates(limit=limit)
-        candidates = []
+        artifacts = repo.get_markdown_artifacts_needing_detection(
+            detector_version=DETECTOR_VERSION,
+            limit=limit,
+            pipeline_run_id=pipeline_run_id,
+        )
+        catalog_records = repo.list_um_dataset_records()
+        inserted = 0
+        failed = 0
         for artifact in artifacts:
-            path = Path(artifact["path"])
-            markdown = path.read_text(encoding="utf-8")
-            candidates.extend(detect_dataset_candidates(artifact["paper_id"], markdown))
-        inserted = repo.upsert_mention_candidates(candidates)
+            detection_run_id = repo.begin_detection_run(
+                int(artifact["publication_row_id"]),
+                int(artifact["markdown_artifact_id"]),
+                str(artifact["render_sha256"]),
+                DETECTOR_VERSION,
+            )
+            try:
+                path = Path(artifact["path"])
+                actual_hash = sha256_file(path)
+                if actual_hash != artifact["render_sha256"]:
+                    raise ValueError("Markdown hash does not match the persisted artifact; rerender required")
+                markdown = path.read_text(encoding="utf-8")
+                candidates = detect_dataset_candidates(
+                    artifact["paper_id"],
+                    markdown,
+                    render_sha256=actual_hash,
+                    catalog_records=catalog_records,
+                )
+                count = repo.upsert_mention_candidates(candidates, detection_run_id=detection_run_id)
+                covered = sum(candidate.char_end - candidate.char_start for candidate in candidates)
+                repo.finish_detection_run(
+                    detection_run_id,
+                    count,
+                    {
+                        "detector_version": DETECTOR_VERSION,
+                        "render_sha256": actual_hash,
+                        "markdown_characters": len(markdown),
+                        "candidate_characters": covered,
+                        "candidate_text_fraction": covered / len(markdown) if markdown else 0,
+                        "tiers": {
+                            tier: sum(candidate.evidence_tier == tier for candidate in candidates)
+                            for tier in ("strong", "medium", "broad")
+                        },
+                    },
+                )
+                inserted += count
+            except Exception as exc:
+                failed += 1
+                repo.fail_detection_run(detection_run_id, str(exc))
+        if failed and inserted:
+            status = "completed_with_errors"
+        elif failed:
+            status = "failed"
+        else:
+            status = "successful"
         result = _stage_result(
             PipelineStage.DETECT_MENTIONS,
-            "successful" if inserted else "skipped",
+            status,
             inserted,
-            f"Detected and persisted {inserted} candidate dataset mentions.",
-            {"candidates": inserted, "documents": len(artifacts)},
+            f"Processed {len(artifacts)} documents and persisted {inserted} rules-v3 windows.",
+            {
+                "candidates": inserted,
+                "documents": len(artifacts),
+                "failed_documents": failed,
+                "detector_version": DETECTOR_VERSION,
+            },
         )
         repo.record_stage_result(PipelineStage.DETECT_MENTIONS, result["status"], result, pipeline_run_id)
         return result
@@ -196,7 +283,7 @@ def extract_features_from_candidates(
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
-        rows = repo.get_unprocessed_candidates(limit=limit)
+        rows = repo.get_unprocessed_candidates(limit=limit, pipeline_run_id=pipeline_run_id)
         mentions: list[DatasetMention] = []
         candidate_ids: list[int] = []
         for candidate in rows:
@@ -253,7 +340,7 @@ def match_um_dataset_batch(
         if not records:
             raise ValueError("No UM datasets are imported. Run import-um-datasets first.")
 
-        mention_rows = repo.get_unmatched_mentions(limit=limit)
+        mention_rows = repo.get_unmatched_mentions(limit=limit, pipeline_run_id=pipeline_run_id)
         decisions = []
         for row in mention_rows:
             mention = DatasetMention.model_validate(
@@ -397,15 +484,43 @@ def detect_mentions_pipeline_item(
             message = "Markdown artifact is missing."
             repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "failed", {"message": message}, message)
             return _item_result(PipelineStage.DETECT_MENTIONS, "failed", item_id, message)
+        if not context.get("markdown_artifact_id") or not context.get("markdown_sha256"):
+            message = "Markdown lineage is missing; rerender the document before detection."
+            repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "failed", {"message": message}, message)
+            return _item_result(PipelineStage.DETECT_MENTIONS, "failed", item_id, message)
+        detection_run_id = repo.begin_detection_run(
+            int(context["publication_row_id"]),
+            int(context["markdown_artifact_id"]),
+            str(context["markdown_sha256"]),
+            DETECTOR_VERSION,
+        )
         try:
-            markdown = Path(context["markdown_path"]).read_text(encoding="utf-8")
-        except OSError as exc:
-            message = f"Markdown read error: {exc}"
+            markdown_path = Path(context["markdown_path"])
+            actual_hash = sha256_file(markdown_path)
+            if actual_hash != context["markdown_sha256"]:
+                raise ValueError("Markdown hash does not match the persisted artifact; rerender required")
+            markdown = markdown_path.read_text(encoding="utf-8")
+            candidates = detect_dataset_candidates(
+                context["paper_id"],
+                markdown,
+                render_sha256=actual_hash,
+                catalog_records=repo.list_um_dataset_records(),
+            )
+            inserted = repo.upsert_mention_candidates(candidates, detection_run_id=detection_run_id)
+            covered = sum(candidate.char_end - candidate.char_start for candidate in candidates)
+            metrics = {
+                "candidates": inserted,
+                "paper_id": context["paper_id"],
+                "detector_version": DETECTOR_VERSION,
+                "render_sha256": actual_hash,
+                "candidate_text_fraction": covered / len(markdown) if markdown else 0,
+            }
+            repo.finish_detection_run(detection_run_id, inserted, metrics)
+        except Exception as exc:
+            message = f"Mention detection error: {exc}"
+            repo.fail_detection_run(detection_run_id, str(exc))
             repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "failed", {"message": message}, str(exc))
             return _item_result(PipelineStage.DETECT_MENTIONS, "failed", item_id, message)
-        candidates = detect_dataset_candidates(context["paper_id"], markdown)
-        inserted = repo.upsert_mention_candidates(candidates)
-        metrics = {"candidates": inserted, "paper_id": context["paper_id"]}
         repo.finish_item_stage(item_id, PipelineStage.DETECT_MENTIONS, "successful", metrics)
         return _item_result(
             PipelineStage.DETECT_MENTIONS,
@@ -498,14 +613,13 @@ def export_insights_csv(
     pipeline_run_id: int | None = None,
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
-        export_rows = rows if rows is not None else repo.export_insight_rows()
+        export_rows = (
+            rows if rows is not None else repo.export_insight_rows(pipeline_run_id=pipeline_run_id)
+        )
         path = _project_path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        fieldnames = sorted({key for row in export_rows for key in row.keys()})
         with path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows([_json_safe(row) for row in export_rows])
+            handle.write(serialize_insights_csv(export_rows, INSIGHT_COLUMNS))
         result = _stage_result(
             PipelineStage.EXPORT_INSIGHTS,
             "successful",
@@ -515,6 +629,68 @@ def export_insights_csv(
         )
         repo.record_stage_result(PipelineStage.EXPORT_INSIGHTS, result["status"], result, pipeline_run_id)
         return result
+
+
+EVALUATION_PAPER_COLUMNS = [
+    "run_id", "run_key", "run_created_at", "run_config", "publication_row_id",
+    "paper_id", "title", "doi", "year", "language", "publication_type",
+    "source_url", "open_access_url", "discovery_score", "discovery_evidence_tier",
+    "evidence_reasons", "matched_um_dataset_ids", "pdf_url_available",
+    "download_status", "download_failure_category", "download_checked_at",
+    "pipeline_item_status", "stage_statuses", "pdf_path", "pdf_sha256",
+    "pdf_metadata", "tei_path", "tei_sha256", "tei_metadata", "markdown_path",
+    "markdown_sha256", "markdown_metadata", "detection_status", "detector_version",
+    "candidate_count", "detection_metrics", "detection_error",
+]
+EVALUATION_CANDIDATE_COLUMNS = [
+    "run_id", "paper_id", "title", "doi", "discovery_score",
+    "discovery_evidence_tier", "markdown_artifact_id", "markdown_path",
+    "render_sha256", "renderer_version", "detection_run_id", "detector_version",
+    "detected_at", "candidate_id", "dataset_name", "evidence_tier",
+    "trigger_type", "trigger_text", "triggers", "evidence_text", "section_heading",
+    "standardized_section", "char_start", "char_end", "legacy_tier_score", "source",
+]
+
+
+def export_evaluation_bundle(pipeline_run_id: int, output_dir: str) -> dict[str, Any]:
+    """Write run-scoped paper and active rules-v3 candidate tables."""
+    with PipelineRepository() as repo:
+        if repo.get_pipeline_run(pipeline_run_id) is None:
+            raise ValueError(f"Pipeline run {pipeline_run_id} does not exist")
+        papers = repo.evaluation_paper_rows(pipeline_run_id)
+        candidates = repo.evaluation_candidate_rows(pipeline_run_id)
+
+    destination = _project_path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    papers_path = destination / "papers.csv"
+    candidates_path = destination / "candidates.csv"
+    _write_dict_rows(papers_path, papers, EVALUATION_PAPER_COLUMNS)
+    _write_dict_rows(candidates_path, candidates, EVALUATION_CANDIDATE_COLUMNS)
+    return {
+        "status": "successful",
+        "run_id": pipeline_run_id,
+        "papers": len(papers),
+        "candidates": len(candidates),
+        "detector_version": DETECTOR_VERSION,
+        "papers_path": str(papers_path),
+        "candidates_path": str(candidates_path),
+    }
+
+
+def _write_dict_rows(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: _csv_value(row.get(column)) for column in columns})
+
+
+def _csv_value(value: Any) -> Any:
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(_json_safe(value), ensure_ascii=False, sort_keys=True)
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
 
 
 def load_um_dataset_records(path: str) -> list[UMDatasetRecord]:
@@ -654,7 +830,7 @@ def _mention_from_candidate(candidate: dict[str, Any]) -> DatasetMention:
             char_start=candidate.get("char_start"),
             char_end=candidate.get("char_end"),
             confidence=candidate.get("score", 0.0),
-            prompt_version="rules-v2",
+            prompt_version=DETECTOR_VERSION,
         ),
     )
 

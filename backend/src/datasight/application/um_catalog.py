@@ -61,6 +61,22 @@ def verify_um_dataset_catalog(source_path: str = DEFAULT_UM_DATASETS_PATH) -> di
 
     source_by_id = {record.um_dataset_id: record for record in source_records}
     stored_by_id = {record.um_dataset_id: record for record in stored_records}
+    if source_records and not stored_records:
+        return {
+            "status": "not_imported",
+            "source_path": source_path,
+            "checked_at": checked_at,
+            "source_count": len(source_records),
+            "stored_count": 0,
+            "verified_count": 0,
+            "issues": [],
+            "warnings": warnings,
+            "metrics": metrics,
+            "message": (
+                "The authoritative catalog is available but has not been imported into the "
+                "database. Import it once, then run verification again."
+            ),
+        }
     issues: list[dict[str, Any]] = []
     verified_count = 0
 

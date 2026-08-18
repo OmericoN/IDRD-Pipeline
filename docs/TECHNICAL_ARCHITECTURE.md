@@ -56,7 +56,7 @@ discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions
 
 ## Data Flow
 
-1. `discover` queries OpenAlex and stores publication metadata, topics, keywords, MeSH, concepts, affiliations, citation/dataset relationships, and related-work links. UM-profile runs sweep the authoritative catalog in 100-ID `cites` and `datasets` batches before applying secondary metadata signals.
+1. `discover` materializes an operator-reviewed strategy-v2 preview for every production run. Catalog mode completes direct evidence first, then conditionally runs exact mentions, related works, and focused topic/keyword expansion until its PDF-ready target is met. Random mode uses OpenAlex's native seeded sample operation and preserves the draw order; manual mode runs one expert query. The direct query-first stage remains a development diagnostic only.
 2. `download_pdf` downloads and validates open-access PDFs.
 3. `grobid_convert` submits PDFs to GROBID and stores TEI XML.
 4. `render_document` converts TEI XML into Markdown for extraction.
@@ -65,9 +65,56 @@ discover -> download_pdf -> grobid_convert -> render_document -> detect_mentions
 7. `match_um_dataset` compares mentions against imported UM dataset records and returns all candidate IDs when metadata-only evidence is ambiguous.
 8. `export_insights` writes joined insight rows to CSV.
 
+### Adaptive OpenAlex discovery funnel
+
+This Mermaid block is compatible with Obsidian and Excalidraw's Mermaid importer:
+
+```mermaid
+flowchart TD
+    A["Verified UM dataset catalog"] --> B["Profile catalog identifiers, titles, related works, topics, and keywords"]
+    B --> C["Phase 1: Direct evidence"]
+    C --> C1["OpenAlex filter: datasets in catalog work IDs; batches of 100"]
+    C --> C2["OpenAlex filter: cites catalog work IDs; batches of 100"]
+    C1 --> D["Normalize and deduplicate OpenAlex works"]
+    C2 --> D
+    D --> E{"Enough unique PDF-ready candidates?"}
+    E -->|"Yes"| R["Rank and retain candidate pool"]
+    E -->|"No"| F["Phase 2: Exact mentions"]
+    F --> F1["Exact DOI search; batches of 25"]
+    F --> F2["Exact distinctive title and alias search; batches of 5"]
+    F1 --> G["Attach a UM dataset ID only when the exact term is visible in returned title or abstract"]
+    F2 --> G
+    G --> H{"Enough unique PDF-ready candidates?"}
+    H -->|"Yes"| R
+    H -->|"No"| I["Phase 3A: Catalog-provided related works; batches of 100"]
+    I --> J{"Enough unique PDF-ready candidates?"}
+    J -->|"Yes"| R
+    J -->|"No"| K["Phase 3B: Lazily resolve priority OpenAlex topics"]
+    K --> L["Search resolved topics and informative non-generic keywords"]
+    L --> M{"Ready target, cost ceiling, or expansion exhausted?"}
+    M -->|"Continue"| L
+    M -->|"Stop"| R
+    R --> R1["Evidence tier: Direct, Exact, or Expanded"]
+    R --> R2["Candidate strength: transparent 0 to 100 evidence score; not probability"]
+    R1 --> S["Reserve strongest PDF-ready papers up to process-now target"]
+    R2 --> S
+    S --> T["Fill remaining pool capacity with additional ready papers and no-PDF watchlist leads"]
+    T --> U["Operator reviews and excludes candidates"]
+    U --> V["Launch standard or high-throughput run with preview ID"]
+    V --> W["Revalidate expiry, strategy version, and catalog fingerprint"]
+    W --> X["Materialize run-scoped discovery candidates and backfill exclusions"]
+    X --> Y["PDF download, full-text extraction, dataset mention detection, and UM matching"]
+    Y --> Z["Only downstream evidence may confirm actual dataset use"]
+    C -.-> Q{"Next call fits remaining cost budget?"}
+    F -.-> Q
+    I -.-> Q
+    L -.-> Q
+    Q -->|"No"| R
+```
+
 ## Persistence And Artifacts
 
-PostgreSQL is the source of truth for durable state. `PipelineRepository` composes focused persistence modules for publications, artifacts, mentions, UM datasets, insights, runs, and events.
+PostgreSQL is the source of truth for durable state. `PipelineRepository` composes focused persistence modules for publications, discovery previews and candidates, artifacts, mentions, UM datasets, insights, runs, and events.
 
 Generated files are written under:
 
@@ -85,8 +132,11 @@ Curated source/reference files belong under `data/` and should not be removed by
 
 `POST /api/v1/runs` creates a pipeline run, stores run configuration, and enqueues Celery work. The GUI polls:
 
+- `GET /api/v1/discovery/um-profile` and `/api/v1/openalex/status` before previewing
+- `POST /api/v1/discovery/preview` to create an expiring strategy snapshot
 - `GET /api/v1/runs/{run_id}` for run and stage summaries
 - `GET /api/v1/runs/{run_id}/events` for chronological messages and errors
+- `GET /api/v1/runs/{run_id}/discovery-candidates` for paginated discovery evidence
 - `GET /api/v1/insights` for result preview
 
 Celery task names use the `datasight.*` prefix. The worker command is:
@@ -121,7 +171,7 @@ Reset lives in `datasight.application.reset` and requires:
 }
 ```
 
-It truncates generated pipeline tables and deletes configured generated artifact paths under `storage/`. It does not delete migrations, source files, `.env`, Docker volumes, or curated inputs in `data/`.
+It discovers and truncates pipeline-generated application tables in the current database schema, restarts their identity sequences, and deletes configured generated artifact paths under `storage/`. The imported `um_datasets` catalog and Alembic migration marker are preserved. Reset does not delete migrations, source files, `.env`, Docker volumes, or curated inputs in `data/`.
 
 ## Failure Modes
 

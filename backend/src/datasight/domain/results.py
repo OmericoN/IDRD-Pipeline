@@ -8,7 +8,7 @@ decides how to persist them (database, DataFrame, JSON, etc.).
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 
 
@@ -24,6 +24,12 @@ class DownloadResult:
     file_size_bytes: int = 0
     download_time: Optional[datetime] = None
     url: Optional[str] = None
+    sha256: Optional[str] = None
+    source_sha256: Optional[str] = None
+    producer_version: str = "pdf-downloader-v2"
+    failure_category: Optional[str] = None
+    warnings: list[str] | None = None
+    quality_metrics: dict[str, Any] | None = None
     
     def __post_init__(self):
         """Set download_time if not provided."""
@@ -43,6 +49,12 @@ class ConversionResult:
     error: Optional[str] = None
     conversion_time: Optional[datetime] = None
     xml_size_bytes: int = 0
+    sha256: Optional[str] = None
+    source_sha256: Optional[str] = None
+    producer_version: str = "grobid-tei-v2"
+    failure_category: Optional[str] = None
+    warnings: list[str] | None = None
+    quality_metrics: dict[str, Any] | None = None
     
     def __post_init__(self):
         """Set conversion_time if not provided."""
@@ -63,6 +75,12 @@ class RenderResult:
     render_time: Optional[datetime] = None
     sections_extracted: int = 0
     references_count: int = 0
+    sha256: Optional[str] = None
+    source_sha256: Optional[str] = None
+    producer_version: str = "tei-renderer-v3"
+    profile: str = "full_body"
+    warnings: list[str] | None = None
+    quality_metrics: dict[str, Any] | None = None
     
     def __post_init__(self):
         """Set render_time if not provided."""

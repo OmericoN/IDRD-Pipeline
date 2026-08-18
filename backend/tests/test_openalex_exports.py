@@ -47,7 +47,7 @@ def test_load_um_openalex_export_directory(tmp_path):
     assert record.repository == "Dataverse"
     assert record.keywords == ["cohort", "biobank", "genomics"]
     assert record.raw["openalex"]["topics"][0]["topic_id"] == "T42"
-    assert record.raw["openalex"]["mesh"][0]["mesh"] == "Humans"
+    assert "mesh" not in record.raw["openalex"]
     assert record.raw["openalex"]["related_works"] == ["https://openalex.org/W999"]
 
 
@@ -96,6 +96,7 @@ def test_load_cp1252_tsv_with_singular_affiliations_and_quality_warnings(tmp_pat
     assert bundle.metrics["invalid_doi_count"] == 1
     assert bundle.metrics["encodings"]["data"] == "cp1252"
     assert bundle.metrics["delimiters"]["data"] == "tab"
+    assert all("mesh" not in warning.casefold() for warning in bundle.warnings)
 
 
 def test_supplied_um_catalog_has_expected_shape():
@@ -110,3 +111,5 @@ def test_supplied_um_catalog_has_expected_shape():
     assert bundle.metrics["invalid_doi_count"] == 1
     assert bundle.metrics["duplicate_title_groups"] == 476
     assert bundle.metrics["duplicate_title_rows"] == 1103
+    assert "mesh" not in bundle.metrics["child_rows"]
+    assert all("mesh" not in warning.casefold() for warning in bundle.warnings)

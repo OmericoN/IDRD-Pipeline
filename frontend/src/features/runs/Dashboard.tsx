@@ -6,6 +6,7 @@ import {
   RiClipboardLine,
   RiDatabase2Line,
   RiDeleteBinLine,
+  RiDownload2Line,
   RiErrorWarningLine,
   RiFileList3Line,
   RiFileTextLine,
@@ -25,7 +26,7 @@ import {
   RiTimeLine,
   type RemixiconComponentType,
 } from "@remixicon/react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   BrowserRouter,
   Link,
@@ -34,7 +35,6 @@ import {
   Route,
   Routes,
   useLocation,
-  useNavigate,
   useOutletContext,
   useParams,
 } from "react-router";
@@ -85,6 +85,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -118,7 +119,6 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import maastrichtBanner from "@/assets/maastricht-university-seeklogo.png";
-import UMDatasetsPage from "@/features/datasets/UMDatasetsPage";
 import { cn } from "@/lib/utils";
 import {
   ApiError,
@@ -145,25 +145,10 @@ import {
   type VisualStage,
 } from "./pipeline";
 
-const DEFAULT_OUTPUT = "storage/exports/insights.csv";
-const DEFAULT_UM_DATASETS = "data/um_dataset";
-const RESET_CONFIRMATION = "RESET DATASIGHT";
+const DiscoveryLaunchPage = lazy(() => import("@/features/discovery/DiscoveryLaunchPage"));
+const UMDatasetsPage = lazy(() => import("@/features/datasets/UMDatasetsPage"));
 
-type RunFormState = {
-  query: string;
-  limit: number;
-  umDatasetsPath: string;
-  outputPath: string;
-  topicIds: string;
-  keywordTerms: string;
-  meshTerms: string;
-  fromYear: string;
-  toYear: string;
-  useUmProfile: boolean;
-  openAccessOnly: boolean;
-  overwrite: boolean;
-  highThroughput: boolean;
-};
+const RESET_CONFIRMATION = "RESET DATASIGHT";
 
 type OutletContext = {
   health: HealthResponse | undefined;
@@ -278,18 +263,36 @@ function Dashboard() {
       <Routes>
         <Route element={<PipelineShell />}>
           <Route index element={<Navigate replace to="/launch" />} />
-          <Route path="launch" element={<LaunchPage />} />
+          <Route
+            path="launch"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <DiscoveryLaunchPage />
+              </Suspense>
+            }
+          />
           <Route path="runs" element={<RunsPage />} />
           <Route path="workspace" element={<WorkspaceRedirect />} />
           <Route path="runs/:runId" element={<WorkspacePage />} />
           <Route path="insights" element={<InsightsPage />} />
-          <Route path="datasets" element={<UMDatasetsPage />} />
+          <Route
+            path="datasets"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <UMDatasetsPage />
+              </Suspense>
+            }
+          />
           <Route path="admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate replace to="/launch" />} />
         </Route>
       </Routes>
     </BrowserRouter>
   );
+}
+
+function RouteFallback() {
+  return <Skeleton aria-label="Loading page" className="h-72 w-full rounded-xl" />;
 }
 
 function PipelineShell() {
@@ -340,7 +343,7 @@ function PipelineShell() {
               <div className="min-w-0">
                 <p className="font-heading text-sm font-medium">DataSight</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  Dataset reuse discovery
+                  Dataset reuse monitoring
                 </p>
               </div>
             </div>
@@ -492,356 +495,6 @@ function PipelineShell() {
         </div>
       </SidebarInset>
     </SidebarProvider>
-  );
-}
-
-function LaunchPage() {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [form, setForm] = useState<RunFormState>({
-    query: "Maastricht dataset reuse",
-    limit: 25,
-    umDatasetsPath: DEFAULT_UM_DATASETS,
-    outputPath: DEFAULT_OUTPUT,
-    topicIds: "",
-    keywordTerms: "",
-    meshTerms: "",
-    fromYear: "",
-    toYear: "",
-    useUmProfile: true,
-    openAccessOnly: true,
-    overwrite: false,
-    highThroughput: false,
-  });
-
-  const createRunMutation = useMutation({
-    mutationFn: api.createRun,
-    onSuccess: async (created) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["runs"] }),
-        queryClient.invalidateQueries({
-          queryKey: ["run", created.pipeline_run_id],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["run-events", created.pipeline_run_id],
-        }),
-      ]);
-      navigate(`/runs/${created.pipeline_run_id}`);
-    },
-  });
-
-  function submitRun(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    createRunMutation.mutate({
-      query: form.query.trim(),
-      limit: form.limit,
-      topic_ids: splitTerms(form.topicIds),
-      keyword_terms: splitTerms(form.keywordTerms),
-      mesh_terms: splitTerms(form.meshTerms),
-      from_year: parseOptionalYear(form.fromYear),
-      to_year: parseOptionalYear(form.toYear),
-      use_um_profile: form.useUmProfile,
-      open_access_only: form.openAccessOnly,
-      overwrite: form.overwrite,
-      um_datasets_path: form.umDatasetsPath.trim() || null,
-      output_path: form.outputPath.trim() || DEFAULT_OUTPUT,
-      strategy: form.highThroughput ? "high_throughput" : "standard",
-    });
-  }
-
-  return (
-    <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Start a dataset mention run</CardTitle>
-          <CardDescription>
-            Queue the full publication-to-insight pipeline with explicit inputs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="flex flex-col gap-6" onSubmit={submitRun}>
-            <FieldSet>
-              <FieldLegend>Run inputs</FieldLegend>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="query">Search query</FieldLabel>
-                  <Input
-                    id="query"
-                    value={form.query}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        query: event.target.value,
-                      }))
-                    }
-                    placeholder="Maastricht dataset reuse"
-                    required
-                  />
-                  <FieldDescription>
-                    Used by discovery to find candidate publication metadata.
-                  </FieldDescription>
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]">
-                  <Field>
-                    <FieldLabel htmlFor="limit">Limit</FieldLabel>
-                    <Input
-                      id="limit"
-                      type="number"
-                      min={1}
-                      max={1000}
-                      value={form.limit}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          limit: Number(event.target.value),
-                        }))
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="outputPath">Output CSV</FieldLabel>
-                    <Input
-                      id="outputPath"
-                      value={form.outputPath}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          outputPath: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                </div>
-                <Field>
-                  <FieldLabel htmlFor="umDatasetsPath">
-                    UM dataset metadata
-                  </FieldLabel>
-                  <Input
-                    id="umDatasetsPath"
-                    value={form.umDatasetsPath}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        umDatasetsPath: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="topicIds">OpenAlex topics</FieldLabel>
-                    <Input
-                      id="topicIds"
-                      value={form.topicIds}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          topicIds: event.target.value,
-                        }))
-                      }
-                      placeholder="T12345, T67890"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="keywordTerms">Keywords</FieldLabel>
-                    <Input
-                      id="keywordTerms"
-                      value={form.keywordTerms}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          keywordTerms: event.target.value,
-                        }))
-                      }
-                      placeholder="biobank, cohort"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="meshTerms">MeSH terms</FieldLabel>
-                    <Input
-                      id="meshTerms"
-                      value={form.meshTerms}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          meshTerms: event.target.value,
-                        }))
-                      }
-                      placeholder="Humans, Surveys"
-                    />
-                  </Field>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="fromYear">From</FieldLabel>
-                      <Input
-                        id="fromYear"
-                        type="number"
-                        min={1800}
-                        max={3000}
-                        value={form.fromYear}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            fromYear: event.target.value,
-                          }))
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="toYear">To</FieldLabel>
-                      <Input
-                        id="toYear"
-                        type="number"
-                        min={1800}
-                        max={3000}
-                        value={form.toYear}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            toYear: event.target.value,
-                          }))
-                        }
-                      />
-                    </Field>
-                  </div>
-                </div>
-              </FieldGroup>
-            </FieldSet>
-
-            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-              <Field orientation="horizontal" className="rounded-lg border p-3">
-                <Switch
-                  id="useUmProfile"
-                  checked={form.useUmProfile}
-                  onCheckedChange={(checked) =>
-                    setForm((current) => ({
-                      ...current,
-                      useUmProfile: checked,
-                    }))
-                  }
-                />
-                <FieldContent>
-                  <FieldLabel htmlFor="useUmProfile">
-                    UM profile discovery
-                  </FieldLabel>
-                  <FieldDescription>
-                    Expand discovery from imported OpenAlex metadata.
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-              <Field orientation="horizontal" className="rounded-lg border p-3">
-                <Switch
-                  id="openAccessOnly"
-                  checked={form.openAccessOnly}
-                  onCheckedChange={(checked) =>
-                    setForm((current) => ({
-                      ...current,
-                      openAccessOnly: checked,
-                    }))
-                  }
-                />
-                <FieldContent>
-                  <FieldLabel htmlFor="openAccessOnly">
-                    Open access only
-                  </FieldLabel>
-                  <FieldDescription>
-                    Prefer publications with available PDF links.
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-              <Field orientation="horizontal" className="rounded-lg border p-3">
-                <Switch
-                  id="overwrite"
-                  checked={form.overwrite}
-                  onCheckedChange={(checked) =>
-                    setForm((current) => ({ ...current, overwrite: checked }))
-                  }
-                />
-                <FieldContent>
-                  <FieldLabel htmlFor="overwrite">
-                    Overwrite artifacts
-                  </FieldLabel>
-                  <FieldDescription>
-                    Replace existing generated files for matching records.
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-              <Field orientation="horizontal" className="rounded-lg border p-3">
-                <Switch
-                  id="highThroughput"
-                  checked={form.highThroughput}
-                  onCheckedChange={(checked) =>
-                    setForm((current) => ({
-                      ...current,
-                      highThroughput: checked,
-                    }))
-                  }
-                />
-                <FieldContent>
-                  <FieldLabel htmlFor="highThroughput">
-                    High-throughput mode
-                  </FieldLabel>
-                  <FieldDescription>
-                    Stream papers through stages in parallel instead of waiting
-                    for each full stage batch.
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-            </FieldGroup>
-
-            {createRunMutation.error ? (
-              <Alert variant="destructive">
-                <RiErrorWarningLine />
-                <AlertTitle>Run was not queued</AlertTitle>
-                <AlertDescription>
-                  {createRunMutation.error.message}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                disabled={createRunMutation.isPending || !form.query.trim()}
-              >
-                <RiPlayLine data-icon="inline-start" />
-                {createRunMutation.isPending ? "Starting" : "Start run"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Pipeline shape</CardTitle>
-          <CardDescription>
-            Every run follows the same eight backend stages.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3">
-            {[
-              "Discover",
-              "Download PDF",
-              "GROBID",
-              "Render",
-              "Detect mentions",
-              "Extract",
-              "Match UM",
-              "Export insights",
-            ].map((label, index) => (
-              <div key={label} className="flex items-center gap-3">
-                <span className="flex size-6 items-center justify-center rounded-md border text-xs tabular-nums text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="text-sm">{label}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
   );
 }
 
@@ -1065,6 +718,8 @@ function InsightsPage() {
   const [selectedInsightIndex, setSelectedInsightIndex] = useState<
     number | null
   >(null);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const insightsQuery = useQuery({
     queryKey: ["insights"],
     queryFn: () => api.insights(100),
@@ -1072,11 +727,47 @@ function InsightsPage() {
   });
   const rows = insightsQuery.data?.rows ?? [];
   const columns = useMemo(
-    () => Array.from(new Set(rows.flatMap((row) => Object.keys(row)))),
-    [rows],
+    () =>
+      insightsQuery.data?.columns ??
+      Array.from(new Set(rows.flatMap((row) => Object.keys(row)))),
+    [insightsQuery.data?.columns, rows],
   );
   const selectedInsight =
     selectedInsightIndex === null ? null : rows[selectedInsightIndex];
+  const downloadMutation = useMutation({
+    mutationFn: (chosenColumns: string[]) =>
+      api.downloadInsightsCsv(chosenColumns),
+    onSuccess: ({ blob, filename }) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+      setDownloadOpen(false);
+    },
+  });
+  const downloadError =
+    downloadMutation.error instanceof ApiError &&
+    typeof downloadMutation.error.detail === "string"
+      ? downloadMutation.error.detail
+      : downloadMutation.error instanceof Error
+        ? downloadMutation.error.message
+        : null;
+
+  function toggleDownloadColumn(column: string, checked: boolean) {
+    setSelectedColumns((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(column);
+      } else {
+        next.delete(column);
+      }
+      return columns.filter((candidate) => next.has(candidate));
+    });
+  }
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5">
@@ -1087,9 +778,25 @@ function InsightsPage() {
             Preview the latest exported joined insight rows.
           </CardDescription>
           <CardAction>
-            <StatusBadge
-              status={insightsQuery.isFetching ? "running" : "ready"}
-            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={insightsQuery.isLoading || !rows.length}
+                onClick={() => {
+                  setSelectedColumns(columns);
+                  downloadMutation.reset();
+                  setDownloadOpen(true);
+                }}
+              >
+                <RiDownload2Line data-icon="inline-start" />
+                Download CSV
+              </Button>
+              <StatusBadge
+                status={insightsQuery.isFetching ? "running" : "ready"}
+              />
+            </div>
           </CardAction>
         </CardHeader>
         <CardContent className="min-w-0 overflow-hidden">
@@ -1139,6 +846,83 @@ function InsightsPage() {
           ) : null}
         </CardContent>
       </Card>
+      <Sheet open={downloadOpen} onOpenChange={setDownloadOpen}>
+        <SheetContent side="right" className="min-h-0 w-[92vw] sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Download insights</SheetTitle>
+            <SheetDescription>
+              Choose the columns to include. The CSV contains every available
+              insight row, not only this preview.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex items-center justify-between gap-3 px-4">
+            <p className="text-xs text-muted-foreground">
+              {selectedColumns.length} of {columns.length} columns selected
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => setSelectedColumns(columns)}
+              >
+                Select all
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => setSelectedColumns([])}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+          <ScrollArea className="min-h-0 flex-1 px-4">
+            <div className="grid gap-2 pb-4">
+              {columns.map((column) => {
+                const label = titleCase(formatStageName(column));
+                return (
+                  <label
+                    key={column}
+                    className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background px-3 py-2.5 hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Include ${label}`}
+                      checked={selectedColumns.includes(column)}
+                      onChange={(event) =>
+                        toggleDownloadColumn(column, event.target.checked)
+                      }
+                      className="size-4 accent-primary"
+                    />
+                    <span className="text-sm">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </ScrollArea>
+          {downloadError ? (
+            <div className="px-4">
+              <Alert variant="destructive">
+                <RiErrorWarningLine />
+                <AlertTitle>Download failed</AlertTitle>
+                <AlertDescription>{downloadError}</AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
+          <SheetFooter className="border-t">
+            <Button
+              type="button"
+              disabled={!selectedColumns.length || downloadMutation.isPending}
+              onClick={() => downloadMutation.mutate(selectedColumns)}
+            >
+              <RiDownload2Line data-icon="inline-start" />
+              {downloadMutation.isPending ? "Preparing CSV…" : "Download CSV"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
       <Sheet
         open={Boolean(selectedInsight)}
         onOpenChange={(open) => {
@@ -1209,13 +993,7 @@ function AdminPage() {
       setResetConfirm("");
       setResetAcknowledged(false);
       setResetForce(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["health"] }),
-        queryClient.invalidateQueries({ queryKey: ["runs"] }),
-        queryClient.invalidateQueries({ queryKey: ["run"] }),
-        queryClient.invalidateQueries({ queryKey: ["run-events"] }),
-        queryClient.invalidateQueries({ queryKey: ["insights"] }),
-      ]);
+      await queryClient.invalidateQueries();
     },
   });
   const canReset = resetConfirm === RESET_CONFIRMATION && resetAcknowledged;
@@ -1335,8 +1113,8 @@ function AdminPage() {
                   <AlertDialogTitle>Reset DataSight storage?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This will remove stored pipeline records and generated
-                    runtime files. The confirmation phrase has been entered
-                    correctly.
+                    runtime files. The authoritative UM dataset catalog is
+                    preserved. The confirmation phrase has been entered correctly.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -2166,22 +1944,6 @@ function formatJsonValue(value: unknown) {
   } catch {
     return null;
   }
-}
-
-function splitTerms(value: string) {
-  const terms = value
-    .split(/[;,|]/)
-    .map((term) => term.trim())
-    .filter(Boolean);
-  return terms.length ? terms : null;
-}
-
-function parseOptionalYear(value: string) {
-  if (!value.trim()) {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function titleCase(value: string) {

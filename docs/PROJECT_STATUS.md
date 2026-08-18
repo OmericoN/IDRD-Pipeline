@@ -15,7 +15,7 @@ The main remaining risk is result quality and run isolation, not basic service w
 
 | Stage | Current state | Evidence | Remaining work |
 |---|---|---|---|
-| `discover` | Operating | OpenAlex client and profile tests; two live runs discovered 25 publications each. | Bound UM-profile query fan-out, record rate-limit metrics, and scope every discovered publication to its run. |
+| `discover` | Operating | OpenAlex client and profile tests; two live runs discovered 25 publications each. The current worktree adds cost-bounded, expiring discovery previews. | Exercise the preview workflow against the live provider and preserve acceptance evidence. |
 | `download_pdf` | Operating with expected external failures | Historical yields were 18/24 and 10/25. Partial failures now produce `completed_with_errors`. | Classify failure reasons, set an acceptable yield target, and add adapter tests for redirects, HTML masquerading as PDF, timeout, and retry. |
 | `grobid_convert` | Operating | 28 XML artifacts; live endpoint returns healthy. Docker healthcheck was repaired to avoid unavailable `curl`. | Add integration fixtures and decide whether GROBID 0.8.0 remains the pinned production version. |
 | `render_document` | Operating | 28 Markdown artifacts and successful historical stages. | Renderer coverage is low; validate headings, references, tables, figures, malformed TEI, and section counts against fixtures. |
@@ -30,14 +30,14 @@ The main remaining risk is result quality and run isolation, not basic service w
 - One canonical stage order and shared API/CLI/worker stage registry.
 - Durable run, stage, item, event, artifact, mention, match, and catalog persistence.
 - Standard and database-backed high-throughput strategies.
-- Versioned Alembic schema at `20260715_0007`.
+- Versioned Alembic schema at `20260804_0008` in the current worktree.
 - Read-only UM catalog browser and source-versus-database verification.
 - Guarded reset behavior that preserves curated inputs.
 
 ## Highest-priority gaps
 
-1. **Run isolation.** Standard batch queries select global “needs work” rows. A run can process backlog created by another run, and export currently returns all insights. Prefer the item-scoped high-throughput path or add run/publication filters to every standard repository query.
-2. **Limit semantics.** The publication `limit` is reused for candidates and mentions. A run that detects more candidates than publications leaves work behind; one historical run detected 36 candidates but promoted only 25.
+1. **Export isolation.** Standard and high-throughput production runs are preview-backed and restrict downstream processing to included discovery candidates. Confirm that every export query remains run-scoped under concurrent load.
+2. **Limit semantics.** Discovery now separates the retained candidate-pool cap from the PDF-ready process target. Downstream mention and feature limits still require load testing when one paper produces many candidates.
 3. **Measured quality.** The existing `data/ground_truth` files describe publications but do not label mention spans, normalized dataset identities, or correct UM matches. There is no end-to-end precision/recall or matching benchmark.
 4. **Reprocessing/versioning.** Existing candidates and promoted mentions are treated as complete. Updating detector or extractor rules does not automatically refresh stored results.
 5. **Operational test depth.** Unit suites are healthy, but coverage is concentrated away from the file/network adapters and full orchestration. The renderer, downloader, converter, standard orchestrator, and failure/retry paths need fixture-backed integration tests.

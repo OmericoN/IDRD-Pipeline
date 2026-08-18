@@ -14,6 +14,7 @@ from datasight.interfaces.api.schemas import (
     StageRunCreateRequest,
 )
 from datasight.application import orchestrator
+from datasight.application.discovery_preview import DiscoveryPreviewError, validate_discovery_preview
 from datasight.application.stage_registry import (
     MissingStageArgument,
     PipelineStage,
@@ -30,21 +31,22 @@ router = APIRouter(tags=["runs"])
 
 @router.post("/runs", response_model=RunCreateResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_run(request: RunCreateRequest) -> RunCreateResponse:
-    result = orchestrator.enqueue_run_all(
-        query=request.query,
-        limit=request.limit,
-        output=request.output_path,
-        um_datasets_path=request.um_datasets_path,
-        overwrite=request.overwrite,
-        open_access_only=request.open_access_only,
-        topic_ids=request.topic_ids,
-        keyword_terms=request.keyword_terms,
-        mesh_terms=request.mesh_terms,
-        from_year=request.from_year,
-        to_year=request.to_year,
-        use_um_profile=request.use_um_profile,
-        strategy=request.strategy,
-    )
+    try:
+        validate_discovery_preview(request.preview_id, request.processing_limit)
+        result = orchestrator.enqueue_run_all(
+            preview_id=request.preview_id,
+            processing_limit=request.processing_limit,
+            excluded_candidate_ids=request.excluded_candidate_ids,
+            output=request.output_path,
+            um_datasets_path=request.um_datasets_path,
+            overwrite=request.overwrite,
+            strategy=request.strategy,
+        )
+    except DiscoveryPreviewError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"kind": exc.kind, "message": str(exc)},
+        ) from exc
     return RunCreateResponse.model_validate(result)
 
 
@@ -60,10 +62,10 @@ def create_stage_run(stage: PipelineStage, request: StageRunCreateRequest) -> Ru
         open_access_only=request.open_access_only,
         topic_ids=request.topic_ids,
         keyword_terms=request.keyword_terms,
-        mesh_terms=request.mesh_terms,
         from_year=request.from_year,
         to_year=request.to_year,
         use_um_profile=request.use_um_profile,
+        render_profile=request.render_profile,
     )
     try:
         args = stage_args(stage, options)

@@ -50,15 +50,9 @@ export type PipelineRunEvent = {
 };
 
 export type RunCreateRequest = {
-  query: string;
-  limit: number;
-  topic_ids?: string[] | null;
-  keyword_terms?: string[] | null;
-  mesh_terms?: string[] | null;
-  from_year?: number | null;
-  to_year?: number | null;
-  use_um_profile?: boolean;
-  open_access_only: boolean;
+  preview_id: string;
+  processing_limit?: number | null;
+  excluded_candidate_ids?: string[];
   overwrite: boolean;
   um_datasets_path?: string | null;
   output_path: string;
@@ -72,7 +66,113 @@ export type RunCreateResponse = {
 };
 
 export type InsightsResponse = {
+  columns: string[];
   rows: Record<string, unknown>[];
+};
+
+export type CsvDownload = {
+  blob: Blob;
+  filename: string;
+};
+
+export type DiscoveryPhaseId = "direct" | "exact" | "related" | "focused" | "random" | "manual";
+
+export type UMProfilePhase = {
+  id: DiscoveryPhaseId;
+  label: string;
+  description: string;
+  coverage_count: number;
+  coverage_percent: number;
+  estimated_calls: number;
+  estimated_cost_usd: number;
+};
+
+export type UMDiscoveryProfile = {
+  dataset_count: number;
+  catalog_fingerprint: string;
+  coverage: Record<string, number>;
+  counts: Record<string, number>;
+  topic_resolution: Record<string, unknown>;
+  phases: UMProfilePhase[];
+  top_topics: string[];
+  top_keywords: string[];
+  warnings: string[];
+};
+
+export type OpenAlexStatus = {
+  status: "ready" | "missing" | "invalid" | "unavailable";
+  available: boolean;
+  remaining: number | null;
+  limit: number | null;
+  reset_seconds: number | null;
+  reset_at: string | null;
+  message: string;
+};
+
+export type DiscoveryPreviewRequest = {
+  strategy_version: 2;
+  mode: "catalog_funnel" | "random" | "manual";
+  focus_query: string;
+  manual_query: string | null;
+  random_seed: number | null;
+  from_year: number | null;
+  to_year: number | null;
+  publication_types: string[];
+  language: string | null;
+  discovery_limit: number;
+  processing_limit: number;
+  max_cost_usd: number;
+};
+
+export type DiscoveryCandidate = {
+  paper_id: string;
+  title: string | null;
+  doi: string | null;
+  year: number | null;
+  source_url: string | null;
+  open_access_url: string | null;
+  oa_status: string | null;
+  cited_by_count: number | null;
+  primary_source_name: string | null;
+  candidate_strength: number;
+  evidence_tier: "direct" | "exact" | "expanded";
+  evidence_reasons: string[];
+  matched_um_dataset_ids: string[];
+  pipeline_ready: boolean;
+  included: boolean;
+  exclusion_reason: string | null;
+};
+
+export type DiscoveryPreview = {
+  preview_id: string;
+  strategy_version: 2;
+  strategy_fingerprint: string;
+  catalog_fingerprint: string;
+  language: string | null;
+  code_version: string;
+  provider: "openalex";
+  provider_snapshot_at: string;
+  request: DiscoveryPreviewRequest;
+  executed_queries: Array<Record<string, unknown>>;
+  expires_at: string;
+  candidate_count: number;
+  included_count: number;
+  ready_count: number;
+  watchlist_count: number;
+  estimated_cost_usd: number;
+  actual_cost_usd: number;
+  actual_calls: number;
+  max_cost_usd: number;
+  random_seed: number | null;
+  partial: boolean;
+  rate_limit: Record<string, string>;
+  stop_reason: "ready_target_met" | "cost_ceiling" | "phases_exhausted" | "provider_failure";
+  completed_phases: string[];
+  phase_results: Record<string, Record<string, unknown>>;
+  warnings: string[];
+  metrics: Record<string, unknown>;
+  profile: UMDiscoveryProfile;
+  candidates: DiscoveryCandidate[];
 };
 
 export type UMDatasetSummary = {
@@ -110,7 +210,7 @@ export type UMDatasetVerificationIssue = {
 };
 
 export type UMDatasetVerificationResponse = {
-  status: "verified" | "mismatch" | "unavailable";
+  status: "verified" | "mismatch" | "not_imported" | "unavailable";
   source_path: string;
   checked_at: string;
   source_count: number | null;
@@ -120,6 +220,15 @@ export type UMDatasetVerificationResponse = {
   warnings: string[];
   metrics: Record<string, unknown>;
   message: string | null;
+};
+
+export type ImportUMDatasetsResponse = {
+  status: string;
+  count: number;
+  deleted: number;
+  path: string;
+  warnings: string[];
+  metrics: Record<string, unknown>;
 };
 
 export type UMDatasetListParams = {
@@ -179,6 +288,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return response.json() as Promise<T>;
 }
 
+async function requestBlob(path: string): Promise<CsvDownload> {
+  const response = await fetch(path, { method: "GET" });
+  if (!response.ok) {
+    let detail: unknown = response.statusText;
+    try {
+      detail = (await response.json()).detail ?? detail;
+    } catch {
+      detail = response.statusText;
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? "datasight-insights.csv";
+  return { blob: await response.blob(), filename };
+}
+
 export const api = {
   health: () => request<HealthResponse>("/api/v1/health"),
   stages: async () => {
@@ -200,9 +326,25 @@ export const api = {
   },
   createRun: (body: RunCreateRequest) =>
     request<RunCreateResponse>("/api/v1/runs", { method: "POST", body }),
+  umDiscoveryProfile: () =>
+    request<UMDiscoveryProfile>("/api/v1/discovery/um-profile"),
+  openAlexStatus: () => request<OpenAlexStatus>("/api/v1/openalex/status"),
+  discoveryPreview: (body: DiscoveryPreviewRequest) =>
+    request<DiscoveryPreview>("/api/v1/discovery/preview", { method: "POST", body }),
+  discoveryCandidates: (runId: number, offset = 0, limit = 100) => {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    return request<{ items: DiscoveryCandidate[]; total: number; offset: number; limit: number }>(
+      `/api/v1/runs/${runId}/discovery-candidates?${params}`,
+    );
+  },
   insights: (limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });
     return request<InsightsResponse>(`/api/v1/insights?${params}`);
+  },
+  downloadInsightsCsv: (columns: string[]) => {
+    const params = new URLSearchParams();
+    columns.forEach((column) => params.append("columns", column));
+    return requestBlob(`/api/v1/insights/export.csv?${params}`);
   },
   umDatasets: (filters: UMDatasetListParams = {}) => {
     const params = new URLSearchParams();
@@ -213,6 +355,11 @@ export const api = {
     params.set("limit", String(filters.limit ?? 50));
     return request<UMDatasetListResponse>(`/api/v1/um-datasets?${params}`);
   },
+  importUmDatasets: (path: string) =>
+    request<ImportUMDatasetsResponse>("/api/v1/um-datasets/import", {
+      method: "POST",
+      body: { path },
+    }),
   umDataset: (umDatasetId: string) =>
     request<UMDatasetDetail>(`/api/v1/um-datasets/${encodeURIComponent(umDatasetId)}`),
   verifyUmDatasets: () =>

@@ -15,9 +15,8 @@ describe("api client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await api.createRun({
-      query: "dataset reuse",
-      limit: 5,
-      open_access_only: true,
+      preview_id: "preview-12",
+      processing_limit: 5,
       overwrite: false,
       um_datasets_path: "data/um_datasets.csv",
       output_path: "storage/exports/insights.csv",
@@ -30,9 +29,8 @@ describe("api client", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          query: "dataset reuse",
-          limit: 5,
-          open_access_only: true,
+          preview_id: "preview-12",
+          processing_limit: 5,
           overwrite: false,
           um_datasets_path: "data/um_datasets.csv",
           output_path: "storage/exports/insights.csv",
@@ -115,6 +113,44 @@ describe("api client", () => {
       "/api/v1/um-datasets/W%2F123",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("imports an authoritative UM dataset directory", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ count: 2748 }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.importUmDatasets("data/um_dataset");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/um-datasets/import",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ path: "data/um_dataset" }),
+      }),
+    );
+  });
+
+  it("downloads a selected-column insight CSV with its server filename", async () => {
+    const blob = new Blob(["paper_id\nW123\n"], { type: "text/csv" });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) =>
+          name === "Content-Disposition"
+            ? 'attachment; filename="datasight-insights.csv"'
+            : null,
+      },
+      blob: async () => blob,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await api.downloadInsightsCsv(["paper_id", "discovery_mode"]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/insights/export.csv?columns=paper_id&columns=discovery_mode",
+      { method: "GET" },
+    );
+    expect(result).toEqual({ blob, filename: "datasight-insights.csv" });
   });
 
   it("raises ApiError with reset failure details", async () => {

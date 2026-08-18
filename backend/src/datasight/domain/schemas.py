@@ -86,6 +86,13 @@ class MentionCandidate(BaseModel):
     char_end: int
     score: float = Field(default=0.0, ge=0.0, le=1.0)
     source: Literal["rule", "citation_context", "llm"] = "rule"
+    evidence_tier: Literal["strong", "medium", "broad"] = "broad"
+    trigger_type: str
+    trigger_text: str
+    triggers: list[dict[str, str]] = Field(default_factory=list)
+    detector_version: str = "rules-v3"
+    render_sha256: str | None = None
+    detection_run_id: int | None = None
 
 
 class UMDatasetRecord(BaseModel):

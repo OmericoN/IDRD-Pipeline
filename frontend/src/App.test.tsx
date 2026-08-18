@@ -33,6 +33,97 @@ function response(body: unknown, ok = true, status = 200, statusText = "OK") {
   };
 }
 
+const insightColumns = ["paper_id", "discovery_mode", "discovery_methods"];
+
+const discoveryPhases = [
+  ["direct", "Direct evidence", 2748, 100, 56, 0.0056],
+  ["exact", "Exact mentions", 2848, 100, 130, 0.13],
+  ["related", "Related works", 5284, 100, 53, 0.0053],
+  ["focused", "Focused expansion", 54, 2, 7, 0.007],
+].map(([id, label, coverage_count, coverage_percent, estimated_calls, estimated_cost_usd]) => ({
+  id,
+  label,
+  description: `${label} explanation`,
+  coverage_count,
+  coverage_percent,
+  estimated_calls,
+  estimated_cost_usd,
+}));
+
+const discoveryProfile = {
+  dataset_count: 2748,
+  catalog_fingerprint: "catalog-123",
+  coverage: { openalex_ids: 100, dois: 100, keywords: 98.5, topics: 56.1, related_works: 35.1 },
+  counts: { openalex_ids: 2748, dois: 2748, unique_related_works: 5284, informative_keywords: 42, topic_names: 12, resolved_topics: 9 },
+  topic_resolution: { status: "partial", resolved: 9, requested: 12, unresolved: 3 },
+  phases: discoveryPhases,
+  top_topics: ["Population Health"],
+  top_keywords: ["longitudinal cohort"],
+  warnings: ["3 priority topic names still need a strong OpenAlex match."],
+};
+
+const discoveryPreview = {
+  preview_id: "preview-123",
+  strategy_version: 2,
+  strategy_fingerprint: "strategy-123",
+  catalog_fingerprint: "catalog-123",
+  expires_at: "2026-08-04T12:30:00Z",
+  candidate_count: 143,
+  included_count: 1,
+  ready_count: 81,
+  watchlist_count: 62,
+  estimated_cost_usd: 0.148,
+  actual_cost_usd: 0.041,
+  actual_calls: 41,
+  max_cost_usd: 0.25,
+  partial: false,
+  rate_limit: { remaining: "959" },
+  stop_reason: "ready_target_met",
+  completed_phases: ["direct"],
+  phase_results: { direct: { status: "completed", fetched: 42, unique_added: 40, ready_after_phase: 81, calls: 2, cost_usd: 0.002 } },
+  warnings: [],
+  metrics: { target_met: true, unique_fetched: 143, duplicates_seen: 3 },
+  profile: discoveryProfile,
+  candidates: [
+    {
+      paper_id: "W900",
+      title: "Secondary analysis of a Maastricht longitudinal cohort",
+      doi: "10.1234/reuse",
+      year: 2025,
+      source_url: "https://openalex.org/W900",
+      open_access_url: "https://example.org/paper.pdf",
+      oa_status: "green",
+      cited_by_count: 7,
+      primary_source_name: "Research Data Journal",
+      candidate_strength: 98,
+      evidence_tier: "direct",
+      evidence_reasons: ["dataset_citation", "identifier_mention"],
+      matched_um_dataset_ids: ["W123"],
+      pipeline_ready: true,
+      included: true,
+      exclusion_reason: null,
+    },
+    {
+      paper_id: "W901",
+      title: "Potential reuse without downloadable full text",
+      doi: null,
+      year: 2024,
+      source_url: "https://openalex.org/W901",
+      open_access_url: null,
+      oa_status: "closed",
+      cited_by_count: 2,
+      primary_source_name: null,
+      candidate_strength: 75,
+      evidence_tier: "exact",
+      evidence_reasons: ["title_mention"],
+      matched_um_dataset_ids: ["W123"],
+      pipeline_ready: false,
+      included: false,
+      exclusion_reason: "No usable PDF link",
+    },
+  ],
+};
+
 function defaultFetchMock(resetResponse = response({
   status: "successful",
   active_runs: 0,
@@ -124,10 +215,11 @@ function defaultFetchMock(resetResponse = response({
         ],
       });
     }
-    if (path === "/api/v1/runs/39") {
+    if (path === "/api/v1/runs/39" || path === "/api/v1/runs/40") {
+      const runId = path.endsWith("/40") ? 40 : 39;
       return response({
-        id: 39,
-        run_key: "run-39",
+        id: runId,
+        run_key: `run-${runId}`,
         query: "Maastricht dataset reuse",
         status: "running",
         config: { strategy: "high_throughput" },
@@ -179,12 +271,13 @@ function defaultFetchMock(resetResponse = response({
         ],
       });
     }
-    if (path.startsWith("/api/v1/runs/39/events")) {
+    if (path.startsWith("/api/v1/runs/39/events") || path.startsWith("/api/v1/runs/40/events")) {
+      const runId = path.includes("/runs/40/") ? 40 : 39;
       return response({
         events: [
           {
             id: 1,
-            pipeline_run_id: 39,
+            pipeline_run_id: runId,
             stage: "discover",
             level: "info",
             message: "Discovery started",
@@ -195,7 +288,23 @@ function defaultFetchMock(resetResponse = response({
       });
     }
     if (path.startsWith("/api/v1/insights?")) {
-      return response({ rows: [] });
+      return response({ columns: insightColumns, rows: [] });
+    }
+    if (path === "/api/v1/discovery/um-profile") {
+      return response(discoveryProfile);
+    }
+    if (path === "/api/v1/openalex/status") {
+      return response({
+        status: "ready",
+        available: true,
+        remaining: 959,
+        limit: 1000,
+        reset_seconds: 3600,
+        message: "OpenAlex is ready.",
+      });
+    }
+    if (path === "/api/v1/discovery/preview" && init?.method === "POST") {
+      return response(discoveryPreview);
     }
     if (path === "/api/v1/um-datasets?offset=0&limit=50") {
       return response({
@@ -377,12 +486,91 @@ describe("App routed workflow", () => {
   it("defaults to the launch page and navigates to runs", async () => {
     renderApp(defaultFetchMock(), "/launch");
 
-    expect(await screen.findByText("Start a dataset mention run")).toBeInTheDocument();
+    expect(await screen.findByText("Choose a discovery strategy")).toBeInTheDocument();
+    expect(screen.getByText("Adaptive funnel")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: /^Runs/ }));
 
     expect(await screen.findByText("Open a run to inspect the workspace, events, and stage metrics.")).toBeInTheDocument();
     expect(screen.getByText("Maastricht dataset reuse")).toBeInTheDocument();
     expect(screen.getByText("High-throughput")).toBeInTheDocument();
+  });
+
+  it("downloads all insights with the selected columns", async () => {
+    const baseFetch = defaultFetchMock();
+    const csvBlob = new Blob(["paper_id,discovery_mode\nW123,catalog_funnel\n"], {
+      type: "text/csv",
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.startsWith("/api/v1/insights?")) {
+        return response({
+          columns: insightColumns,
+          rows: [
+            {
+              paper_id: "W123",
+              discovery_mode: "catalog_funnel",
+              discovery_methods: ["dataset_citation"],
+            },
+          ],
+        });
+      }
+      if (path.startsWith("/api/v1/insights/export.csv?")) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => 'attachment; filename="datasight-insights.csv"' },
+          blob: async () => csvBlob,
+        };
+      }
+      return baseFetch(input, init);
+    });
+    const createObjectURL = vi.fn(() => "blob:insights");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    renderApp(fetchMock, "/insights");
+
+    await screen.findByText("W123");
+    fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    expect(screen.getByLabelText("Include Paper Id")).toBeChecked();
+    expect(screen.getByLabelText("Include Discovery Methods")).toBeChecked();
+    fireEvent.click(screen.getByLabelText("Include Discovery Methods"));
+    fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/insights/export.csv?columns=paper_id&columns=discovery_mode",
+        { method: "GET" },
+      );
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(csvBlob);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:insights");
+  });
+
+  it("disables empty insight exports and reports generation failures", async () => {
+    const baseFetch = defaultFetchMock();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.startsWith("/api/v1/insights?")) {
+        return response({ columns: insightColumns, rows: [{ paper_id: "W123" }] });
+      }
+      if (path.startsWith("/api/v1/insights/export.csv?")) {
+        return response({ detail: "CSV generation failed." }, false, 500, "Server Error");
+      }
+      return baseFetch(input, init);
+    });
+    renderApp(fetchMock, "/insights");
+
+    await screen.findByText("W123");
+    fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByRole("button", { name: "Download CSV" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+
+    expect(await screen.findByText("CSV generation failed.")).toBeInTheDocument();
   });
 
   it("browses the verified UM dataset catalog and opens raw details", async () => {
@@ -465,6 +653,46 @@ describe("App routed workflow", () => {
     expect(screen.getByText("title, raw")).toBeInTheDocument();
   });
 
+  it("offers to import the authoritative catalog when storage is empty", async () => {
+    const baseFetch = defaultFetchMock();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/um-datasets/verification") {
+        return response({
+          status: "not_imported",
+          source_path: "data/um_dataset",
+          checked_at: "2026-08-14T00:00:00Z",
+          source_count: 2748,
+          stored_count: 0,
+          verified_count: 0,
+          issues: [],
+          warnings: [],
+          metrics: {},
+          message: "The authoritative catalog is available but has not been imported into the database.",
+        });
+      }
+      if (String(input) === "/api/v1/um-datasets/import") {
+        return response({ count: 2748, warnings: [], metrics: {} });
+      }
+      return baseFetch(input, init);
+    });
+    renderApp(fetchMock, "/datasets");
+
+    expect(await screen.findByText("Catalog setup required")).toBeInTheDocument();
+    expect(screen.queryByText("Stored catalog differs from the authoritative source")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Search UM datasets" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Import authoritative catalog" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/um-datasets/import",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ path: "data/um_dataset" }),
+        }),
+      );
+    });
+  });
+
   it("keeps stored UM datasets browsable when verification is unavailable", async () => {
     const baseFetch = defaultFetchMock();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -495,7 +723,7 @@ describe("App routed workflow", () => {
     renderApp(fetchMock, "/launch");
 
     fireEvent.click(await screen.findByLabelText("High-throughput mode"));
-    fireEvent.click(screen.getByRole("button", { name: /Start run/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run pipeline" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -506,6 +734,100 @@ describe("App routed workflow", () => {
         }),
       );
     });
+  });
+
+  it("prepares the adaptive funnel in one click and opens the live workspace", async () => {
+    const fetchMock = defaultFetchMock();
+    renderApp(fetchMock, "/launch");
+
+    const runButton = await screen.findByRole("button", { name: "Run pipeline" });
+    await waitFor(() => expect(runButton).toBeEnabled());
+    fireEvent.click(runButton);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/discovery/preview",
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/runs",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"preview_id":"preview-123"'),
+        }),
+      );
+    });
+
+    await waitFor(() => expect(window.location.pathname).toBe("/runs/40"));
+    expect(await screen.findByText("Run graph")).toBeInTheDocument();
+    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+  });
+
+  it("selects a reproducible random sample strategy", async () => {
+    const fetchMock = defaultFetchMock();
+    renderApp(fetchMock, "/launch");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Select Random sample" }));
+    expect(screen.getByLabelText("Random sample size")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sample seed")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Optional focus")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Random sample size"), { target: { value: "120" } });
+    fireEvent.change(screen.getByLabelText("Sample seed"), { target: { value: "42" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview results" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/discovery/preview",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"mode":"random"'),
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/discovery/preview",
+        expect.objectContaining({ body: expect.stringContaining('"random_seed":42') }),
+      );
+    });
+    expect(await screen.findAllByText("Not scored")).not.toHaveLength(0);
+    expect(screen.getByText(/Random inclusion is not evidence of dataset use/)).toBeInTheDocument();
+  });
+
+  it("previews the adaptive funnel and launches only reviewed PDF-ready candidates", async () => {
+    const fetchMock = defaultFetchMock();
+    renderApp(fetchMock, "/launch");
+
+    fireEvent.change(await screen.findByLabelText("Candidate pool cap"), {
+      target: { value: "120" },
+    });
+    const previewButton = await screen.findByRole("button", { name: "Preview results" });
+    await waitFor(() => expect(previewButton).toBeEnabled());
+    fireEvent.click(previewButton);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/discovery/preview",
+        expect.objectContaining({ body: expect.stringContaining('"discovery_limit":120') }),
+      );
+    });
+
+    expect(await screen.findByText("Secondary analysis of a Maastricht longitudinal cohort")).toBeInTheDocument();
+    expect(screen.getByText("Potential reuse without downloadable full text")).toBeInTheDocument();
+    expect(screen.getByText("Watchlist")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run pipeline" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/runs",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"preview_id":"preview-123"'),
+        }),
+      );
+    });
+
+    await waitFor(() => expect(window.location.pathname).toBe("/runs/40"));
+    expect(await screen.findByText("Run graph")).toBeInTheDocument();
+    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
   });
 
   it("renders the workspace graph and selected stage inspector", async () => {

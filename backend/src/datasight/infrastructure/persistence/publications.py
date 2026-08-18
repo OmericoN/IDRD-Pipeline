@@ -7,6 +7,7 @@ from typing import Any
 
 import psycopg2.extras
 
+from datasight.infrastructure.persistence.discovery import scope_to_preview_candidates
 from datasight.infrastructure.pubfetcher.openalex import openalex_work_id
 
 
@@ -84,18 +85,18 @@ class PublicationRepositoryMixin:
         self.conn.commit()
         return count
 
-    def get_papers_needing_download(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_papers_needing_download(
+        self, limit: int | None = None, pipeline_run_id: int | None = None
+    ) -> list[dict[str, Any]]:
         query = """
             SELECT p.paper_id AS "paperId", p.title, p.open_access_url AS url
             FROM publications p
-            LEFT JOIN artifacts a
-              ON a.publication_id = p.id AND a.artifact_type = 'pdf'
             WHERE p.open_access_url IS NOT NULL
               AND p.open_access_url != ''
-              AND a.id IS NULL
-            ORDER BY p.id
         """
         params: list[Any] = []
+        query, params = scope_to_preview_candidates(query, params, pipeline_run_id)
+        query += " ORDER BY p.id"
         if limit is not None:
             query += " LIMIT %s"
             params.append(limit)
@@ -108,7 +109,6 @@ class PublicationRepositoryMixin:
             "publication_openalex_topics",
             "publication_openalex_keywords",
             "publication_openalex_concepts",
-            "publication_openalex_mesh",
             "publication_openalex_related_works",
         ):
             self.cursor.execute(f"DELETE FROM {table} WHERE publication_id = %s", (publication_id,))
@@ -116,7 +116,6 @@ class PublicationRepositoryMixin:
         self._insert_openalex_topics(publication_id, raw)
         self._insert_openalex_keywords(publication_id, raw)
         self._insert_openalex_concepts(publication_id, raw)
-        self._insert_openalex_mesh(publication_id, raw)
         self._insert_openalex_related_works(publication_id, raw)
 
     def _insert_openalex_affiliations(self, publication_id: int, raw: dict[str, Any]) -> None:
@@ -212,20 +211,6 @@ class PublicationRepositoryMixin:
                 ),
             )
 
-    def _insert_openalex_mesh(self, publication_id: int, raw: dict[str, Any]) -> None:
-        for mesh in _rows(raw.get("mesh")):
-            value = mesh.get("descriptor_name") or mesh.get("mesh")
-            if not value:
-                continue
-            qualifier = mesh.get("qualifier_name") or mesh.get("qualifier")
-            self.cursor.execute(
-                """
-                INSERT INTO publication_openalex_mesh (publication_id, mesh, qualifier, raw)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (publication_id, value, qualifier, psycopg2.extras.Json(mesh)),
-            )
-
     def _insert_openalex_related_works(self, publication_id: int, raw: dict[str, Any]) -> None:
         for related in raw.get("related_works") or []:
             related_work_id = openalex_work_id(str(related))
@@ -240,36 +225,48 @@ class PublicationRepositoryMixin:
                 (publication_id, related_work_id),
             )
 
-    def get_papers_needing_conversion(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_papers_needing_conversion(
+        self, limit: int | None = None, pipeline_run_id: int | None = None
+    ) -> list[dict[str, Any]]:
         query = """
             SELECT p.paper_id AS "paperId", p.title, pdf.path AS pdf_path
             FROM publications p
-            JOIN artifacts pdf
-              ON pdf.publication_id = p.id AND pdf.artifact_type = 'pdf'
-            LEFT JOIN artifacts xml
-              ON xml.publication_id = p.id AND xml.artifact_type = 'tei_xml'
-            WHERE xml.id IS NULL
-            ORDER BY p.id
+            JOIN LATERAL (
+                SELECT path
+                FROM artifacts
+                WHERE publication_id = p.id AND artifact_type = 'pdf'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) pdf ON TRUE
+            WHERE TRUE
         """
         params: list[Any] = []
+        query, params = scope_to_preview_candidates(query, params, pipeline_run_id)
+        query += " ORDER BY p.id"
         if limit is not None:
             query += " LIMIT %s"
             params.append(limit)
         self.cursor.execute(query, params)
         return [dict(row) for row in self.cursor.fetchall()]
 
-    def get_papers_needing_rendering(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_papers_needing_rendering(
+        self, limit: int | None = None, pipeline_run_id: int | None = None
+    ) -> list[dict[str, Any]]:
         query = """
             SELECT p.paper_id AS "paperId", p.title, xml.path AS xml_path
             FROM publications p
-            JOIN artifacts xml
-              ON xml.publication_id = p.id AND xml.artifact_type = 'tei_xml'
-            LEFT JOIN artifacts md
-              ON md.publication_id = p.id AND md.artifact_type = 'markdown'
-            WHERE md.id IS NULL
-            ORDER BY p.id
+            JOIN LATERAL (
+                SELECT path
+                FROM artifacts
+                WHERE publication_id = p.id AND artifact_type = 'tei_xml'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) xml ON TRUE
+            WHERE TRUE
         """
         params: list[Any] = []
+        query, params = scope_to_preview_candidates(query, params, pipeline_run_id)
+        query += " ORDER BY p.id"
         if limit is not None:
             query += " LIMIT %s"
             params.append(limit)

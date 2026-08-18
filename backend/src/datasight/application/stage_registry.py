@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from datasight.domain.stages import PipelineStage, STAGE_ORDER, stage_values
 
@@ -34,12 +34,12 @@ class StageRunOptions:
     open_access_only: bool = True
     topic_ids: str | list[str] | None = None
     keyword_terms: str | list[str] | None = None
-    mesh_terms: str | list[str] | None = None
     from_year: int | None = None
     to_year: int | None = None
     use_um_profile: bool = True
     rows: list[dict[str, Any]] | None = None
     pipeline_run_id: int | None = None
+    render_profile: Literal["full_body", "pruned"] = "full_body"
 
 
 def stage_description(stage: PipelineStage | str) -> str:
@@ -86,13 +86,18 @@ def stage_kwargs(stage: PipelineStage | str, options: StageRunOptions) -> dict[s
             "open_access_only": options.open_access_only,
             "topic_ids": options.topic_ids,
             "keyword_terms": options.keyword_terms,
-            "mesh_terms": options.mesh_terms,
             "from_year": options.from_year,
             "to_year": options.to_year,
             "use_um_profile": options.use_um_profile,
         }
-    elif stage_value in {PipelineStage.DOWNLOAD_PDF, PipelineStage.RENDER_DOCUMENT}:
+    elif stage_value == PipelineStage.DOWNLOAD_PDF:
         kwargs = {"limit": options.limit, "overwrite": options.overwrite}
+    elif stage_value == PipelineStage.RENDER_DOCUMENT:
+        kwargs = {
+            "limit": options.limit,
+            "overwrite": options.overwrite,
+            "profile": options.render_profile,
+        }
     elif stage_value == PipelineStage.GROBID_CONVERT:
         kwargs = {
             "limit": options.limit,

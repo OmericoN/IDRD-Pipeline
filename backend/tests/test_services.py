@@ -1,3 +1,5 @@
+import csv
+import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -8,10 +10,46 @@ sys.path.insert(0, str(ROOT / "src"))
 from datasight.application.pipeline_services import (
     _mention_from_candidate,
     _result_from_operation,
+    export_insights_csv,
     load_um_dataset_records,
 )
 from datasight.domain.schemas import DatasetRole, ReferenceDirectness
 from datasight.domain.stages import PipelineStage
+
+
+def test_export_insights_csv_includes_discovery_provenance_and_json_cells(tmp_path, monkeypatch):
+    class FakeRepo:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return None
+
+        def export_insight_rows(self, pipeline_run_id=None):
+            assert pipeline_run_id == 9
+            return [
+                {
+                    "paper_id": "W123",
+                    "discovery_mode": "catalog_funnel",
+                    "discovery_methods": ["dataset_citation", "title_mention"],
+                    "evidence": {"quote": "Dataset, reused"},
+                }
+            ]
+
+        def record_stage_result(self, *args):
+            return None
+
+    monkeypatch.setattr("datasight.application.pipeline_services.PipelineRepository", FakeRepo)
+    output = tmp_path / "insights.csv"
+
+    result = export_insights_csv(str(output), pipeline_run_id=9)
+
+    with output.open(newline="", encoding="utf-8") as handle:
+        row = next(csv.DictReader(handle))
+    assert result["count"] == 1
+    assert row["discovery_mode"] == "catalog_funnel"
+    assert json.loads(row["discovery_methods"]) == ["dataset_citation", "title_mention"]
+    assert json.loads(row["evidence"]) == {"quote": "Dataset, reused"}
 
 
 def test_load_um_dataset_records_from_csv(tmp_path):
@@ -61,4 +99,4 @@ def test_rule_feature_extraction_populates_matchable_metadata():
     assert mention.metadata.dataset_year == 2024
     assert mention.dataset_role == DatasetRole.USED
     assert mention.reference_directness == ReferenceDirectness.DIRECT
-    assert mention.provenance.prompt_version == "rules-v2"
+    assert mention.provenance.prompt_version == "rules-v3"

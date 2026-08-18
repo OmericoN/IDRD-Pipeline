@@ -8,6 +8,7 @@ from typing import Any
 import psycopg2.extras
 
 from datasight.domain.schemas import UMDatasetRecord, UMMatchDecision
+from datasight.infrastructure.persistence.discovery import scope_to_preview_candidates
 
 
 class UMDatasetRepositoryMixin:
@@ -183,7 +184,9 @@ class UMDatasetRepositoryMixin:
         row = self.cursor.fetchone()
         return dict(row) if row else None
 
-    def get_unmatched_mentions(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_unmatched_mentions(
+        self, limit: int | None = None, pipeline_run_id: int | None = None
+    ) -> list[dict[str, Any]]:
         query = """
             SELECT
                 dm.id AS mention_id,
@@ -199,9 +202,10 @@ class UMDatasetRepositoryMixin:
             JOIN publications p ON p.id = dm.publication_id
             LEFT JOIN um_match_decisions md ON md.dataset_mention_id = dm.id
             WHERE md.id IS NULL
-            ORDER BY dm.id
         """
         params: list[Any] = []
+        query, params = scope_to_preview_candidates(query, params, pipeline_run_id)
+        query += " ORDER BY dm.id"
         if limit is not None:
             query += " LIMIT %s"
             params.append(limit)

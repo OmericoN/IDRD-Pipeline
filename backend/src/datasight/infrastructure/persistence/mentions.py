@@ -8,31 +8,124 @@ from typing import Any
 import psycopg2.extras
 
 from datasight.domain.schemas import DatasetMention, MentionCandidate
+from datasight.domain.candidate_detection import DETECTOR_VERSION
+from datasight.infrastructure.persistence.discovery import scope_to_preview_candidates
 
 
 class MentionRepositoryMixin:
     conn: Any
     cursor: Any
 
-    def get_markdown_artifacts_without_candidates(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_markdown_artifacts_needing_detection(
+        self,
+        detector_version: str = DETECTOR_VERSION,
+        limit: int | None = None,
+        pipeline_run_id: int | None = None,
+    ) -> list[dict[str, Any]]:
         query = """
-            SELECT p.id AS publication_row_id, p.paper_id, md.path
+            SELECT
+                p.id AS publication_row_id,
+                p.paper_id,
+                md.id AS markdown_artifact_id,
+                md.path,
+                md.sha256 AS render_sha256
             FROM publications p
             JOIN artifacts md
               ON md.publication_id = p.id AND md.artifact_type = 'markdown'
-            LEFT JOIN mention_candidates c
-              ON c.publication_id = p.id
-            WHERE c.id IS NULL
-            ORDER BY p.id
+            WHERE md.sha256 IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM mention_detection_runs dr
+                  WHERE dr.publication_id = p.id
+                    AND dr.markdown_artifact_id = md.id
+                    AND dr.render_sha256 = md.sha256
+                    AND dr.detector_version = %s
+                    AND dr.status = 'successful'
+              )
         """
-        params: list[Any] = []
+        params: list[Any] = [detector_version]
+        query, params = scope_to_preview_candidates(query, params, pipeline_run_id)
+        query += " ORDER BY p.id"
         if limit is not None:
             query += " LIMIT %s"
             params.append(limit)
         self.cursor.execute(query, params)
         return [dict(row) for row in self.cursor.fetchall()]
 
-    def upsert_mention_candidates(self, candidates: Iterable[MentionCandidate]) -> int:
+    def get_markdown_artifacts_without_candidates(
+        self, limit: int | None = None, pipeline_run_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Compatibility alias now backed by versioned completion records."""
+        return self.get_markdown_artifacts_needing_detection(
+            limit=limit, pipeline_run_id=pipeline_run_id
+        )
+
+    def begin_detection_run(
+        self,
+        publication_row_id: int,
+        markdown_artifact_id: int,
+        render_sha256: str,
+        detector_version: str = DETECTOR_VERSION,
+    ) -> int:
+        self.cursor.execute(
+            """
+            INSERT INTO mention_detection_runs (
+                publication_id, markdown_artifact_id, render_sha256, detector_version,
+                status, candidate_count, metrics, error, completed_at
+            )
+            VALUES (%s, %s, %s, %s, 'running', 0, '{}'::jsonb, NULL, NULL)
+            ON CONFLICT (publication_id, markdown_artifact_id, render_sha256, detector_version)
+            DO UPDATE SET
+                status = 'running', candidate_count = 0, metrics = '{}'::jsonb,
+                error = NULL, completed_at = NULL
+            RETURNING id
+            """,
+            (publication_row_id, markdown_artifact_id, render_sha256, detector_version),
+        )
+        row = self.cursor.fetchone()
+        if not row:
+            raise RuntimeError("Failed to create mention detection status record")
+        detection_run_id = int(row["id"])
+        self.cursor.execute(
+            "DELETE FROM mention_candidates WHERE detection_run_id = %s",
+            (detection_run_id,),
+        )
+        self.conn.commit()
+        return detection_run_id
+
+    def finish_detection_run(
+        self,
+        detection_run_id: int,
+        candidate_count: int,
+        metrics: dict[str, Any] | None = None,
+    ) -> None:
+        self.cursor.execute(
+            """
+            UPDATE mention_detection_runs
+            SET status = 'successful', candidate_count = %s, metrics = %s,
+                error = NULL, completed_at = now()
+            WHERE id = %s
+            """,
+            (candidate_count, psycopg2.extras.Json(metrics or {}), detection_run_id),
+        )
+        self.conn.commit()
+
+    def fail_detection_run(self, detection_run_id: int, error: str) -> None:
+        self.cursor.execute(
+            """
+            UPDATE mention_detection_runs
+            SET status = 'failed', error = %s, completed_at = now()
+            WHERE id = %s
+            """,
+            (error, detection_run_id),
+        )
+        self.conn.commit()
+
+    def upsert_mention_candidates(
+        self,
+        candidates: Iterable[MentionCandidate],
+        detection_run_id: int | None = None,
+    ) -> int:
         count = 0
         for candidate in candidates:
             self.cursor.execute(
@@ -42,22 +135,42 @@ class MentionRepositoryMixin:
             row = self.cursor.fetchone()
             if not row:
                 continue
-            self.cursor.execute(
-                """
+            active_detection_run_id = detection_run_id or candidate.detection_run_id
+            query = """
                 INSERT INTO mention_candidates (
                     publication_id, dataset_name, evidence_text, section_heading,
-                    standardized_section, char_start, char_end, score, source, updated_at
+                    standardized_section, char_start, char_end, score, source,
+                    detection_run_id, trigger_type, trigger_text, triggers,
+                    evidence_tier, detector_version, render_sha256, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-                ON CONFLICT (publication_id, dataset_name, char_start, char_end)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            """
+            if active_detection_run_id is not None:
+                query += """
+                ON CONFLICT (detection_run_id, dataset_name, char_start, char_end)
+                WHERE detection_run_id IS NOT NULL
                 DO UPDATE SET
                     evidence_text = EXCLUDED.evidence_text,
                     section_heading = EXCLUDED.section_heading,
                     standardized_section = EXCLUDED.standardized_section,
                     score = EXCLUDED.score,
                     source = EXCLUDED.source,
+                    trigger_type = EXCLUDED.trigger_type,
+                    trigger_text = EXCLUDED.trigger_text,
+                    triggers = EXCLUDED.triggers,
+                    evidence_tier = EXCLUDED.evidence_tier,
+                    detector_version = EXCLUDED.detector_version,
+                    render_sha256 = EXCLUDED.render_sha256,
                     updated_at = now()
-                """,
+                """
+            else:
+                query += """
+                ON CONFLICT (publication_id, dataset_name, char_start, char_end)
+                WHERE detection_run_id IS NULL
+                DO UPDATE SET evidence_text = EXCLUDED.evidence_text, updated_at = now()
+                """
+            self.cursor.execute(
+                query,
                 (
                     row["id"],
                     candidate.dataset_name,
@@ -68,13 +181,22 @@ class MentionRepositoryMixin:
                     candidate.char_end,
                     candidate.score,
                     candidate.source,
+                    active_detection_run_id,
+                    candidate.trigger_type,
+                    candidate.trigger_text,
+                    psycopg2.extras.Json(candidate.triggers),
+                    candidate.evidence_tier,
+                    candidate.detector_version,
+                    candidate.render_sha256,
                 ),
             )
             count += 1
         self.conn.commit()
         return count
 
-    def get_unprocessed_candidates(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_unprocessed_candidates(
+        self, limit: int | None = None, pipeline_run_id: int | None = None
+    ) -> list[dict[str, Any]]:
         query = """
             SELECT
                 c.id AS candidate_id,
@@ -89,10 +211,19 @@ class MentionRepositoryMixin:
                 c.source
             FROM mention_candidates c
             JOIN publications p ON p.id = c.publication_id
+            JOIN mention_detection_runs dr ON dr.id = c.detection_run_id
+            JOIN artifacts md
+              ON md.id = dr.markdown_artifact_id
+             AND md.publication_id = p.id
+             AND md.artifact_type = 'markdown'
+             AND md.sha256 = dr.render_sha256
             WHERE c.promoted_mention_id IS NULL
-            ORDER BY c.id
+              AND dr.status = 'successful'
+              AND dr.detector_version = %s
         """
-        params: list[Any] = []
+        params: list[Any] = [DETECTOR_VERSION]
+        query, params = scope_to_preview_candidates(query, params, pipeline_run_id)
+        query += " ORDER BY c.id"
         if limit is not None:
             query += " LIMIT %s"
             params.append(limit)
@@ -115,11 +246,19 @@ class MentionRepositoryMixin:
                 c.source
             FROM mention_candidates c
             JOIN publications p ON p.id = c.publication_id
+            JOIN mention_detection_runs dr ON dr.id = c.detection_run_id
+            JOIN artifacts md
+              ON md.id = dr.markdown_artifact_id
+             AND md.publication_id = p.id
+             AND md.artifact_type = 'markdown'
+             AND md.sha256 = dr.render_sha256
             WHERE c.promoted_mention_id IS NULL
+              AND dr.status = 'successful'
+              AND dr.detector_version = %s
               AND c.publication_id = %s
             ORDER BY c.id
             """,
-            (publication_row_id,),
+            (DETECTOR_VERSION, publication_row_id),
         )
         return [dict(row) for row in self.cursor.fetchall()]
 

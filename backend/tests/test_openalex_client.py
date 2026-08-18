@@ -139,3 +139,157 @@ def test_transient_errors_are_retried(monkeypatch):
     assert work["paperId"] == "W1"
     assert len(session.calls) == 2
 
+
+def test_search_with_meta_cursor_paginates_and_reports_cost_and_rate_limit():
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={
+                    "meta": {"count": 250, "cost_usd": 0.001, "next_cursor": "page-2"},
+                    "results": [{"id": f"https://openalex.org/W{i}"} for i in range(100)],
+                },
+                headers={"X-RateLimit-Remaining": "975"},
+            ),
+            FakeResponse(
+                payload={
+                    "meta": {"count": 250, "cost_usd": 0.001, "next_cursor": None},
+                    "results": [{"id": "https://openalex.org/W101"}],
+                },
+                headers={"X-RateLimit-Remaining": "974"},
+            ),
+        ]
+    )
+    client = OpenAlexClient(api_key="key", mailto="", session=session, request_delay=0)
+
+    result = client.search_works_with_meta(
+        query='"10.1234/example"',
+        limit=101,
+        search_mode="search.exact",
+        max_cost_usd=0.01,
+    )
+
+    assert len(result.works) == 101
+    assert result.total_count == 250
+    assert result.calls == 2
+    assert result.cost_usd == 0.002
+    assert result.rate_limit["remaining"] == "974"
+    assert session.calls[0]["params"]["search.exact"] == '"10.1234/example"'
+    assert session.calls[1]["params"]["cursor"] == "page-2"
+
+
+def test_seeded_random_sample_uses_deterministic_deduplicated_batches():
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={
+                    "meta": {"count": 125, "cost_usd": 0.0001},
+                    "results": [{"id": f"https://openalex.org/W{i}"} for i in range(100)],
+                }
+            ),
+            FakeResponse(
+                payload={
+                    "meta": {"count": 125, "cost_usd": 0.0001},
+                    "results": [{"id": f"https://openalex.org/W{i}"} for i in range(100, 125)],
+                }
+            ),
+        ]
+    )
+    client = OpenAlexClient(api_key="key", mailto="", session=session, request_delay=0)
+
+    result = client.search_works_with_meta(
+        limit=125,
+        filters={"type": ["article"]},
+        sample_size=125,
+        sample_seed=42,
+        max_cost_usd=0.01,
+    )
+
+    assert len(result.works) == 125
+    assert result.calls == 2
+    assert result.truncated is False
+    assert session.calls[0]["params"]["sample"] == 100
+    assert session.calls[0]["params"]["seed"] == 42
+    assert "cursor" not in session.calls[0]["params"]
+    assert "page" not in session.calls[0]["params"]
+    assert session.calls[1]["params"]["sample"] == 25
+    assert session.calls[1]["params"]["seed"] == 43
+
+
+def test_seeded_random_sample_refills_cross_batch_duplicates():
+    session = FakeSession(
+        [
+            FakeResponse(payload={"meta": {"cost_usd": 0.0001}, "results": [{"id": f"https://openalex.org/W{i}"} for i in range(100)]}),
+            FakeResponse(payload={"meta": {"cost_usd": 0.0001}, "results": [{"id": f"https://openalex.org/W{i}"} for i in range(20)]}),
+            FakeResponse(payload={"meta": {"cost_usd": 0.0001}, "results": [{"id": f"https://openalex.org/W{i}"} for i in range(100, 125)]}),
+        ]
+    )
+    client = OpenAlexClient(api_key="key", mailto="", session=session, request_delay=0)
+
+    result = client.search_works_with_meta(
+        limit=125,
+        sample_size=125,
+        sample_seed=42,
+        max_cost_usd=0.01,
+    )
+
+    assert len(result.works) == 125
+    assert result.calls == 3
+    assert session.calls[2]["params"]["sample"] == 25
+    assert session.calls[2]["params"]["seed"] == 44
+
+
+def test_search_with_meta_stops_before_next_page_would_exceed_budget():
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={
+                    "meta": {"count": 500, "cost_usd": 0.001, "next_cursor": "page-2"},
+                    "results": [{"id": f"https://openalex.org/W{i}"} for i in range(100)],
+                }
+            )
+        ]
+    )
+    client = OpenAlexClient(api_key="key", mailto="", session=session, request_delay=0)
+
+    result = client.search_works_with_meta(query="reuse", limit=500, max_cost_usd=0.0015)
+
+    assert result.calls == 1
+    assert result.cost_usd == 0.001
+    assert result.truncated is True
+
+
+def test_rate_limit_status_returns_safe_daily_budget_fields():
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={
+                    "api_key": "secret-value",
+                    "rate_limit": {
+                        "daily_budget_usd": 1,
+                        "daily_remaining_usd": 0.84,
+                        "resets_at": "2026-08-05T00:00:00Z",
+                        "resets_in_seconds": 3600,
+                    },
+                }
+            )
+        ]
+    )
+    client = OpenAlexClient(api_key="secret-value", mailto="", session=session, request_delay=0)
+
+    status = client.rate_limit_status()
+
+    assert status["status"] == "ready"
+    assert status["remaining"] == 0.84
+    assert status["limit"] == 1
+    assert status["reset_at"] == "2026-08-05T00:00:00Z"
+    assert "api_key" not in status
+
+
+def test_rate_limit_status_marks_rejected_key_invalid():
+    session = FakeSession([FakeResponse(status_code=401, text="Invalid API key")])
+    client = OpenAlexClient(api_key="bad-key", mailto="", session=session, request_delay=0)
+
+    status = client.rate_limit_status()
+
+    assert status["status"] == "invalid"
+    assert status["available"] is False

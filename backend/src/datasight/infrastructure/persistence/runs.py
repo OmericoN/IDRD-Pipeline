@@ -264,21 +264,25 @@ class RunRepositoryMixin:
         return int(row.get("count") or 0)
 
     def reset_database(self) -> list[str]:
-        tables = [
-            "pipeline_run_events",
-            "stage_runs",
-            "pipeline_item_stages",
-            "pipeline_items",
-            "um_match_decisions",
-            "mention_candidates",
-            "dataset_mentions",
-            "document_sections",
-            "artifacts",
-            "um_datasets",
-            "publications",
-            "pipeline_runs",
-        ]
-        self.cursor.execute(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE")
+        self.cursor.execute(
+            """
+            SELECT tablename, quote_ident(tablename) AS quoted_table_name
+            FROM pg_tables
+            WHERE schemaname = current_schema()
+              AND tablename <> 'alembic_version'
+              AND tablename <> 'um_datasets'
+            ORDER BY tablename
+            """
+        )
+        rows = self.cursor.fetchall()
+        tables = [str(row["tablename"]) for row in rows]
+        if not tables:
+            return []
+
+        quoted_tables = [str(row["quoted_table_name"]) for row in rows]
+        self.cursor.execute(
+            f"TRUNCATE {', '.join(quoted_tables)} RESTART IDENTITY CASCADE"
+        )
         self.conn.commit()
         return tables
 

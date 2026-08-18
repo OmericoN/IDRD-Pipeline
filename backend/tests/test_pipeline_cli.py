@@ -54,44 +54,53 @@ def test_cli_parses_import_um_datasets():
     assert args.path == "um.json"
 
 
-def test_cli_defaults_to_catalog_profile_and_supports_opt_out():
+def test_cli_discovery_preview_defaults_to_adaptive_catalog_funnel():
     defaults = build_parser().parse_args(
-        ["run-all", "--query", "reuse", "--output", "storage/exports/insights.csv"]
-    )
-    opted_out = build_parser().parse_args(
-        [
-            "run-all",
-            "--query",
-            "reuse",
-            "--output",
-            "storage/exports/insights.csv",
-            "--no-use-um-profile",
-        ]
+        ["discovery-preview"]
     )
 
-    assert defaults.um_datasets == "data/um_dataset"
-    assert defaults.use_um_profile is True
-    assert opted_out.use_um_profile is False
+    assert defaults.mode == "catalog_funnel"
+    assert defaults.discovery_limit == 500
+    assert defaults.processing_limit == 50
+    assert defaults.max_cost_usd == 0.25
+
+
+def test_cli_parses_seeded_random_discovery_preview():
+    args = build_parser().parse_args(
+        ["discovery-preview", "--mode", "random", "--random-seed", "42"]
+    )
+
+    assert args.mode == "random"
+    assert args.random_seed == 42
+
+
+def test_cli_parses_english_preview_and_evaluation_export():
+    preview = build_parser().parse_args(["discovery-preview", "--language", "en"])
+    export = build_parser().parse_args(
+        ["evaluation-export", "--run-id", "9", "--output-dir", "storage/evaluation/run-9"]
+    )
+    assert preview.language == "en"
+    assert export.run_id == 9
+    assert export.output_dir == "storage/evaluation/run-9"
 
 
 def test_cli_parses_guided_run_all():
     args = build_parser().parse_args(
         [
             "run-all",
-            "--query",
-            "Maastricht dataset reuse",
-            "--limit",
+            "--preview-id",
+            "preview-123",
+            "--processing-limit",
             "5",
             "--um-datasets",
             "um.csv",
             "--output",
             "storage/exports/insights.csv",
-            "--use-um-profile",
         ]
     )
     assert args.command == "run-all"
     assert args.mode == "guided"
-    assert args.limit == 5
+    assert args.preview_id == "preview-123"
+    assert args.processing_limit == 5
     assert args.um_datasets == "um.csv"
     assert args.output == "storage/exports/insights.csv"
-    assert args.use_um_profile is True

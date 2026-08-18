@@ -8,7 +8,6 @@ from typing import Any
 
 from datasight.application import pipeline_services as services
 from datasight.config import (
-    DEFAULT_UM_DATASETS_PATH,
     HIGH_THROUGHPUT_MAX_BATCHES_PER_DISPATCH,
     HIGH_THROUGHPUT_STAGE_BATCH_SIZE,
 )
@@ -40,35 +39,21 @@ class DispatchPlan:
 
 
 def bootstrap_high_throughput_run(
-    query: str,
-    limit: int,
-    um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
-    overwrite: bool = False,
-    open_access_only: bool = True,
-    topic_ids: str | list[str] | None = None,
-    keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
-    use_um_profile: bool = True,
+    preview_id: str,
+    processing_limit: int,
     pipeline_run_id: int | None = None,
+    overwrite: bool = False,
+    excluded_candidate_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if pipeline_run_id is None:
         raise ValueError("pipeline_run_id is required for high-throughput bootstrap.")
-    if um_datasets_path:
-        services.import_um_datasets(um_datasets_path)
-
     result = services.discover_publications(
-        query=query,
-        limit=limit,
-        open_access_only=open_access_only,
-        topic_ids=topic_ids,
-        keyword_terms=keyword_terms,
-        mesh_terms=mesh_terms,
-        from_year=from_year,
-        to_year=to_year,
-        use_um_profile=use_um_profile,
+        query="preview-backed discovery",
+        limit=processing_limit,
         pipeline_run_id=pipeline_run_id,
+        preview_id=preview_id,
+        processing_limit=processing_limit,
+        excluded_candidate_ids=excluded_candidate_ids,
     )
     payload = result.get("payload", {})
     raw_paper_ids = payload.get("paper_ids", []) if isinstance(payload, dict) else []

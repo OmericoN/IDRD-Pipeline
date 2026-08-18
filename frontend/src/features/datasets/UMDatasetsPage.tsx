@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RiCheckLine,
   RiDatabase2Line,
@@ -85,9 +85,20 @@ export default function UMDatasetsPage() {
     queryFn: () => api.umDataset(selectedId as string),
     enabled: selectedId !== null,
   });
+  const importMutation = useMutation({
+    mutationFn: api.importUmDatasets,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["um-datasets"] }),
+        queryClient.invalidateQueries({ queryKey: ["um-datasets-verification"] }),
+        queryClient.invalidateQueries({ queryKey: ["um-discovery-profile"] }),
+      ]);
+    },
+  });
 
   const catalog = catalogQuery.data;
   const verification = verificationQuery.data;
+  const catalogNeedsImport = verification?.status === "not_imported";
   const issueById = useMemo(
     () => new Map(verification?.issues.map((issue) => [issue.um_dataset_id, issue]) ?? []),
     [verification?.issues],
@@ -114,7 +125,7 @@ export default function UMDatasetsPage() {
         <Card size="sm">
           <CardHeader>
             <CardDescription>Catalog integrity</CardDescription>
-            <CardTitle className="capitalize">{verificationQuery.isLoading ? "Checking…" : verification?.status ?? "Unchecked"}</CardTitle>
+            <CardTitle>{verificationQuery.isLoading ? "Checking…" : integrityLabel(verification?.status ?? "unchecked")}</CardTitle>
             <CardAction>
               <IntegrityBadge status={verification?.status ?? "unchecked"} />
             </CardAction>
@@ -133,7 +144,14 @@ export default function UMDatasetsPage() {
         <Alert variant="destructive">
           <RiErrorWarningLine />
           <AlertTitle>Stored catalog differs from the authoritative source</AlertTitle>
-          <AlertDescription>{verification.issues.length} record issue{verification.issues.length === 1 ? "" : "s"} found. Review the complete list below.</AlertDescription>
+          <AlertDescription>{verification.message || `${verification.issues.length} record issue${verification.issues.length === 1 ? "" : "s"} found. Review the complete list below.`}</AlertDescription>
+        </Alert>
+      ) : null}
+      {importMutation.isError ? (
+        <Alert variant="destructive">
+          <RiErrorWarningLine />
+          <AlertTitle>Catalog import failed</AlertTitle>
+          <AlertDescription>{importMutation.error.message}</AlertDescription>
         </Alert>
       ) : null}
       {verification?.status === "verified" ? (
@@ -144,17 +162,20 @@ export default function UMDatasetsPage() {
         </Alert>
       ) : null}
       {verification?.warnings.length ? (
-        <Alert>
-          <RiErrorWarningLine />
-          <AlertTitle>Source metadata warnings</AlertTitle>
-          <AlertDescription>{verification.warnings.join(" ")}</AlertDescription>
-        </Alert>
+        <details className="rounded-lg border bg-card px-4 py-3 text-sm text-card-foreground">
+          <summary className="cursor-pointer font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+            Source import notes ({verification.warnings.length})
+          </summary>
+          <ul className="mt-3 grid gap-2 pl-5 text-muted-foreground">
+            {verification.warnings.map((warning) => <li key={warning} className="list-disc">{warning}</li>)}
+          </ul>
+        </details>
       ) : null}
 
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle>UM datasets</CardTitle>
-          <CardDescription>Search and inspect the complete stored Maastricht University dataset catalog.</CardDescription>
+          <CardDescription>{catalogNeedsImport ? "Import the validated local source before exploring UM datasets." : "Search and inspect the complete stored Maastricht University dataset catalog."}</CardDescription>
           <CardAction>
             <Button type="button" variant="outline" size="sm" onClick={checkAgain} disabled={verificationQuery.isFetching}>
               <RiRefreshLine data-icon="inline-start" />
@@ -163,7 +184,7 @@ export default function UMDatasetsPage() {
           </CardAction>
         </CardHeader>
         <CardContent className="flex min-w-0 flex-col gap-4">
-          <form className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_240px_150px_auto]" onSubmit={submitSearch}>
+          {!catalogNeedsImport ? <form className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_240px_150px_auto]" onSubmit={submitSearch}>
             <div className="relative">
               <RiSearchLine className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input aria-label="Search UM datasets" className="pl-8" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search ID, title, DOI, creator, or keyword" />
@@ -177,22 +198,32 @@ export default function UMDatasetsPage() {
               {catalog?.years.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
             <Button type="submit">Search</Button>
-          </form>
+          </form> : null}
 
           {catalogQuery.isError ? (
             <Alert variant="destructive"><RiErrorWarningLine /><AlertTitle>Could not load UM datasets</AlertTitle><AlertDescription>{catalogQuery.error.message}</AlertDescription></Alert>
           ) : null}
           {catalogQuery.isLoading ? <CatalogSkeleton /> : null}
-          {!catalogQuery.isLoading && catalog && !catalog.items.length ? (
+          {catalogNeedsImport || (!catalogQuery.isLoading && catalog && !catalog.items.length) ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon"><RiDatabase2Line /></EmptyMedia>
-                <EmptyTitle>No datasets found</EmptyTitle>
-                <EmptyDescription>{search || repository || year ? "Try clearing or changing the catalog filters." : "Import the UM dataset catalog before exploring it."}</EmptyDescription>
+                <EmptyTitle>{catalogNeedsImport ? "Catalog setup required" : "No datasets found"}</EmptyTitle>
+                <EmptyDescription>{catalogNeedsImport ? `The authoritative source contains ${verification?.source_count?.toLocaleString() ?? "available"} records. Importing is atomic and refuses an empty source.` : search || repository || year ? "Try clearing or changing the catalog filters." : "No stored datasets are available."}</EmptyDescription>
               </EmptyHeader>
+              {catalogNeedsImport && verification ? (
+                <Button
+                  type="button"
+                  disabled={importMutation.isPending}
+                  onClick={() => importMutation.mutate(verification.source_path)}
+                >
+                  <RiDatabase2Line data-icon="inline-start" />
+                  {importMutation.isPending ? "Importing catalog…" : "Import authoritative catalog"}
+                </Button>
+              ) : null}
             </Empty>
           ) : null}
-          {catalog?.items.length ? (
+          {!catalogNeedsImport && catalog?.items.length ? (
             <div className="min-w-0 overflow-x-auto rounded-lg border">
               <Table className="min-w-[920px]">
                 <TableHeader><TableRow><TableHead>Status</TableHead><TableHead>Dataset</TableHead><TableHead>Year</TableHead><TableHead>Repository</TableHead><TableHead>Creators</TableHead><TableHead>DOI</TableHead></TableRow></TableHeader>
@@ -205,7 +236,7 @@ export default function UMDatasetsPage() {
             </div>
           ) : null}
 
-          {catalog && catalog.total > 0 ? (
+          {!catalogNeedsImport && catalog && catalog.total > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
               <p>Showing {start}–{end} of {catalog.total}</p>
               <div className="flex gap-2">
@@ -243,8 +274,13 @@ function DatasetRow({ dataset, issue, verificationStatus, onSelect }: { dataset:
 }
 
 function IntegrityBadge({ status }: { status: string }) {
-  const variant = status === "verified" ? "secondary" : status === "unchecked" ? "outline" : "destructive";
-  return <Badge variant={variant} className="capitalize">{status}</Badge>;
+  const variant = status === "verified" ? "secondary" : status === "unchecked" || status === "not_imported" ? "outline" : "destructive";
+  return <Badge variant={variant}>{integrityLabel(status)}</Badge>;
+}
+
+function integrityLabel(status: string) {
+  if (status === "not_imported") return "Not imported";
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function VerificationIssues({ issues, onSelect }: { issues: UMDatasetVerificationIssue[]; onSelect: (id: string) => void }) {

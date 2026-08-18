@@ -14,7 +14,6 @@ from datasight.domain.schemas import UMDatasetRecord
 class DiscoveryOptions:
     topic_ids: tuple[str, ...] = ()
     keyword_terms: tuple[str, ...] = ()
-    mesh_terms: tuple[str, ...] = ()
     from_year: int | None = None
     to_year: int | None = None
     use_um_profile: bool = True
@@ -24,7 +23,6 @@ class DiscoveryOptions:
 class DiscoveryProfile:
     topic_ids: tuple[str, ...] = ()
     keyword_terms: tuple[str, ...] = ()
-    mesh_terms: tuple[str, ...] = ()
     concept_terms: tuple[str, ...] = ()
     source_names: tuple[str, ...] = ()
     openalex_work_ids: tuple[str, ...] = ()
@@ -35,7 +33,6 @@ class DiscoveryProfile:
         return _dedupe(
             [
                 *self.keyword_terms,
-                *self.mesh_terms,
                 *self.concept_terms,
                 *self.source_names,
             ]
@@ -54,7 +51,6 @@ class DiscoveryQuery:
 def build_discovery_profile(records: Iterable[UMDatasetRecord], max_terms: int = 20) -> DiscoveryProfile:
     topic_ids: Counter[str] = Counter()
     keyword_terms: Counter[str] = Counter()
-    mesh_terms: Counter[str] = Counter()
     concept_terms: Counter[str] = Counter()
     source_names: Counter[str] = Counter()
     work_ids: set[str] = set()
@@ -68,8 +64,6 @@ def build_discovery_profile(records: Iterable[UMDatasetRecord], max_terms: int =
 
         for keyword in [*record.keywords, *_terms_from_rows(openalex.get("keywords"), "keyword")]:
             _count_term(keyword_terms, keyword)
-        for mesh in _terms_from_rows(openalex.get("mesh"), "descriptor_name", fallback_key="mesh"):
-            _count_term(mesh_terms, mesh)
         for concept in _terms_from_rows(openalex.get("concepts"), "display_name", fallback_key="concept"):
             _count_term(concept_terms, concept)
         for topic in _rows(openalex.get("topics")):
@@ -87,7 +81,6 @@ def build_discovery_profile(records: Iterable[UMDatasetRecord], max_terms: int =
     return DiscoveryProfile(
         topic_ids=tuple(topic for topic, _ in topic_ids.most_common(max_terms)),
         keyword_terms=tuple(term for term, _ in keyword_terms.most_common(max_terms)),
-        mesh_terms=tuple(term for term, _ in mesh_terms.most_common(max_terms)),
         concept_terms=tuple(term for term, _ in concept_terms.most_common(max_terms)),
         source_names=tuple(term for term, _ in source_names.most_common(max_terms // 2)),
         openalex_work_ids=tuple(sorted(work_ids)),
@@ -136,7 +129,6 @@ def build_openalex_discovery_queries(
     terms = _dedupe(
         [
             *options.keyword_terms,
-            *options.mesh_terms,
             *((profile.search_terms if profile else ()) or ()),
         ]
     )
@@ -191,11 +183,10 @@ def score_openalex_candidate(
         term.casefold()
         for term in [
             *_terms_from_rows(raw_mapping.get("keywords"), "display_name", fallback_key="keyword"),
-            *_terms_from_rows(raw_mapping.get("mesh"), "descriptor_name", fallback_key="mesh"),
             *_terms_from_rows(raw_mapping.get("concepts"), "display_name", fallback_key="concept"),
         ]
     }
-    expected_terms = {term.casefold() for term in [*options.keyword_terms, *options.mesh_terms]}
+    expected_terms = {term.casefold() for term in options.keyword_terms}
     if profile:
         expected_terms |= {term.casefold() for term in profile.search_terms}
     if candidate_terms & expected_terms:

@@ -23,7 +23,6 @@ def test_build_discovery_profile_from_um_openalex_metadata():
                 "id": "https://openalex.org/W123",
                 "topics": [{"id": "https://openalex.org/T42", "display_name": "Health data"}],
                 "keywords": [{"keyword": "biobank"}],
-                "mesh": [{"mesh": "Humans"}],
                 "concepts": [{"concept": "Epidemiology"}],
                 "related_works": ["https://openalex.org/W999"],
             }
@@ -35,7 +34,6 @@ def test_build_discovery_profile_from_um_openalex_metadata():
     assert profile.topic_ids == ("T42",)
     assert "cohort" in profile.keyword_terms
     assert "biobank" in profile.keyword_terms
-    assert profile.mesh_terms == ("Humans",)
     assert profile.related_work_ids == ("W999",)
 
 

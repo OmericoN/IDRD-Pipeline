@@ -1,4 +1,4 @@
-"""Full-pipeline orchestration shared by CLI and Celery."""
+"""Full-pipeline orchestration. Production runs are always preview-backed."""
 
 from __future__ import annotations
 
@@ -7,10 +7,12 @@ from typing import Any
 from celery import chain
 
 from datasight.application import pipeline_services as services
+from datasight.application.discovery_preview import validate_discovery_preview
 from datasight.config import DEFAULT_UM_DATASETS_PATH
 from datasight.domain.run_strategy import RunStrategy
+from datasight.domain.candidate_detection import DETECTOR_VERSION
+from datasight.infrastructure.ingestion.renderer import RENDERER_VERSION
 from datasight.infrastructure.persistence.repository import PipelineRepository
-from datasight.infrastructure.worker.celery_app import celery_app
 
 
 def create_run(query: str, config: dict[str, Any]) -> int:
@@ -19,163 +21,116 @@ def create_run(query: str, config: dict[str, Any]) -> int:
 
 
 def run_all_local(
-    query: str,
-    limit: int,
+    preview_id: str,
     output: str,
+    processing_limit: int | None = None,
+    excluded_candidate_ids: list[str] | None = None,
     um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
-    open_access_only: bool = True,
-    topic_ids: str | list[str] | None = None,
-    keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
-    use_um_profile: bool = True,
 ) -> dict[str, Any]:
-    config = {
-        "limit": limit,
-        "output": output,
-        "overwrite": overwrite,
-        "open_access_only": open_access_only,
-        "topic_ids": topic_ids,
-        "keyword_terms": keyword_terms,
-        "mesh_terms": mesh_terms,
-        "from_year": from_year,
-        "to_year": to_year,
-        "use_um_profile": use_um_profile,
-        "um_datasets_path": um_datasets_path,
-    }
+    preview, effective_limit, query = _preview_context(preview_id, processing_limit)
+    config = _run_config(
+        preview_id=preview_id,
+        processing_limit=effective_limit,
+        output=output,
+        overwrite=overwrite,
+        um_datasets_path=um_datasets_path,
+        strategy=RunStrategy.STANDARD,
+        excluded_candidate_ids=excluded_candidate_ids,
+        preview=preview,
+    )
     pipeline_run_id = create_run(query, config)
     results: list[dict[str, Any]] = []
-
     try:
-        if um_datasets_path:
-            results.append(
-                {
-                    "stage": "import_um_datasets",
-                    **services.import_um_datasets(um_datasets_path),
-                }
-            )
         results.extend(
             [
                 services.discover_publications(
                     query=query,
-                    limit=limit,
-                    open_access_only=open_access_only,
-                    topic_ids=topic_ids,
-                    keyword_terms=keyword_terms,
-                    mesh_terms=mesh_terms,
-                    from_year=from_year,
-                    to_year=to_year,
-                    use_um_profile=use_um_profile,
+                    limit=effective_limit,
                     pipeline_run_id=pipeline_run_id,
+                    preview_id=preview_id,
+                    processing_limit=effective_limit,
+                    excluded_candidate_ids=excluded_candidate_ids,
                 ),
                 services.download_pdf_batch(
-                    limit=limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
+                    limit=effective_limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
                 ),
                 services.grobid_convert_batch(
-                    limit=limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
+                    limit=effective_limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
                 ),
                 services.render_document_batch(
-                    limit=limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
+                    limit=effective_limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
                 ),
-                services.detect_mentions_batch(
-                    limit=limit, pipeline_run_id=pipeline_run_id
-                ),
+                services.detect_mentions_batch(limit=effective_limit, pipeline_run_id=pipeline_run_id),
                 services.extract_features_from_candidates(
-                    limit=limit, pipeline_run_id=pipeline_run_id
+                    limit=effective_limit, pipeline_run_id=pipeline_run_id
                 ),
-                services.match_um_dataset_batch(
-                    limit=limit, pipeline_run_id=pipeline_run_id
-                ),
+                services.match_um_dataset_batch(limit=effective_limit, pipeline_run_id=pipeline_run_id),
                 services.export_insights_csv(output, pipeline_run_id=pipeline_run_id),
             ]
         )
     except Exception:
         _finish_run(pipeline_run_id, "failed")
         raise
-
     status = _run_outcome(results)
     _finish_run(pipeline_run_id, status)
-    return {
-        "pipeline_run_id": pipeline_run_id,
-        "status": status,
-        "results": results,
-    }
+    return {"pipeline_run_id": pipeline_run_id, "status": status, "results": results}
 
 
 def enqueue_run_all(
-    query: str,
-    limit: int,
+    preview_id: str,
     output: str,
+    processing_limit: int | None = None,
+    excluded_candidate_ids: list[str] | None = None,
     um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
-    open_access_only: bool = True,
-    topic_ids: str | list[str] | None = None,
-    keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
-    use_um_profile: bool = True,
     strategy: RunStrategy | str = RunStrategy.STANDARD,
 ) -> dict[str, Any]:
+    preview, effective_limit, query = _preview_context(preview_id, processing_limit)
     strategy_value = RunStrategy(strategy)
     if strategy_value == RunStrategy.HIGH_THROUGHPUT:
         return enqueue_high_throughput_run(
-            query=query,
-            limit=limit,
+            preview_id=preview_id,
             output=output,
+            processing_limit=effective_limit,
+            excluded_candidate_ids=excluded_candidate_ids,
             um_datasets_path=um_datasets_path,
             overwrite=overwrite,
-            open_access_only=open_access_only,
-            topic_ids=topic_ids,
-            keyword_terms=keyword_terms,
-            mesh_terms=mesh_terms,
-            from_year=from_year,
-            to_year=to_year,
-            use_um_profile=use_um_profile,
+            preview=preview,
+            query=query,
         )
 
-    config = {
-        "limit": limit,
-        "output": output,
-        "overwrite": overwrite,
-        "open_access_only": open_access_only,
-        "topic_ids": topic_ids,
-        "keyword_terms": keyword_terms,
-        "mesh_terms": mesh_terms,
-        "from_year": from_year,
-        "to_year": to_year,
-        "use_um_profile": use_um_profile,
-        "um_datasets_path": um_datasets_path,
-        "strategy": strategy_value.value,
-    }
+    config = _run_config(
+        preview_id=preview_id,
+        processing_limit=effective_limit,
+        output=output,
+        overwrite=overwrite,
+        um_datasets_path=um_datasets_path,
+        strategy=strategy_value,
+        excluded_candidate_ids=excluded_candidate_ids,
+        preview=preview,
+    )
     pipeline_run_id = create_run(query, config)
     try:
-        if um_datasets_path:
-            services.import_um_datasets(um_datasets_path)
-
         from datasight.infrastructure.worker import tasks
 
         workflow = chain(
             tasks.discover_publications.si(
-                query,
-                limit,
-                open_access_only,
-                topic_ids,
-                keyword_terms,
-                mesh_terms,
-                from_year,
-                to_year,
-                use_um_profile,
-                pipeline_run_id,
+                query=query,
+                limit=effective_limit,
+                open_access_only=False,
+                use_um_profile=False,
+                pipeline_run_id=pipeline_run_id,
+                preview_id=preview_id,
+                processing_limit=effective_limit,
+                excluded_candidate_ids=excluded_candidate_ids,
             ),
-            tasks.download_pdf.si(limit, overwrite, pipeline_run_id),
-            tasks.grobid_convert.si(limit, overwrite, False, pipeline_run_id),
-            tasks.render_document.si(limit, overwrite, pipeline_run_id),
-            tasks.detect_mentions.si(limit, pipeline_run_id),
-            tasks.extract_features.si(limit, pipeline_run_id),
-            tasks.match_um_dataset.si(limit, pipeline_run_id),
+            tasks.download_pdf.si(effective_limit, overwrite, pipeline_run_id),
+            tasks.grobid_convert.si(effective_limit, overwrite, False, pipeline_run_id),
+            tasks.render_document.si(effective_limit, overwrite, pipeline_run_id),
+            tasks.detect_mentions.si(effective_limit, pipeline_run_id),
+            tasks.extract_features.si(effective_limit, pipeline_run_id),
+            tasks.match_um_dataset.si(effective_limit, pipeline_run_id),
             tasks.export_insights.si(output, None, pipeline_run_id),
             tasks.finish_pipeline_run.si(pipeline_run_id, "successful"),
         )
@@ -190,53 +145,42 @@ def enqueue_run_all(
 
 
 def enqueue_high_throughput_run(
-    query: str,
-    limit: int,
+    preview_id: str,
     output: str,
+    processing_limit: int | None = None,
+    excluded_candidate_ids: list[str] | None = None,
     um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
-    open_access_only: bool = True,
-    topic_ids: str | list[str] | None = None,
-    keyword_terms: str | list[str] | None = None,
-    mesh_terms: str | list[str] | None = None,
-    from_year: int | None = None,
-    to_year: int | None = None,
-    use_um_profile: bool = True,
+    *,
+    preview: dict[str, Any] | None = None,
+    query: str | None = None,
 ) -> dict[str, Any]:
-    config = {
-        "limit": limit,
-        "output": output,
-        "overwrite": overwrite,
-        "open_access_only": open_access_only,
-        "topic_ids": topic_ids,
-        "keyword_terms": keyword_terms,
-        "mesh_terms": mesh_terms,
-        "from_year": from_year,
-        "to_year": to_year,
-        "use_um_profile": use_um_profile,
-        "um_datasets_path": um_datasets_path,
-        "strategy": RunStrategy.HIGH_THROUGHPUT.value,
-    }
+    if preview is None or query is None:
+        preview, effective_limit, query = _preview_context(preview_id, processing_limit)
+    else:
+        effective_limit = int(processing_limit or 0)
+    config = _run_config(
+        preview_id=preview_id,
+        processing_limit=effective_limit,
+        output=output,
+        overwrite=overwrite,
+        um_datasets_path=um_datasets_path,
+        strategy=RunStrategy.HIGH_THROUGHPUT,
+        excluded_candidate_ids=excluded_candidate_ids,
+        preview=preview,
+    )
     pipeline_run_id = create_run(query, config)
-
     from datasight.infrastructure.worker import tasks
 
     try:
         async_result = tasks.bootstrap_high_throughput_run.apply_async(
             kwargs={
-                "query": query,
-                "limit": limit,
+                "preview_id": preview_id,
+                "processing_limit": effective_limit,
                 "output_path": output,
-                "um_datasets_path": um_datasets_path,
                 "overwrite": overwrite,
-                "open_access_only": open_access_only,
-                "topic_ids": topic_ids,
-                "keyword_terms": keyword_terms,
-                "mesh_terms": mesh_terms,
-                "from_year": from_year,
-                "to_year": to_year,
-                "use_um_profile": use_um_profile,
                 "pipeline_run_id": pipeline_run_id,
+                "excluded_candidate_ids": excluded_candidate_ids,
             },
             queue="processing",
         )
@@ -249,12 +193,63 @@ def enqueue_high_throughput_run(
     return {"pipeline_run_id": pipeline_run_id, "task_id": task_id, "status": "queued"}
 
 
-def celery_worker_available(timeout: float = 1.0) -> bool:
-    try:
-        replies = celery_app.control.ping(timeout=timeout)
-        return bool(replies)
-    except Exception:
-        return False
+def _preview_context(
+    preview_id: str,
+    processing_limit: int | None,
+) -> tuple[dict[str, Any], int, str]:
+    preview = validate_discovery_preview(preview_id, processing_limit)
+    request = dict(preview.get("request") or {})
+    effective_limit = int(processing_limit or request["processing_limit"])
+    if request.get("mode") == "random":
+        query = "OpenAlex random sample"
+    else:
+        query = str(
+            request.get("manual_query") or request.get("focus_query") or "UM adaptive discovery"
+        )
+    return preview, effective_limit, query
+
+
+def _run_config(
+    *,
+    preview_id: str,
+    processing_limit: int,
+    output: str,
+    overwrite: bool,
+    um_datasets_path: str | None,
+    strategy: RunStrategy,
+    excluded_candidate_ids: list[str] | None,
+    preview: dict[str, Any],
+) -> dict[str, Any]:
+    request = dict(preview.get("request") or {})
+    return {
+        "preview_id": preview_id,
+        "strategy_version": request.get("strategy_version"),
+        "discovery_mode": request.get("mode"),
+        "random_seed": request.get("random_seed"),
+        "language": request.get("language"),
+        "discovery_filters": {
+            "from_year": request.get("from_year"),
+            "to_year": request.get("to_year"),
+            "publication_types": request.get("publication_types") or [],
+            "language": request.get("language"),
+        },
+        "strategy_fingerprint": (preview.get("payload") or {}).get("strategy_fingerprint"),
+        "catalog_fingerprint": preview.get("catalog_fingerprint"),
+        "openalex_snapshot_at": (preview.get("payload") or {}).get("provider_snapshot_at"),
+        "openalex_calls": (preview.get("payload") or {}).get("actual_calls"),
+        "openalex_cost_usd": (preview.get("payload") or {}).get("actual_cost_usd"),
+        "openalex_queries": (preview.get("payload") or {}).get("executed_queries") or [],
+        "code_version": (preview.get("payload") or {}).get("code_version"),
+        "renderer_version": RENDERER_VERSION,
+        "render_profile": "full_body",
+        "detector_version": DETECTOR_VERSION,
+        "processing_limit": processing_limit,
+        "excluded_candidate_ids": excluded_candidate_ids or [],
+        "output": output,
+        "overwrite": overwrite,
+        "um_datasets_path": um_datasets_path,
+        "strategy": strategy.value,
+    }
 
 
 def _finish_run(pipeline_run_id: int, status: str) -> None:
@@ -268,9 +263,8 @@ def _fail_run(pipeline_run_id: int, error: str) -> None:
 
 
 def _run_outcome(results: list[dict[str, Any]]) -> str:
-    error_statuses = {"failed", "completed_with_errors"}
     return (
         "completed_with_errors"
-        if any(result.get("status") in error_statuses for result in results)
+        if any(result.get("status") in {"failed", "completed_with_errors"} for result in results)
         else "successful"
     )
