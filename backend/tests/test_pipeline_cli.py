@@ -104,3 +104,4 @@ def test_cli_parses_guided_run_all():
     assert args.processing_limit == 5
     assert args.um_datasets == "um.csv"
     assert args.output == "storage/exports/insights.csv"
+    assert args.render_profile == "pruned"

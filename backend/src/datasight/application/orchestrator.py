@@ -11,7 +11,11 @@ from datasight.application.discovery_preview import validate_discovery_preview
 from datasight.config import DEFAULT_UM_DATASETS_PATH
 from datasight.domain.run_strategy import RunStrategy
 from datasight.domain.candidate_detection import DETECTOR_VERSION
-from datasight.infrastructure.ingestion.renderer import RENDERER_VERSION
+from datasight.infrastructure.ingestion.renderer import (
+    DEFAULT_RENDER_PROFILE,
+    RENDERER_VERSION,
+    RenderProfile,
+)
 from datasight.infrastructure.persistence.repository import PipelineRepository
 
 
@@ -27,6 +31,7 @@ def run_all_local(
     excluded_candidate_ids: list[str] | None = None,
     um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
+    render_profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> dict[str, Any]:
     preview, effective_limit, query = _preview_context(preview_id, processing_limit)
     config = _run_config(
@@ -38,6 +43,7 @@ def run_all_local(
         strategy=RunStrategy.STANDARD,
         excluded_candidate_ids=excluded_candidate_ids,
         preview=preview,
+        render_profile=render_profile,
     )
     pipeline_run_id = create_run(query, config)
     results: list[dict[str, Any]] = []
@@ -59,7 +65,10 @@ def run_all_local(
                     limit=effective_limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
                 ),
                 services.render_document_batch(
-                    limit=effective_limit, overwrite=overwrite, pipeline_run_id=pipeline_run_id
+                    limit=effective_limit,
+                    overwrite=overwrite,
+                    pipeline_run_id=pipeline_run_id,
+                    profile=render_profile,
                 ),
                 services.detect_mentions_batch(limit=effective_limit, pipeline_run_id=pipeline_run_id),
                 services.extract_features_from_candidates(
@@ -85,6 +94,7 @@ def enqueue_run_all(
     um_datasets_path: str | None = DEFAULT_UM_DATASETS_PATH,
     overwrite: bool = False,
     strategy: RunStrategy | str = RunStrategy.STANDARD,
+    render_profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> dict[str, Any]:
     preview, effective_limit, query = _preview_context(preview_id, processing_limit)
     strategy_value = RunStrategy(strategy)
@@ -98,6 +108,7 @@ def enqueue_run_all(
             overwrite=overwrite,
             preview=preview,
             query=query,
+            render_profile=render_profile,
         )
 
     config = _run_config(
@@ -109,6 +120,7 @@ def enqueue_run_all(
         strategy=strategy_value,
         excluded_candidate_ids=excluded_candidate_ids,
         preview=preview,
+        render_profile=render_profile,
     )
     pipeline_run_id = create_run(query, config)
     try:
@@ -127,7 +139,9 @@ def enqueue_run_all(
             ),
             tasks.download_pdf.si(effective_limit, overwrite, pipeline_run_id),
             tasks.grobid_convert.si(effective_limit, overwrite, False, pipeline_run_id),
-            tasks.render_document.si(effective_limit, overwrite, pipeline_run_id),
+            tasks.render_document.si(
+                effective_limit, overwrite, pipeline_run_id, render_profile
+            ),
             tasks.detect_mentions.si(effective_limit, pipeline_run_id),
             tasks.extract_features.si(effective_limit, pipeline_run_id),
             tasks.match_um_dataset.si(effective_limit, pipeline_run_id),
@@ -154,6 +168,7 @@ def enqueue_high_throughput_run(
     *,
     preview: dict[str, Any] | None = None,
     query: str | None = None,
+    render_profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> dict[str, Any]:
     if preview is None or query is None:
         preview, effective_limit, query = _preview_context(preview_id, processing_limit)
@@ -168,6 +183,7 @@ def enqueue_high_throughput_run(
         strategy=RunStrategy.HIGH_THROUGHPUT,
         excluded_candidate_ids=excluded_candidate_ids,
         preview=preview,
+        render_profile=render_profile,
     )
     pipeline_run_id = create_run(query, config)
     from datasight.infrastructure.worker import tasks
@@ -219,6 +235,7 @@ def _run_config(
     strategy: RunStrategy,
     excluded_candidate_ids: list[str] | None,
     preview: dict[str, Any],
+    render_profile: RenderProfile,
 ) -> dict[str, Any]:
     request = dict(preview.get("request") or {})
     return {
@@ -241,7 +258,7 @@ def _run_config(
         "openalex_queries": (preview.get("payload") or {}).get("executed_queries") or [],
         "code_version": (preview.get("payload") or {}).get("code_version"),
         "renderer_version": RENDERER_VERSION,
-        "render_profile": "full_body",
+        "render_profile": render_profile,
         "detector_version": DETECTOR_VERSION,
         "processing_limit": processing_limit,
         "excluded_candidate_ids": excluded_candidate_ids or [],

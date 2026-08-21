@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from celery.signals import task_failure
 
 from datasight.application import high_throughput
 from datasight.application import pipeline_services as services
+from datasight.infrastructure.ingestion.renderer import DEFAULT_RENDER_PROFILE, RenderProfile
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.worker.celery_app import celery_app
 
@@ -76,7 +77,7 @@ def render_document(
     limit: int | None = None,
     overwrite: bool = False,
     pipeline_run_id: int | None = None,
-    profile: Literal["full_body", "pruned"] = "full_body",
+    profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> dict[str, Any]:
     return services.render_document_batch(
         limit=limit,

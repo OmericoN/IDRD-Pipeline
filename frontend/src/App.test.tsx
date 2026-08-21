@@ -533,6 +533,10 @@ describe("App routed workflow", () => {
     renderApp(fetchMock, "/insights");
 
     await screen.findByText("W123");
+    expect(screen.getByRole("columnheader", { name: "Discovery strategy" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Discovery strategy: Smart discovery" }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
     expect(screen.getByLabelText("Include Paper Id")).toBeChecked();
     expect(screen.getByLabelText("Include Discovery Methods")).toBeChecked();

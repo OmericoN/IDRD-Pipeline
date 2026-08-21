@@ -41,6 +41,7 @@ def create_run(request: RunCreateRequest) -> RunCreateResponse:
             um_datasets_path=request.um_datasets_path,
             overwrite=request.overwrite,
             strategy=request.strategy,
+            render_profile=request.render_profile,
         )
     except DiscoveryPreviewError as exc:
         raise HTTPException(

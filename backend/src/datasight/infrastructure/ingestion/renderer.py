@@ -1,4 +1,4 @@
-"""TEI XML to recall-safe Markdown rendering with artifact lineage."""
+"""TEI XML to profiled Markdown rendering with artifact lineage."""
 
 from __future__ import annotations
 
@@ -23,10 +23,11 @@ XML = "http://www.w3.org/XML/1998/namespace"
 NS = {"t": TEI}
 RENDERER_VERSION = "tei-renderer-v3"
 RenderProfile = Literal["full_body", "pruned"]
+DEFAULT_RENDER_PROFILE: RenderProfile = "pruned"
 logger = logging.getLogger(__name__)
 
-# Retained only for the explicit ablation profile. The canonical full_body profile
-# never removes a section based on its heading.
+# The default profile removes low-yield sections by heading. ``full_body`` remains
+# available for recall evaluation and never removes a section based on its heading.
 PRUNED_SECTION_PATTERNS = (
     r"related.work",
     r"literature.review",
@@ -285,7 +286,9 @@ def _render_document(xml_path: str | Path, profile: RenderProfile) -> tuple[str,
     return markdown, metrics, state.warnings
 
 
-def extract_markdown(xml_path: str | Path, profile: RenderProfile = "full_body") -> str:
+def extract_markdown(
+    xml_path: str | Path, profile: RenderProfile = DEFAULT_RENDER_PROFILE
+) -> str:
     """Return Markdown while preserving the historical string-returning API."""
     return _render_document(xml_path, profile)[0]
 
@@ -325,7 +328,7 @@ def render_to_markdown(
     output_path: Path | None = None,
     paper_id: str | None = None,
     overwrite: bool = False,
-    profile: RenderProfile = "full_body",
+    profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> RenderResult:
     xml_path = Path(xml_path)
     paper_id = paper_id or xml_path.stem.replace(".tei", "")
@@ -409,7 +412,7 @@ def render_papers(
     paper_id_key: str = "paperId",
     xml_path_key: str = "xml_path",
     overwrite: bool = False,
-    profile: RenderProfile = "full_body",
+    profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> list[RenderResult]:
     destination = Path(output_dir) if output_dir else MARKDOWN_DIR
     destination.mkdir(parents=True, exist_ok=True)

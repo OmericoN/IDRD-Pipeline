@@ -97,6 +97,7 @@ class PipelineItemRepositoryMixin:
                 pi.id AS item_id,
                 pi.pipeline_run_id,
                 pi.status AS item_status,
+                pr.config->>'render_profile' AS render_profile,
                 p.id AS publication_row_id,
                 p.paper_id,
                 p.title,
@@ -107,6 +108,7 @@ class PipelineItemRepositoryMixin:
                 md.id AS markdown_artifact_id,
                 md.sha256 AS markdown_sha256
             FROM pipeline_items pi
+            JOIN pipeline_runs pr ON pr.id = pi.pipeline_run_id
             JOIN publications p ON p.id = pi.publication_id
             LEFT JOIN artifacts pdf
               ON pdf.publication_id = p.id AND pdf.artifact_type = 'pdf'

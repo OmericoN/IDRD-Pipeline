@@ -130,6 +130,7 @@ export default function DiscoveryLaunchPage() {
       um_datasets_path: umDatasetsPath.trim() || null,
       output_path: outputPath.trim() || DEFAULT_OUTPUT,
       strategy: highThroughput ? "high_throughput" : "standard",
+      render_profile: "pruned",
     });
   }
 

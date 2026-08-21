@@ -62,6 +62,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_all.add_argument("--output", required=True)
     run_all.add_argument("--mode", choices=["guided", "local", "enqueue"], default="guided")
     run_all.add_argument("--overwrite", action="store_true")
+    run_all.add_argument(
+        "--render-profile", choices=["full_body", "pruned"], default="pruned"
+    )
 
     evaluation_export = subcommands.add_parser(
         "evaluation-export", help="Export run-scoped papers and active rules-v3 windows"
@@ -143,7 +146,7 @@ def _add_stage_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--all-access", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--delete-pdf", action="store_true")
-    parser.add_argument("--render-profile", choices=["full_body", "pruned"], default="full_body")
+    parser.add_argument("--render-profile", choices=["full_body", "pruned"], default="pruned")
     parser.add_argument("--payload-json", help="Deprecated: only used for export rows")
     parser.add_argument("--output", help="Output path for export_insights")
 
@@ -228,6 +231,7 @@ def _run_all(args: argparse.Namespace) -> dict[str, Any]:
             output=args.output,
             um_datasets_path=args.um_datasets,
             overwrite=args.overwrite,
+            render_profile=args.render_profile,
         )
 
     return orchestrator.run_all_local(
@@ -237,6 +241,7 @@ def _run_all(args: argparse.Namespace) -> dict[str, Any]:
         output=args.output,
         um_datasets_path=args.um_datasets,
         overwrite=args.overwrite,
+        render_profile=args.render_profile,
     )
 
 

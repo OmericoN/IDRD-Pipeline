@@ -25,7 +25,12 @@ from datasight.infrastructure.ingestion.openalex_exports import (
     load_um_openalex_exports,
     looks_like_openalex_export,
 )
-from datasight.infrastructure.ingestion.renderer import render_papers, render_to_markdown
+from datasight.infrastructure.ingestion.renderer import (
+    DEFAULT_RENDER_PROFILE,
+    RenderProfile,
+    render_papers,
+    render_to_markdown,
+)
 from datasight.infrastructure.persistence.repository import PipelineRepository
 from datasight.infrastructure.pubfetcher.openalex import OpenAlexClient
 from datasight.matching.um_matcher import match_mention_to_um_dataset
@@ -190,7 +195,7 @@ def render_document_batch(
     limit: int | None = None,
     overwrite: bool = False,
     pipeline_run_id: int | None = None,
-    profile: Literal["full_body", "pruned"] = "full_body",
+    profile: RenderProfile = DEFAULT_RENDER_PROFILE,
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
         papers = repo.get_papers_needing_rendering(limit=limit, pipeline_run_id=pipeline_run_id)
@@ -439,6 +444,7 @@ def render_pipeline_item(
     overwrite: bool = False,
     task_id: str | None = None,
     claimed: bool = False,
+    profile: RenderProfile | None = None,
 ) -> dict[str, Any]:
     with PipelineRepository() as repo:
         if not claimed and not repo.start_item_stage(item_id, PipelineStage.RENDER_DOCUMENT, task_id):
@@ -451,12 +457,21 @@ def render_pipeline_item(
             repo.finish_item_stage(item_id, PipelineStage.RENDER_DOCUMENT, "failed", {"message": message}, message)
             return _item_result(PipelineStage.RENDER_DOCUMENT, "failed", item_id, message)
         output_path = MARKDOWN_DIR / f"{context['paper_id']}.md"
+        configured_profile = context.get("render_profile")
+        effective_profile: RenderProfile = (
+            profile
+            if profile is not None
+            else configured_profile
+            if configured_profile in {"full_body", "pruned"}
+            else DEFAULT_RENDER_PROFILE
+        )
         try:
             result = render_to_markdown(
                 Path(context["xml_path"]),
                 output_path=output_path,
                 paper_id=context["paper_id"],
                 overwrite=overwrite,
+                profile=effective_profile,
             )
         except Exception as exc:
             message = f"Render error: {exc}"

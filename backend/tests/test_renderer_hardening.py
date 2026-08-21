@@ -53,11 +53,12 @@ def test_full_body_traverses_top_level_content_tables_lists_and_sections(tmp_pat
     assert "Appendix" in markdown
 
 
-def test_pruned_profile_is_explicit_ablation(tmp_path: Path):
+def test_default_profile_prunes_low_yield_sections(tmp_path: Path):
     xml = tmp_path / "paper.tei.xml"
     xml.write_text(_tei(), encoding="utf-8")
-    markdown = extract_markdown(xml, profile="pruned")
+    markdown = extract_markdown(xml)
     assert "Methods" in markdown
+    assert "Data Availability" in markdown
     assert "Discussion" not in markdown
     assert "Conclusion" not in markdown
     assert "Supplementary Material" not in markdown
@@ -73,6 +74,8 @@ def test_render_records_lineage_metrics_and_reuses_only_matching_cache(tmp_path:
     second = render_to_markdown(xml, output, "W1")
 
     assert first.success and first.sha256 and first.source_sha256
+    assert first.profile == "pruned"
+    assert first.warnings == ["Pruned profile omits sections and is not canonical for evaluation"]
     assert first.quality_metrics
     assert first.quality_metrics["figures"] == 2
     assert first.quality_metrics["tables"] == 1

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from datasight.domain.stages import PipelineStage, STAGE_ORDER, stage_values
+from datasight.infrastructure.ingestion.renderer import DEFAULT_RENDER_PROFILE, RenderProfile
 
 
 STAGE_DESCRIPTIONS: dict[PipelineStage, str] = {
@@ -39,7 +40,7 @@ class StageRunOptions:
     use_um_profile: bool = True
     rows: list[dict[str, Any]] | None = None
     pipeline_run_id: int | None = None
-    render_profile: Literal["full_body", "pruned"] = "full_body"
+    render_profile: RenderProfile = DEFAULT_RENDER_PROFILE
 
 
 def stage_description(stage: PipelineStage | str) -> str:

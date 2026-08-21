@@ -54,6 +54,7 @@ def test_stage_registry_builds_discover_arguments():
 
 
 def test_stage_registry_requires_stage_specific_inputs():
+    assert StageRunOptions().render_profile == "pruned"
     with pytest.raises(MissingStageArgument):
         stage_args(PipelineStage.DISCOVER, StageRunOptions())
 

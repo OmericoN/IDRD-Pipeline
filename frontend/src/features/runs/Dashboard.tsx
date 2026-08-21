@@ -815,7 +815,7 @@ function InsightsPage() {
                   <TableRow>
                     {columns.map((column) => (
                       <TableHead key={column}>
-                        {titleCase(formatStageName(column))}
+                        {insightColumnLabel(column)}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -828,10 +828,21 @@ function InsightsPage() {
                           <button
                             type="button"
                             className="block w-full truncate rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            title={formatCell(row[column])}
+                            title={formatInsightCell(column, row[column])}
+                            aria-label={
+                              column === "discovery_mode"
+                                ? `Discovery strategy: ${formatInsightCell(column, row[column])}`
+                                : undefined
+                            }
                             onClick={() => setSelectedInsightIndex(index)}
                           >
-                            {formatCell(row[column])}
+                            {column === "discovery_mode" ? (
+                              <Badge variant="secondary">
+                                {formatInsightCell(column, row[column])}
+                              </Badge>
+                            ) : (
+                              formatInsightCell(column, row[column])
+                            )}
                           </button>
                         </TableCell>
                       ))}
@@ -881,7 +892,7 @@ function InsightsPage() {
           <ScrollArea className="min-h-0 flex-1 px-4">
             <div className="grid gap-2 pb-4">
               {columns.map((column) => {
-                const label = titleCase(formatStageName(column));
+                const label = insightColumnLabel(column);
                 return (
                   <label
                     key={column}
@@ -956,7 +967,7 @@ function InsightsPage() {
                         className="min-w-0 rounded-lg border bg-background p-3"
                       >
                         <p className="mb-1 text-xs font-medium uppercase tracking-normal text-muted-foreground">
-                          {titleCase(formatStageName(key))}
+                          {insightColumnLabel(key)}
                         </p>
                         {formattedJson ? (
                           <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground [overflow-wrap:anywhere] [tab-size:2]">
@@ -964,7 +975,7 @@ function InsightsPage() {
                           </pre>
                         ) : (
                           <p className="max-h-72 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-                            {formatCell(value)}
+                            {formatInsightCell(key, value)}
                           </p>
                         )}
                       </div>
@@ -1916,6 +1927,32 @@ function formatCell(value: unknown) {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+const DISCOVERY_STRATEGY_LABELS: Record<string, string> = {
+  adaptive_funnel: "Smart discovery",
+  catalog_funnel: "Smart discovery",
+  manual: "Manual query",
+  manual_query: "Manual query",
+  random: "Random selection",
+  random_sample: "Random selection",
+  smart_discovery: "Smart discovery",
+  unrecorded: "Not recorded",
+};
+
+function insightColumnLabel(column: string) {
+  return column === "discovery_mode"
+    ? "Discovery strategy"
+    : titleCase(formatStageName(column));
+}
+
+function formatInsightCell(column: string, value: unknown) {
+  if (column !== "discovery_mode") {
+    return formatCell(value);
+  }
+
+  const rawValue = formatCell(value);
+  return DISCOVERY_STRATEGY_LABELS[rawValue] ?? titleCase(formatStageName(rawValue));
 }
 
 function formatJsonValue(value: unknown) {

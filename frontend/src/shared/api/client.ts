@@ -57,6 +57,7 @@ export type RunCreateRequest = {
   um_datasets_path?: string | null;
   output_path: string;
   strategy?: "standard" | "high_throughput";
+  render_profile?: "full_body" | "pruned";
 };
 
 export type RunCreateResponse = {
