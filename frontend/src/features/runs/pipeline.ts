@@ -10,6 +10,7 @@ export type VisualStage = StageInfo & {
 const COMPLETE_STATUSES = new Set(["successful", "completed_with_errors", "failed", "skipped"]);
 const ACTIVE_STATUSES = new Set(["queued", "running", "started"]);
 const SUCCESS_EDGE_STATUSES = new Set(["successful", "queued", "running", "started"]);
+const ERROR_STATUSES = new Set(["completed_with_errors", "failed", "error"]);
 
 export function mergeStages(stages: StageInfo[], run: PipelineRunSummary | undefined): VisualStage[] {
   const active = isActiveRun(run?.status);
@@ -42,6 +43,22 @@ export function stageProgress(stages: VisualStage[]) {
   }
   const complete = stages.filter((stage) => COMPLETE_STATUSES.has(stage.status)).length;
   return Math.round((complete / stages.length) * 100);
+}
+
+export function stageStatusCounts(stages: VisualStage[]) {
+  return stages.reduce(
+    (counts, stage) => {
+      if (stage.status === "successful") {
+        counts.done += 1;
+      } else if (stage.status === "skipped") {
+        counts.skipped += 1;
+      } else if (ERROR_STATUSES.has(stage.status)) {
+        counts.errors += 1;
+      }
+      return counts;
+    },
+    { done: 0, skipped: 0, errors: 0 },
+  );
 }
 
 export function formatStageName(value: string) {

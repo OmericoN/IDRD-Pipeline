@@ -7,6 +7,7 @@ import {
   mergeStages,
   runStrategyLabel,
   stageProgress,
+  stageStatusCounts,
   statusTone,
 } from "./pipeline";
 
@@ -69,6 +70,26 @@ describe("pipeline view helpers", () => {
     ];
 
     expect(stageProgress(visual)).toBe(33);
+  });
+
+  it("counts completed-with-errors stages in the error summary", () => {
+    const visual = [
+      { ...stages[0]!, status: "successful", working: false },
+      { ...stages[1]!, status: "completed_with_errors", working: false },
+      { ...stages[2]!, status: "skipped", working: false },
+    ];
+
+    expect(stageStatusCounts(visual)).toEqual({ done: 1, skipped: 1, errors: 1 });
+  });
+
+  it("supports the legacy error status in the error summary", () => {
+    const visual = [
+      { ...stages[0]!, status: "failed", working: false },
+      { ...stages[1]!, status: "error", working: false },
+      { ...stages[2]!, status: "running", working: true },
+    ];
+
+    expect(stageStatusCounts(visual)).toEqual({ done: 0, skipped: 0, errors: 2 });
   });
 
   it("preserves multiple recorded running stages for high-throughput runs", () => {

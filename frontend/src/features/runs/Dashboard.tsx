@@ -140,6 +140,7 @@ import {
   runStrategy,
   runStrategyLabel,
   stageProgress,
+  stageStatusCounts,
   statusBadgeVariant,
   statusTone,
   type VisualStage,
@@ -1178,6 +1179,7 @@ function WorkspaceHeader({
   stages: VisualStage[];
 }) {
   const progress = stageProgress(stages);
+  const statusCounts = stageStatusCounts(stages);
   const parallelStages = activeParallelStages(run, stages);
 
   return (
@@ -1204,17 +1206,15 @@ function WorkspaceHeader({
         <div className="flex flex-wrap gap-2">
           <MetricPill
             label="Done"
-            value={
-              stages.filter((stage) => stage.status === "successful").length
-            }
+            value={statusCounts.done}
           />
           <MetricPill
             label="Skipped"
-            value={stages.filter((stage) => stage.status === "skipped").length}
+            value={statusCounts.skipped}
           />
           <MetricPill
             label="Errors"
-            value={stages.filter((stage) => stage.status === "failed").length}
+            value={statusCounts.errors}
           />
           <MetricPill label="Stages" value={stages.length} />
           {run && runStrategy(run) === "high_throughput" ? (
