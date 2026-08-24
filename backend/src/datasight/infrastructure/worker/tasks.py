@@ -171,16 +171,11 @@ def dispatch_high_throughput_run(
             },
             queue=batch.queue,
         )
-    if plan.finalize:
-        finalize_high_throughput_run.apply_async(
-            kwargs={"output_path": output_path, "pipeline_run_id": pipeline_run_id},
-            queue="export",
-        )
     return {
         "pipeline_run_id": pipeline_run_id,
         "batches": len(plan.batches),
-        "finalize": plan.finalize,
-        "status": "queued" if plan.batches else ("finalizing" if plan.finalize else "idle"),
+        "finalize": plan.final_status is not None,
+        "status": "queued" if plan.batches else (plan.final_status or "idle"),
     }
 
 

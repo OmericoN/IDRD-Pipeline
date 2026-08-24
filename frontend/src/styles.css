@@ -454,4 +454,17 @@ code {
     background: color-mix(in oklch, var(--status-error), transparent 88%);
     color: var(--status-error);
   }
+
+  .pipeline-node[data-disabled="true"] {
+    border-style: dashed;
+    color: var(--muted-foreground);
+    box-shadow: none;
+    opacity: 0.72;
+  }
+
+  .pipeline-node[data-disabled="true"]:hover,
+  .pipeline-node[data-disabled="true"].pipeline-node-selected {
+    border-color: var(--pipeline-edge);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--pipeline-edge), transparent 78%);
+  }
 }

@@ -21,7 +21,6 @@ STAGE_QUEUES: dict[PipelineStage, str] = {
     PipelineStage.RENDER_DOCUMENT: "processing",
     PipelineStage.DETECT_MENTIONS: "processing",
     PipelineStage.EXTRACT_FEATURES: "processing",
-    PipelineStage.MATCH_UM_DATASET: "matching",
 }
 
 
@@ -35,7 +34,7 @@ class StageBatch:
 @dataclass(frozen=True)
 class DispatchPlan:
     batches: tuple[StageBatch, ...]
-    finalize: bool = False
+    final_status: str | None = None
 
 
 def bootstrap_high_throughput_run(
@@ -81,10 +80,8 @@ def build_dispatch_plan(
 ) -> DispatchPlan:
     with PipelineRepository() as repo:
         if repo.all_item_stages_terminal(pipeline_run_id):
-            started = repo.try_start_run_level_stage(
-                pipeline_run_id, PipelineStage.EXPORT_INSIGHTS
-            )
-            return DispatchPlan(batches=(), finalize=started)
+            status = repo.finalize_high_throughput_run_if_ready(pipeline_run_id)
+            return DispatchPlan(batches=(), final_status=status)
 
         queued_counts = repo.get_queued_item_stage_counts(pipeline_run_id)
 
@@ -163,11 +160,13 @@ def finalize_high_throughput_run(
         raise ValueError(
             "pipeline_run_id is required for high-throughput finalization."
         )
-    result = services.export_insights_csv(output_path, pipeline_run_id=pipeline_run_id)
     with PipelineRepository() as repo:
-        status = repo.high_throughput_outcome(pipeline_run_id)
-        repo.finish_pipeline_run(pipeline_run_id, status)
-    return {"pipeline_run_id": pipeline_run_id, "status": status, "export": result}
+        status = repo.finalize_high_throughput_run_if_ready(pipeline_run_id)
+    return {
+        "pipeline_run_id": pipeline_run_id,
+        "status": status or "not_ready",
+        "output_path": output_path,
+    }
 
 
 def _process_claimed_item_stage(
@@ -198,10 +197,6 @@ def _process_claimed_item_stage(
         )
     if stage == PipelineStage.EXTRACT_FEATURES:
         return services.extract_features_pipeline_item(
-            item_id, task_id=task_id, claimed=True
-        )
-    if stage == PipelineStage.MATCH_UM_DATASET:
-        return services.match_um_dataset_pipeline_item(
             item_id, task_id=task_id, claimed=True
         )
     raise ValueError(f"Unsupported high-throughput item stage: {stage.value}")

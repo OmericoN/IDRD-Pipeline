@@ -11,7 +11,7 @@ from datasight.domain.stages import PipelineStage
 class FakeRepo:
     all_terminal = False
     queued_counts = {}
-    finalize_started = False
+    final_status: str | None = None
     claimed_items = []
     finished = []
     outcome = "successful"
@@ -30,10 +30,9 @@ class FakeRepo:
         assert pipeline_run_id == 9
         return self.queued_counts
 
-    def try_start_run_level_stage(self, pipeline_run_id, stage):
+    def finalize_high_throughput_run_if_ready(self, pipeline_run_id):
         assert pipeline_run_id == 9
-        assert stage == PipelineStage.EXPORT_INSIGHTS
-        return self.finalize_started
+        return self.final_status
 
     def claim_queued_item_stages(self, pipeline_run_id, stage, limit, task_id=None):
         assert pipeline_run_id == 9
@@ -73,18 +72,18 @@ def test_dispatch_plan_schedules_bounded_batches(monkeypatch):
         PipelineStage.DOWNLOAD_PDF,
         PipelineStage.GROBID_CONVERT,
     ]
-    assert plan.finalize is False
+    assert plan.final_status is None
 
 
 def test_dispatch_plan_finalizes_once_when_terminal(monkeypatch):
     FakeRepo.all_terminal = True
-    FakeRepo.finalize_started = True
+    FakeRepo.final_status = "successful"
     monkeypatch.setattr(high_throughput, "PipelineRepository", FakeRepo)
 
     plan = high_throughput.build_dispatch_plan(9)
 
     assert plan.batches == ()
-    assert plan.finalize is True
+    assert plan.final_status == "successful"
 
 
 def test_process_stage_claims_batch_and_uses_claimed_service(monkeypatch):
@@ -112,16 +111,11 @@ def test_process_stage_claims_batch_and_uses_claimed_service(monkeypatch):
 
 
 def test_finalize_uses_completed_with_errors_outcome(monkeypatch):
-    FakeRepo.outcome = "completed_with_errors"
+    FakeRepo.final_status = "completed_with_errors"
     FakeRepo.finished = []
     monkeypatch.setattr(high_throughput, "PipelineRepository", FakeRepo)
-    monkeypatch.setattr(
-        high_throughput.services,
-        "export_insights_csv",
-        lambda output_path, pipeline_run_id=None: {"status": "successful", "output_path": output_path},
-    )
 
     result = high_throughput.finalize_high_throughput_run("storage/exports/insights.csv", 9)
 
     assert result["status"] == "completed_with_errors"
-    assert FakeRepo.finished[-1] == {"pipeline_run_id": 9, "status": "completed_with_errors"}
+    assert "export" not in result

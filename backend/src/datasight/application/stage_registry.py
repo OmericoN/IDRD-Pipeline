@@ -20,6 +20,17 @@ STAGE_DESCRIPTIONS: dict[PipelineStage, str] = {
     PipelineStage.EXPORT_INSIGHTS: "Export joined insight rows to CSV.",
 }
 
+STAGE_LABELS: dict[PipelineStage, str | None] = {
+    PipelineStage.DISCOVER: "Discover",
+    PipelineStage.DOWNLOAD_PDF: "Download PDF",
+    PipelineStage.GROBID_CONVERT: "GROBID Convert",
+    PipelineStage.RENDER_DOCUMENT: "Render Document",
+    PipelineStage.DETECT_MENTIONS: "Detect Mentions",
+    PipelineStage.EXTRACT_FEATURES: "Extract Features",
+    PipelineStage.MATCH_UM_DATASET: None,
+    PipelineStage.EXPORT_INSIGHTS: None,
+}
+
 
 class MissingStageArgument(ValueError):
     """Raised when a stage request is missing a required input."""
@@ -48,8 +59,15 @@ def stage_description(stage: PipelineStage | str) -> str:
     return STAGE_DESCRIPTIONS.get(stage_value, stage_value.value)
 
 
-def stage_catalog() -> list[dict[str, str]]:
-    return [{"name": stage.value, "description": stage_description(stage)} for stage in STAGE_ORDER]
+def stage_catalog() -> list[dict[str, str | None]]:
+    return [
+        {
+            "name": stage.value,
+            "label": STAGE_LABELS[stage],
+            "description": stage_description(stage),
+        }
+        for stage in STAGE_ORDER
+    ]
 
 
 def task_for_stage(stage: PipelineStage | str, tasks_module: Any) -> Any:

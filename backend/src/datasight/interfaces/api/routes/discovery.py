@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
+
+from datasight.application.insights import (
+    serialize_discovery_candidates_csv,
+    validate_discovery_candidate_columns,
+)
 
 from datasight.application.discovery_preview import (
     DiscoveryPreviewError,
@@ -57,9 +62,45 @@ def run_discovery_candidates(
     pipeline_run_id: int,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
+    selected_only: bool = Query(default=False),
 ) -> DiscoveryCandidateListResponse:
     with PipelineRepository() as repo:
         if not repo.get_pipeline_run(pipeline_run_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
-        result = repo.list_discovery_candidates(pipeline_run_id, offset=offset, limit=limit)
+        result = repo.list_discovery_candidates(
+            pipeline_run_id,
+            offset=offset,
+            limit=limit,
+            selected_only=selected_only,
+        )
     return DiscoveryCandidateListResponse.model_validate(result)
+
+
+@router.get("/runs/{pipeline_run_id}/discovery-candidates/export.csv")
+def export_run_discovery_candidates_csv(
+    pipeline_run_id: int,
+    columns: list[str] | None = Query(default=None),
+    selected_only: bool = Query(default=True),
+) -> Response:
+    try:
+        selected_columns = validate_discovery_candidate_columns(columns)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+    with PipelineRepository() as repo:
+        if not repo.get_pipeline_run(pipeline_run_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
+        result = repo.list_discovery_candidates(
+            pipeline_run_id,
+            offset=0,
+            limit=1000,
+            selected_only=selected_only,
+        )
+    csv_content = serialize_discovery_candidates_csv(result["items"], selected_columns)
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="datasight-run-{pipeline_run_id}-candidates.csv"'
+        },
+    )

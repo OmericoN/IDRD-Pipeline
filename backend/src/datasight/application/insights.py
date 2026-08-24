@@ -34,6 +34,25 @@ INSIGHT_COLUMNS: tuple[str, ...] = (
     "um_repository",
 )
 
+DISCOVERY_CANDIDATE_COLUMNS: tuple[str, ...] = (
+    "paper_id",
+    "title",
+    "doi",
+    "year",
+    "source_url",
+    "open_access_url",
+    "oa_status",
+    "cited_by_count",
+    "primary_source_name",
+    "candidate_strength",
+    "evidence_tier",
+    "evidence_reasons",
+    "matched_um_dataset_ids",
+    "pipeline_ready",
+    "included",
+    "exclusion_reason",
+)
+
 
 def validate_insight_columns(columns: Sequence[str] | None) -> list[str]:
     """Return selected columns in canonical order, rejecting unknown or empty selections."""
@@ -49,6 +68,11 @@ def validate_insight_columns(columns: Sequence[str] | None) -> list[str]:
     return [column for column in INSIGHT_COLUMNS if column in requested]
 
 
+def validate_discovery_candidate_columns(columns: Sequence[str] | None) -> list[str]:
+    """Return selected discovery columns in canonical order."""
+    return _validate_columns(columns, DISCOVERY_CANDIDATE_COLUMNS, "discovery candidate")
+
+
 def serialize_insights_csv(
     rows: Iterable[dict[str, Any]],
     columns: Sequence[str] | None = None,
@@ -60,6 +84,40 @@ def serialize_insights_csv(
     writer.writeheader()
     for row in rows:
         writer.writerow({column: _csv_cell(row.get(column)) for column in selected_columns})
+    return output.getvalue()
+
+
+def serialize_discovery_candidates_csv(
+    rows: Iterable[dict[str, Any]],
+    columns: Sequence[str] | None = None,
+) -> str:
+    """Serialize selected run discovery candidates as CSV."""
+    selected_columns = validate_discovery_candidate_columns(columns)
+    return _serialize_rows_csv(rows, selected_columns)
+
+
+def _validate_columns(
+    columns: Sequence[str] | None,
+    allowed_columns: Sequence[str],
+    label: str,
+) -> list[str]:
+    if columns is None:
+        return list(allowed_columns)
+    requested = {column for column in columns if column}
+    unknown = sorted(requested.difference(allowed_columns))
+    if unknown:
+        raise ValueError(f"Unknown {label} columns: {', '.join(unknown)}")
+    if not requested:
+        raise ValueError("Select at least one column.")
+    return [column for column in allowed_columns if column in requested]
+
+
+def _serialize_rows_csv(rows: Iterable[dict[str, Any]], columns: Sequence[str]) -> str:
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({column: _csv_cell(row.get(column)) for column in columns})
     return output.getvalue()
 
 

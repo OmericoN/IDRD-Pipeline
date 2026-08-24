@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./app/App";
@@ -145,14 +145,14 @@ function defaultFetchMock(resetResponse = response({
     if (path === "/api/v1/stages") {
       return response({
         stages: [
-          { name: "discover", description: "Find publication metadata." },
-          { name: "download_pdf", description: "Download PDFs." },
-          { name: "grobid_convert", description: "Convert PDFs." },
-          { name: "render_document", description: "Render text." },
-          { name: "detect_mentions", description: "Detect mentions." },
-          { name: "extract_features", description: "Extract features." },
-          { name: "match_um_dataset", description: "Match UM datasets." },
-          { name: "export_insights", description: "Export insights." },
+          { name: "discover", label: "Discover", description: "Find publication metadata." },
+          { name: "download_pdf", label: "Download PDF", description: "Download PDFs." },
+          { name: "grobid_convert", label: "GROBID Convert", description: "Convert PDFs." },
+          { name: "render_document", label: "Render Document", description: "Render text." },
+          { name: "detect_mentions", label: "Detect Mentions", description: "Detect mentions." },
+          { name: "extract_features", label: "Extract Features", description: "Extract features." },
+          { name: "match_um_dataset", label: null, description: "Match UM datasets." },
+          { name: "export_insights", label: null, description: "Export insights." },
         ],
       });
     }
@@ -285,6 +285,41 @@ function defaultFetchMock(resetResponse = response({
             created_at: "2026-05-31T19:00:00Z",
           },
         ],
+      });
+    }
+    if (path.startsWith("/api/v1/runs/39/discovery-candidates?")) {
+      return response({
+        items: [discoveryPreview.candidates[0]],
+        total: 1,
+        offset: 0,
+        limit: 50,
+      });
+    }
+    if (path.startsWith("/api/v1/runs/39/insights?")) {
+      return response({
+        columns: [
+          "paper_id",
+          "publication_title",
+          "dataset_name",
+          "dataset_role",
+          "match_status",
+          "match_score",
+          "um_dataset_title",
+        ],
+        rows: [
+          {
+            paper_id: "W900",
+            publication_title: "Secondary analysis of a Maastricht longitudinal cohort",
+            dataset_name: "Maastricht Health Dataset",
+            dataset_role: "used",
+            match_status: "matched",
+            match_score: 0.98,
+            um_dataset_title: "Maastricht Health Dataset",
+          },
+        ],
+        total: 1,
+        offset: 0,
+        limit: 50,
       });
     }
     if (path.startsWith("/api/v1/insights?")) {
@@ -493,6 +528,71 @@ describe("App routed workflow", () => {
     expect(await screen.findByText("Open a run to inspect the workspace, events, and stage metrics.")).toBeInTheDocument();
     expect(screen.getByText("Maastricht dataset reuse")).toBeInTheDocument();
     expect(screen.getByText("High-throughput")).toBeInTheDocument();
+  });
+
+  it("opens run-scoped candidates and final insights without leaving the Runs list", async () => {
+    const fetchMock = defaultFetchMock();
+    renderApp(fetchMock, "/runs");
+
+    const resultsButton = await screen.findByRole("button", { name: "View results for Run #39" });
+    fireEvent.click(resultsButton);
+
+    expect(window.location.pathname).toBe("/runs");
+    expect(await screen.findByText("Maastricht dataset reuse results")).toBeInTheDocument();
+    expect(await screen.findByText("Secondary analysis of a Maastricht longitudinal cohort")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/runs/39/discovery-candidates?offset=0&limit=50&selected_only=true",
+      expect.objectContaining({ method: "GET" }),
+    );
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/runs/39/insights?offset=0&limit=50",
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+
+    const insightsTab = screen.getByRole("tab", { name: /Final insights/ });
+    fireEvent.mouseDown(insightsTab, { button: 0 });
+    await waitFor(() => expect(insightsTab).toHaveAttribute("data-state", "active"));
+    expect(await screen.findByText("used")).toBeInTheDocument();
+    expect(screen.getAllByText("Maastricht Health Dataset").length).toBeGreaterThan(0);
+  });
+
+  it("downloads selected columns from the active run-results tab", async () => {
+    const baseFetch = defaultFetchMock();
+    const csvBlob = new Blob(["paper_id\nW900\n"], { type: "text/csv" });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/v1/runs/39/discovery-candidates/export.csv?")) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => 'attachment; filename="datasight-run-39-candidates.csv"' },
+          blob: async () => csvBlob,
+        };
+      }
+      return baseFetch(input, init);
+    });
+    const createObjectURL = vi.fn(() => "blob:run-results");
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    renderApp(fetchMock, "/runs");
+
+    fireEvent.click(await screen.findByRole("button", { name: "View results for Run #39" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download CSV" }));
+    expect(screen.getByLabelText("Include Paper ID")).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByLabelText("Include Paper ID"));
+    fireEvent.click(screen.getAllByRole("button", { name: "Download CSV" }).at(-1)!);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/runs/39/discovery-candidates/export.csv?selected_only=true&columns=paper_id",
+        { method: "GET" },
+      );
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(csvBlob);
   });
 
   it("downloads all insights with the selected columns", async () => {
@@ -767,6 +867,47 @@ describe("App routed workflow", () => {
     expect(screen.getAllByText("running").length).toBeGreaterThan(0);
   });
 
+  it("keeps discovery running after leaving Launch and shows its animated nav state", async () => {
+    const baseFetch = defaultFetchMock();
+    let resolvePreview: ((value: ReturnType<typeof response>) => void) | undefined;
+    const pendingPreview = new Promise<ReturnType<typeof response>>((resolve) => {
+      resolvePreview = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/discovery/preview" && init?.method === "POST") {
+        return pendingPreview;
+      }
+      return baseFetch(input, init);
+    });
+    renderApp(fetchMock, "/launch");
+
+    const runButton = await screen.findByRole("button", { name: "Run pipeline" });
+    await waitFor(() => expect(runButton).toBeEnabled());
+    fireEvent.click(runButton);
+    fireEvent.click(screen.getByRole("link", { name: /^Runs/ }));
+
+    expect(await screen.findByText("Open a run to inspect the workspace, events, and stage metrics.")).toBeInTheDocument();
+    const launchLink = screen.getAllByRole("link", { name: "Launching…" }).at(0)!;
+    expect(launchLink.querySelector("svg")).toHaveClass("animate-spin");
+
+    await act(async () => {
+      resolvePreview?.(response(discoveryPreview));
+      await pendingPreview;
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/runs",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"preview_id":"preview-123"'),
+        }),
+      );
+    });
+    expect(window.location.pathname).toBe("/runs");
+    await waitFor(() => expect(screen.getByRole("link", { name: "Launch" })).toBeInTheDocument());
+  });
+
   it("selects a reproducible random sample strategy", async () => {
     const fetchMock = defaultFetchMock();
     renderApp(fetchMock, "/launch");
@@ -846,6 +987,16 @@ describe("App routed workflow", () => {
       "userSpaceOnUse",
     );
     expect(screen.getAllByText("Discover").length).toBeGreaterThan(0);
+    expect(screen.getByText("6 active · 8 total")).toBeInTheDocument();
+    expect(screen.getAllByText("NULL")).toHaveLength(2);
+    const disabledMatchNode = screen.getByLabelText(
+      "Inspect Match Um Dataset status and filter events",
+    );
+    expect(disabledMatchNode).toHaveAttribute("data-disabled", "true");
+    expect(container.querySelector('[data-edge="extract_features-match_um_dataset"]')).toHaveAttribute(
+      "data-edge-tone",
+      "muted",
+    );
     const downloadNode = screen.getByLabelText("Inspect Download Pdf status and filter events");
     expect(downloadNode).toBeInTheDocument();
     fireEvent.click(downloadNode);

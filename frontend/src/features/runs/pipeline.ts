@@ -12,14 +12,34 @@ const ACTIVE_STATUSES = new Set(["queued", "running", "started"]);
 const SUCCESS_EDGE_STATUSES = new Set(["successful", "queued", "running", "started"]);
 const ERROR_STATUSES = new Set(["completed_with_errors", "failed", "error"]);
 
+export function isEnabledStage(stage: StageInfo) {
+  return stage.label !== null;
+}
+
+export function activeStageCount(stages: StageInfo[]) {
+  return stages.filter(isEnabledStage).length;
+}
+
+export function stageStatusLabel(stage: VisualStage) {
+  return isEnabledStage(stage) ? stage.status : "NULL";
+}
+
 export function mergeStages(stages: StageInfo[], run: PipelineRunSummary | undefined): VisualStage[] {
   const active = isActiveRun(run?.status);
+  const enabledStageNames = new Set(
+    stages.filter(isEnabledStage).map((stage) => stage.name),
+  );
   const hasRecordedWorkingStage = Boolean(
-    run?.stages.some((item) => ACTIVE_STATUSES.has(item.status)),
+    run?.stages.some(
+      (item) => enabledStageNames.has(item.stage) && ACTIVE_STATUSES.has(item.status),
+    ),
   );
   let markedActive = false;
 
   return stages.map((stage) => {
+    if (!isEnabledStage(stage)) {
+      return { ...stage, status: "pending", working: false };
+    }
     const recorded = run?.stages.find((item) => item.stage === stage.name);
     if (recorded) {
       return {
@@ -38,16 +58,20 @@ export function mergeStages(stages: StageInfo[], run: PipelineRunSummary | undef
 }
 
 export function stageProgress(stages: VisualStage[]) {
-  if (!stages.length) {
+  const enabledStages = stages.filter(isEnabledStage);
+  if (!enabledStages.length) {
     return 0;
   }
-  const complete = stages.filter((stage) => COMPLETE_STATUSES.has(stage.status)).length;
-  return Math.round((complete / stages.length) * 100);
+  const complete = enabledStages.filter((stage) => COMPLETE_STATUSES.has(stage.status)).length;
+  return Math.round((complete / enabledStages.length) * 100);
 }
 
 export function stageStatusCounts(stages: VisualStage[]) {
   return stages.reduce(
     (counts, stage) => {
+      if (!isEnabledStage(stage)) {
+        return counts;
+      }
       if (stage.status === "successful") {
         counts.done += 1;
       } else if (stage.status === "skipped") {
@@ -100,7 +124,7 @@ export function statusTone(status: string): StatusTone {
   if (status === "skipped" || status === "warning" || status === "completed_with_errors") {
     return "warning";
   }
-  if (status === "pending") {
+  if (status === "pending" || status === "NULL") {
     return "muted";
   }
   return "default";
@@ -118,7 +142,7 @@ export function activeParallelStages(run: PipelineRunSummary | undefined, stages
   if (runStrategy(run) !== "high_throughput") {
     return [];
   }
-  return stages.filter((stage) => stage.working);
+  return stages.filter((stage) => isEnabledStage(stage) && stage.working);
 }
 
 export function statusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {

@@ -8,6 +8,7 @@ export type HealthResponse = {
 
 export type StageInfo = {
   name: string;
+  label: string | null;
   description: string;
 };
 
@@ -69,6 +70,12 @@ export type RunCreateResponse = {
 export type InsightsResponse = {
   columns: string[];
   rows: Record<string, unknown>[];
+};
+
+export type PaginatedInsightsResponse = InsightsResponse & {
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 export type CsvDownload = {
@@ -142,6 +149,13 @@ export type DiscoveryCandidate = {
   pipeline_ready: boolean;
   included: boolean;
   exclusion_reason: string | null;
+};
+
+export type DiscoveryCandidateListResponse = {
+  items: DiscoveryCandidate[];
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 export type DiscoveryPreview = {
@@ -332,11 +346,29 @@ export const api = {
   openAlexStatus: () => request<OpenAlexStatus>("/api/v1/openalex/status"),
   discoveryPreview: (body: DiscoveryPreviewRequest) =>
     request<DiscoveryPreview>("/api/v1/discovery/preview", { method: "POST", body }),
-  discoveryCandidates: (runId: number, offset = 0, limit = 100) => {
-    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
-    return request<{ items: DiscoveryCandidate[]; total: number; offset: number; limit: number }>(
+  discoveryCandidates: (runId: number, offset = 0, limit = 100, selectedOnly = false) => {
+    const params = new URLSearchParams({
+      offset: String(offset),
+      limit: String(limit),
+      selected_only: String(selectedOnly),
+    });
+    return request<DiscoveryCandidateListResponse>(
       `/api/v1/runs/${runId}/discovery-candidates?${params}`,
     );
+  },
+  runInsights: (runId: number, offset = 0, limit = 50) => {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    return request<PaginatedInsightsResponse>(`/api/v1/runs/${runId}/insights?${params}`);
+  },
+  downloadRunCandidatesCsv: (runId: number, columns: string[]) => {
+    const params = new URLSearchParams({ selected_only: "true" });
+    columns.forEach((column) => params.append("columns", column));
+    return requestBlob(`/api/v1/runs/${runId}/discovery-candidates/export.csv?${params}`);
+  },
+  downloadRunInsightsCsv: (runId: number, columns: string[]) => {
+    const params = new URLSearchParams();
+    columns.forEach((column) => params.append("columns", column));
+    return requestBlob(`/api/v1/runs/${runId}/insights/export.csv?${params}`);
   },
   insights: (limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });

@@ -26,7 +26,16 @@ def test_stage_catalog_exposes_canonical_order_and_descriptions():
         "match_um_dataset",
         "export_insights",
     ]
-    assert catalog[0]["description"].startswith("Find publication metadata")
+    assert str(catalog[0]["description"]).startswith("Find publication metadata")
+    assert [stage["label"] for stage in catalog[:6]] == [
+        "Discover",
+        "Download PDF",
+        "GROBID Convert",
+        "Render Document",
+        "Detect Mentions",
+        "Extract Features",
+    ]
+    assert [stage["label"] for stage in catalog[6:]] == [None, None]
 
 
 def test_stage_registry_builds_discover_arguments():

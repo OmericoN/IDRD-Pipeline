@@ -22,6 +22,7 @@ class HealthResponse(BaseModel):
 
 class StageInfo(BaseModel):
     name: str
+    label: str | None
     description: str
 
 
@@ -112,6 +113,12 @@ class RunEventsResponse(BaseModel):
 class InsightsResponse(BaseModel):
     columns: list[str]
     rows: list[dict[str, Any]]
+
+
+class PaginatedInsightsResponse(InsightsResponse):
+    total: int
+    offset: int
+    limit: int
 
 
 class UMProfilePhase(BaseModel):

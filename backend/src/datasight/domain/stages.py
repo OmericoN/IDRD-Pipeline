@@ -27,6 +27,19 @@ STAGE_ORDER: tuple[PipelineStage, ...] = (
     PipelineStage.EXPORT_INSIGHTS,
 )
 
+# Stages currently executed by automatic standard and high-throughput runs.
+# Matching and export remain registered for direct API/CLI development use.
+WORKFLOW_STAGE_ORDER: tuple[PipelineStage, ...] = (
+    PipelineStage.DISCOVER,
+    PipelineStage.DOWNLOAD_PDF,
+    PipelineStage.GROBID_CONVERT,
+    PipelineStage.RENDER_DOCUMENT,
+    PipelineStage.DETECT_MENTIONS,
+    PipelineStage.EXTRACT_FEATURES,
+)
+
+ITEM_STAGE_ORDER: tuple[PipelineStage, ...] = WORKFLOW_STAGE_ORDER[1:]
+
 
 def stage_values() -> list[str]:
     return [stage.value for stage in STAGE_ORDER]

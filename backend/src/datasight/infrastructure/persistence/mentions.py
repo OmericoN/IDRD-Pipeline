@@ -111,6 +111,9 @@ class MentionRepositoryMixin:
         self.conn.commit()
 
     def fail_detection_run(self, detection_run_id: int, error: str) -> None:
+        # A failed candidate insert leaves PostgreSQL's transaction aborted.
+        # Clear it before persisting the detection-run failure itself.
+        self.conn.rollback()
         self.cursor.execute(
             """
             UPDATE mention_detection_runs

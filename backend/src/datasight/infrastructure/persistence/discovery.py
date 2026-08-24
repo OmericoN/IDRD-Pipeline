@@ -188,14 +188,16 @@ class DiscoveryRepositoryMixin:
         pipeline_run_id: int,
         offset: int = 0,
         limit: int = 100,
+        selected_only: bool = False,
     ) -> dict[str, Any]:
+        selection_filter = " AND dc.included AND dc.pipeline_ready" if selected_only else ""
         self.cursor.execute(
-            "SELECT COUNT(*) AS count FROM discovery_candidates WHERE pipeline_run_id = %s",
+            f"SELECT COUNT(*) AS count FROM discovery_candidates dc WHERE dc.pipeline_run_id = %s{selection_filter}",
             (pipeline_run_id,),
         )
         total = int((self.cursor.fetchone() or {}).get("count") or 0)
         self.cursor.execute(
-            """
+            f"""
             SELECT
                 p.paper_id,
                 p.title,
@@ -216,6 +218,7 @@ class DiscoveryRepositoryMixin:
             FROM discovery_candidates dc
             JOIN publications p ON p.id = dc.publication_id
             WHERE dc.pipeline_run_id = %s
+              {selection_filter}
             ORDER BY
                 CASE dc.evidence_tier WHEN 'direct' THEN 3 WHEN 'exact' THEN 2 ELSE 1 END DESC,
                 dc.candidate_strength DESC,

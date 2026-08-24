@@ -2,19 +2,27 @@ import { describe, expect, it } from "vitest";
 
 import type { PipelineRunSummary, StageInfo } from "../../shared/api/client";
 import {
+  activeStageCount,
   activeParallelStages,
   edgeToneFromSourceStatus,
+  isEnabledStage,
   mergeStages,
   runStrategyLabel,
   stageProgress,
   stageStatusCounts,
+  stageStatusLabel,
   statusTone,
 } from "./pipeline";
 
 const stages: StageInfo[] = [
-  { name: "discover", description: "Find publication metadata." },
-  { name: "download_pdf", description: "Download PDFs." },
-  { name: "export_insights", description: "Export CSV." },
+  { name: "discover", label: "Discover", description: "Find publication metadata." },
+  { name: "download_pdf", label: "Download PDF", description: "Download PDFs." },
+  { name: "grobid_convert", label: "GROBID Convert", description: "Convert PDFs." },
+];
+
+const disabledStages: StageInfo[] = [
+  { name: "match_um_dataset", label: null, description: "Match UM datasets." },
+  { name: "export_insights", label: null, description: "Export CSV." },
 ];
 
 describe("pipeline view helpers", () => {
@@ -92,6 +100,57 @@ describe("pipeline view helpers", () => {
     expect(stageStatusCounts(visual)).toEqual({ done: 0, skipped: 0, errors: 2 });
   });
 
+  it("ignores disabled stages in progress and status counters", () => {
+    const visual = [
+      { ...stages[0]!, status: "successful", working: false },
+      { ...stages[1]!, status: "successful", working: false },
+      { ...disabledStages[0]!, status: "failed", working: false },
+      { ...disabledStages[1]!, status: "skipped", working: false },
+    ];
+
+    expect(activeStageCount(visual)).toBe(2);
+    expect(stageProgress(visual)).toBe(100);
+    expect(stageStatusCounts(visual)).toEqual({ done: 2, skipped: 0, errors: 0 });
+    expect(isEnabledStage(visual[2]!)).toBe(false);
+    expect(stageStatusLabel(visual[2]!)).toBe("NULL");
+  });
+
+  it("ignores historical run records for disabled stages", () => {
+    const disabled = disabledStages[0]!;
+    const run: PipelineRunSummary = {
+      id: 1,
+      run_key: "run-1",
+      query: "dataset reuse",
+      status: "running",
+      config: {},
+      celery_task_id: null,
+      error: null,
+      created_at: null,
+      updated_at: null,
+      finished_at: null,
+      stages: [
+        {
+          id: 9,
+          stage: disabled.name,
+          status: "failed",
+          attempt_count: 1,
+          task_id: null,
+          error: "legacy failure",
+          metrics: {},
+          started_at: null,
+          finished_at: null,
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    };
+
+    const [visual] = mergeStages([disabled], run);
+
+    expect(visual).toMatchObject({ status: "pending", working: false });
+    expect(visual?.run).toBeUndefined();
+  });
+
   it("preserves multiple recorded running stages for high-throughput runs", () => {
     const run: PipelineRunSummary = {
       id: 1,
@@ -136,7 +195,7 @@ describe("pipeline view helpers", () => {
 
     const visual = mergeStages(stages, run);
 
-    expect(visual.map((stage) => stage.working)).toEqual([false, true, false]);
+    expect(visual.map((stage) => stage.working)).toEqual([false, true, true]);
     expect(visual[1]?.status).toBe("running");
   });
 

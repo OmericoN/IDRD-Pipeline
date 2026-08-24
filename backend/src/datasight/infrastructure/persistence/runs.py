@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import psycopg2.extras
 
+from datasight.domain.stages import WORKFLOW_STAGE_ORDER
 from datasight.infrastructure.persistence.events import event_level, event_message
 
 
@@ -135,9 +136,10 @@ class RunRepositoryMixin:
             SELECT COUNT(*) AS count
             FROM stage_runs
             WHERE pipeline_run_id = %s
+              AND stage = ANY(%s)
               AND status IN ('failed', 'completed_with_errors')
             """,
-            (pipeline_run_id,),
+            (pipeline_run_id, [stage.value for stage in WORKFLOW_STAGE_ORDER]),
         )
         row = self.cursor.fetchone() or {}
         return "completed_with_errors" if int(row.get("count") or 0) else "successful"

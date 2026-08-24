@@ -275,6 +275,18 @@ def test_zero_candidate_detection_is_persisted_as_successful_completion():
     assert conn.commits == 2
 
 
+def test_failed_detection_rolls_back_before_recording_failure():
+    repo, cursor, conn = make_repo()
+
+    repo.fail_detection_run(77, "duplicate mention candidate")
+
+    assert conn.rollbacks == 1
+    query, params = cursor.executed[-1]
+    assert "status = 'failed'" in query
+    assert params == ("duplicate mention candidate", 77)
+    assert conn.commits == 1
+
+
 def test_rules_v3_candidate_persistence_carries_full_lineage():
     repo, cursor, _ = make_repo()
     cursor.fetchone_results = [{"id": 1}]
@@ -331,6 +343,22 @@ def test_discovery_candidate_pages_include_the_full_api_contract():
     assert result["items"] == []
 
 
+def test_selected_discovery_candidates_filter_before_count_and_pagination():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"count": 1}]
+    cursor.fetchall_results = [[{"paper_id": "W123"}]]
+
+    result = repo.list_discovery_candidates(9, offset=50, limit=50, selected_only=True)
+
+    count_query, count_params = cursor.executed[-2]
+    page_query, page_params = cursor.executed[-1]
+    assert "dc.included AND dc.pipeline_ready" in count_query
+    assert count_params == (9,)
+    assert "dc.included AND dc.pipeline_ready" in page_query
+    assert page_params == (9, 50, 50)
+    assert result["total"] == 1
+
+
 def test_insight_rows_resolve_run_specific_discovery_provenance_without_duplicates():
     repo, cursor, _ = make_repo()
     cursor.fetchall_results = [[{"paper_id": "W123", "discovery_mode": "random"}]]
@@ -339,13 +367,12 @@ def test_insight_rows_resolve_run_specific_discovery_provenance_without_duplicat
 
     query, params = cursor.executed[-1]
     assert rows[0]["discovery_mode"] == "random"
-    assert "LEFT JOIN LATERAL" in query
-    assert "dc.evidence_reasons AS discovery_methods" in query
+    assert "JOIN discovery_candidates dc" in query
+    assert "COALESCE(dc.evidence_reasons" in query
     assert "dc.included" in query
     assert "dc.pipeline_ready" in query
-    assert "dc.pipeline_run_id = %s THEN 0" in query
-    assert "LIMIT 1" in query
-    assert params == (9, 9)
+    assert "dc.pipeline_run_id = %s" in query
+    assert params == (9,)
 
 
 def test_global_insight_rows_use_latest_provenance_and_label_legacy_rows():
@@ -429,9 +456,34 @@ def test_create_pipeline_items_initializes_item_stages():
     queries = [query for query, _ in cursor.executed]
     assert any("INSERT INTO pipeline_items" in query for query in queries)
     stage_inserts = [params for query, params in cursor.executed if "INSERT INTO pipeline_item_stages" in query]
-    assert len(stage_inserts) == 6
+    assert len(stage_inserts) == 5
     assert stage_inserts[0] == (200, "download_pdf")
+    assert stage_inserts[-1] == (200, "extract_features")
     assert conn.commits == 1
+
+
+def test_extract_features_is_the_terminal_successful_item_stage():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [
+        {"pipeline_run_id": 9},
+        {
+            "total": 1,
+            "successful": 1,
+            "failed": 0,
+            "skipped": 0,
+            "queued": 0,
+            "running": 0,
+            "pending": 0,
+        },
+        None,
+    ]
+
+    repo.finish_item_stage(200, "extract_features", "successful", {"mentions": 2})
+
+    assert any(
+        "UPDATE pipeline_items SET status = 'successful'" in query
+        for query, _ in cursor.executed
+    )
 
 
 def test_start_item_stage_marks_stage_and_item_running():
@@ -467,6 +519,49 @@ def test_high_throughput_outcome_reports_partial_errors():
     cursor.fetchone_results = [{"failed": 1, "skipped": 3}]
 
     assert repo.high_throughput_outcome(9) == "completed_with_errors"
+    query, params = cursor.executed[-1]
+    assert "pis.stage = ANY(%s)" in query
+    assert "match_um_dataset" not in params[1]
+
+
+def test_terminal_check_ignores_disabled_item_stage_rows():
+    repo, cursor, _ = make_repo()
+    cursor.fetchone_results = [{"count": 0}]
+
+    assert repo.all_item_stages_terminal(9) is True
+
+    query, params = cursor.executed[-1]
+    assert "pis.stage = ANY(%s)" in query
+    assert "match_um_dataset" not in params[1]
+
+
+def test_high_throughput_finalization_is_idempotent():
+    repo, cursor, conn = make_repo()
+    cursor.fetchone_results = [
+        {"locked": True},
+        {"status": "running"},
+        {"count": 0},
+        {"failed": 0, "skipped": 0},
+        {"locked": True},
+        {"status": "successful"},
+    ]
+
+    assert repo.finalize_high_throughput_run_if_ready(9) == "successful"
+    assert repo.finalize_high_throughput_run_if_ready(9) == "successful"
+
+    finish_updates = [
+        params
+        for query, params in cursor.executed
+        if "UPDATE pipeline_runs SET status" in query
+    ]
+    finish_events = [
+        params
+        for query, params in cursor.executed
+        if "INSERT INTO pipeline_run_events" in query
+    ]
+    assert finish_updates == [("successful", 9)]
+    assert len(finish_events) == 1
+    assert conn.commits == 2
 
 
 def test_standard_run_outcome_reports_partial_errors():
@@ -475,8 +570,10 @@ def test_standard_run_outcome_reports_partial_errors():
 
     assert repo.standard_run_outcome(9) == "completed_with_errors"
     query, params = cursor.executed[-1]
+    assert "stage = ANY(%s)" in query
     assert "status IN ('failed', 'completed_with_errors')" in query
-    assert params == (9,)
+    assert params[0] == 9
+    assert params[1][-1] == "extract_features"
 
 
 def test_fail_pipeline_run_records_error_event():

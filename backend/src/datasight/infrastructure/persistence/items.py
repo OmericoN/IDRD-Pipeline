@@ -7,18 +7,11 @@ from typing import Any
 
 import psycopg2.extras
 
-from datasight.domain.stages import PipelineStage
+from datasight.domain.stages import ITEM_STAGE_ORDER, PipelineStage
 from datasight.infrastructure.persistence.events import event_level, event_message
 
 
-ITEM_STAGES: tuple[PipelineStage, ...] = (
-    PipelineStage.DOWNLOAD_PDF,
-    PipelineStage.GROBID_CONVERT,
-    PipelineStage.RENDER_DOCUMENT,
-    PipelineStage.DETECT_MENTIONS,
-    PipelineStage.EXTRACT_FEATURES,
-    PipelineStage.MATCH_UM_DATASET,
-)
+ITEM_STAGES: tuple[PipelineStage, ...] = ITEM_STAGE_ORDER
 
 class PipelineItemRepositoryMixin:
     conn: Any
@@ -32,6 +25,9 @@ class PipelineItemRepositoryMixin:
         message: str,
         payload: dict[str, Any] | None = None,
     ) -> None:
+        raise NotImplementedError
+
+    def finish_pipeline_run(self, pipeline_run_id: int | None, status: str) -> None:
         raise NotImplementedError
 
     def create_pipeline_items(self, pipeline_run_id: int, paper_ids: Iterable[str]) -> list[int]:
@@ -238,7 +234,7 @@ class PipelineItemRepositoryMixin:
                 """,
                 (item_id, next_stage.value),
             )
-        elif stage_value == PipelineStage.MATCH_UM_DATASET.value:
+        else:
             self.cursor.execute(
                 "UPDATE pipeline_items SET status = 'successful', updated_at = now() WHERE id = %s",
                 (item_id,),
@@ -258,9 +254,10 @@ class PipelineItemRepositoryMixin:
             FROM pipeline_item_stages pis
             JOIN pipeline_items pi ON pi.id = pis.pipeline_item_id
             WHERE pi.pipeline_run_id = %s
+              AND pis.stage = ANY(%s)
               AND pis.status NOT IN ('successful', 'failed', 'skipped')
             """,
-            (pipeline_run_id,),
+            (pipeline_run_id, [stage.value for stage in ITEM_STAGES]),
         )
         row = self.cursor.fetchone() or {}
         return int(row.get("count") or 0) == 0
@@ -272,10 +269,11 @@ class PipelineItemRepositoryMixin:
             FROM pipeline_item_stages pis
             JOIN pipeline_items pi ON pi.id = pis.pipeline_item_id
             WHERE pi.pipeline_run_id = %s
+              AND pis.stage = ANY(%s)
               AND pis.status = 'queued'
             GROUP BY pis.stage
             """,
-            (pipeline_run_id,),
+            (pipeline_run_id, [stage.value for stage in ITEM_STAGES]),
         )
         return {str(row["stage"]): int(row["count"]) for row in self.cursor.fetchall()}
 
@@ -288,55 +286,47 @@ class PipelineItemRepositoryMixin:
             FROM pipeline_item_stages pis
             JOIN pipeline_items pi ON pi.id = pis.pipeline_item_id
             WHERE pi.pipeline_run_id = %s
+              AND pis.stage = ANY(%s)
             """,
-            (pipeline_run_id,),
+            (pipeline_run_id, [stage.value for stage in ITEM_STAGES]),
         )
         row = self.cursor.fetchone() or {}
         failed = int(row.get("failed") or 0)
         skipped = int(row.get("skipped") or 0)
         return "completed_with_errors" if failed or skipped else "successful"
 
-    def try_start_run_level_stage(self, pipeline_run_id: int, stage: PipelineStage | str) -> bool:
-        stage_value = PipelineStage(stage).value
+    def finalize_high_throughput_run_if_ready(self, pipeline_run_id: int) -> str | None:
+        """Finish a ready run once without creating a synthetic export stage."""
         self.cursor.execute(
             "SELECT pg_try_advisory_xact_lock(%s, hashtext(%s)) AS locked",
-            (pipeline_run_id, stage_value),
+            (pipeline_run_id, "pipeline_run_finalization"),
         )
         lock_row = self.cursor.fetchone() or {}
         if not lock_row.get("locked"):
             self.conn.commit()
-            return False
+            return None
 
         self.cursor.execute(
-            """
-            SELECT id FROM stage_runs
-            WHERE pipeline_run_id = %s AND publication_id IS NULL AND stage = %s
-            """,
-            (pipeline_run_id, stage_value),
+            "SELECT status FROM pipeline_runs WHERE id = %s FOR UPDATE",
+            (pipeline_run_id,),
         )
-        if self.cursor.fetchone():
+        run_row = self.cursor.fetchone()
+        if not run_row:
             self.conn.commit()
-            return False
+            return None
 
-        self.cursor.execute(
-            """
-            INSERT INTO stage_runs (
-                pipeline_run_id, stage, status, attempt_count, metrics,
-                started_at, updated_at
-            )
-            VALUES (%s, %s, 'running', 1, '{}'::jsonb, now(), now())
-            """,
-            (pipeline_run_id, stage_value),
-        )
-        self._insert_pipeline_run_event(
-            pipeline_run_id=pipeline_run_id,
-            stage=stage_value,
-            level="info",
-            message=f"{stage_value}: running.",
-            payload={},
-        )
-        self.conn.commit()
-        return True
+        current_status = str(run_row["status"])
+        if current_status not in {"queued", "running", "started"}:
+            self.conn.commit()
+            return current_status
+
+        if not self.all_item_stages_terminal(pipeline_run_id):
+            self.conn.commit()
+            return None
+
+        status = self.high_throughput_outcome(pipeline_run_id)
+        self.finish_pipeline_run(pipeline_run_id, status)
+        return status
 
     def refresh_stage_aggregate_for_item(self, item_id: int, stage: PipelineStage | str) -> None:
         self.cursor.execute(

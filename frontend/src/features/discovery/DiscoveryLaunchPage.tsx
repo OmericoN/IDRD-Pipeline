@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   RiCheckLine,
   RiDatabase2Line,
   RiErrorWarningLine,
   RiExternalLinkLine,
+  RiLoader4Line,
   RiPlayLine,
   RiPulseLine,
   RiRouteLine,
@@ -13,7 +14,6 @@ import {
   RiShuffleLine,
 } from "@remixicon/react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { useNavigate } from "react-router";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -26,13 +26,14 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError, api, type DiscoveryCandidate, type DiscoveryPreviewRequest } from "@/shared/api/client";
 
+import { useLaunchJob } from "./LaunchJobProvider";
+
 const DEFAULT_OUTPUT = "storage/exports/insights.csv";
 const DEFAULT_UM_DATASETS = "data/um_dataset";
 type DiscoveryMode = "catalog_funnel" | "random" | "manual";
 
 export default function DiscoveryLaunchPage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const launchJob = useLaunchJob();
   const [mode, setMode] = useState<DiscoveryMode>("catalog_funnel");
   const [focusQuery, setFocusQuery] = useState("");
   const [manualQuery, setManualQuery] = useState("");
@@ -66,14 +67,6 @@ export default function DiscoveryLaunchPage() {
     mutationFn: api.discoveryPreview,
     onSuccess: () => setExcludedIds(new Set()),
   });
-  const createRunMutation = useMutation({
-    mutationFn: api.createRun,
-    onSuccess: (created) => {
-      navigate(`/runs/${created.pipeline_run_id}`);
-      void queryClient.invalidateQueries({ queryKey: ["runs"] });
-    },
-  });
-
   useEffect(() => {
     setProcessingLimit((current) => Math.min(current, discoveryLimit));
   }, [discoveryLimit]);
@@ -122,15 +115,18 @@ export default function DiscoveryLaunchPage() {
   }
 
   function launch(previewId: string, excluded: string[]) {
-    createRunMutation.mutate({
-      preview_id: previewId,
-      processing_limit: processingLimit,
-      excluded_candidate_ids: excluded,
-      overwrite,
-      um_datasets_path: umDatasetsPath.trim() || null,
-      output_path: outputPath.trim() || DEFAULT_OUTPUT,
-      strategy: highThroughput ? "high_throughput" : "standard",
-      render_profile: "pruned",
+    launchJob.start({
+      preview: preview?.preview_id === previewId ? preview : undefined,
+      previewRequest,
+      excludedCandidateIds: excluded,
+      runRequest: {
+        processing_limit: processingLimit,
+        overwrite,
+        um_datasets_path: umDatasetsPath.trim() || null,
+        output_path: outputPath.trim() || DEFAULT_OUTPUT,
+        strategy: highThroughput ? "high_throughput" : "standard",
+        render_profile: "pruned",
+      },
     });
   }
 
@@ -140,8 +136,18 @@ export default function DiscoveryLaunchPage() {
       launch(preview.preview_id, [...excludedIds]);
       return;
     }
-    previewMutation.mutate(previewRequest, {
-      onSuccess: (created) => launch(created.preview_id, []),
+    launchJob.start({
+      preview: undefined,
+      previewRequest,
+      excludedCandidateIds: [],
+      runRequest: {
+        processing_limit: processingLimit,
+        overwrite,
+        um_datasets_path: umDatasetsPath.trim() || null,
+        output_path: outputPath.trim() || DEFAULT_OUTPUT,
+        strategy: highThroughput ? "high_throughput" : "standard",
+        render_profile: "pruned",
+      },
     });
   }
 
@@ -253,13 +259,13 @@ export default function DiscoveryLaunchPage() {
       ) : null}
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-end border-t bg-background/95 px-3 py-2 backdrop-blur xl:static xl:border-0 xl:bg-transparent xl:p-0">
-        <Button className="pointer-events-auto min-w-40 shadow-lg" type="submit" disabled={createRunMutation.isPending || previewMutation.isPending || blocked || manualMissing}>
-          <RiPlayLine data-icon="inline-start" />
-          {createRunMutation.isPending ? "Opening workspace…" : previewMutation.isPending ? mode === "random" ? "Drawing sample…" : "Preparing preview…" : "Run pipeline"}
+        <Button className="pointer-events-auto min-w-40 shadow-lg" type="submit" disabled={launchJob.isPending || previewMutation.isPending || blocked || manualMissing}>
+          {launchJob.isPending ? <RiLoader4Line className="animate-spin" data-icon="inline-start" aria-hidden="true" /> : <RiPlayLine data-icon="inline-start" />}
+          {launchJob.phase === "starting" ? "Opening workspace…" : launchJob.phase === "discovering" ? mode === "random" ? "Drawing sample…" : "Preparing discovery…" : previewMutation.isPending ? mode === "random" ? "Drawing sample…" : "Preparing preview…" : "Run pipeline"}
         </Button>
       </div>
 
-      {createRunMutation.isError ? <PreviewError error={createRunMutation.error} /> : null}
+      {launchJob.error ? <PreviewError error={launchJob.error} /> : null}
       <CandidateSheet mode={mode} candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
     </form>
   );

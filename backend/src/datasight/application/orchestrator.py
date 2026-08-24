@@ -74,8 +74,6 @@ def run_all_local(
                 services.extract_features_from_candidates(
                     limit=effective_limit, pipeline_run_id=pipeline_run_id
                 ),
-                services.match_um_dataset_batch(limit=effective_limit, pipeline_run_id=pipeline_run_id),
-                services.export_insights_csv(output, pipeline_run_id=pipeline_run_id),
             ]
         )
     except Exception:
@@ -144,8 +142,6 @@ def enqueue_run_all(
             ),
             tasks.detect_mentions.si(effective_limit, pipeline_run_id),
             tasks.extract_features.si(effective_limit, pipeline_run_id),
-            tasks.match_um_dataset.si(effective_limit, pipeline_run_id),
-            tasks.export_insights.si(output, None, pipeline_run_id),
             tasks.finish_pipeline_run.si(pipeline_run_id, "successful"),
         )
         async_result = workflow.apply_async()
